@@ -3,11 +3,13 @@
 #include "products/image_products.h"
 #include "nlohmann/json.hpp"
 #include "common/calibration.h"
+#include "common/projection/sat_proj/sat_proj.h"
 
 namespace nat2pro
 {
     class MHSNatCalibrator : public satdump::ImageProducts::CalibratorBase
     {
+
     public:
         MHSNatCalibrator(nlohmann::json calib, satdump::ImageProducts *products) : satdump::ImageProducts::CalibratorBase(calib, products)
         {
@@ -17,20 +19,16 @@ namespace nat2pro
         {
         }
 
-        double compute(int channel, int /*pos_x*/, int /*pos_y*/, int px_val)
+        double compute(int channel, int pos_x, int pos_y, int px_val)
         {
-            double final_val = px_val << 4;
+            if (px_val == 0)
+                return CALIBRATION_INVALID_VALUE;
 
-            //  if (channel == 0)
-            //      final_val = (final_val / d_products->get_wavenumber(channel)) * 1e-5 * 2;
-            //  else if (channel == 1)
-            //      final_val = (final_val / d_products->get_wavenumber(channel)) * 1e-5 * 4;
+            double physical_units = double(px_val << 4);
 
-            printf("VAL %f\n", final_val);
-            final_val = (d_products->get_wavenumber(channel) / final_val) * 1e1; //* 1e-3;
-            printf("VAL2 %f\n", final_val);
+            physical_units /= 1000 * 1000 * 10;
 
-            return final_val;
+            return physical_units;
         }
     };
 }
