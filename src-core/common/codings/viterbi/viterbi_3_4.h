@@ -5,7 +5,6 @@
 #include "common/codings/rotation.h"
 #include "common/codings/viterbi/cc_decoder.h"
 #include "common/codings/viterbi/cc_encoder.h"
-#include "common/repack_bits_byte.h"
 
 namespace viterbi
 {
@@ -32,7 +31,6 @@ namespace viterbi
 
         // Main decoder
         fec::code::cc_decoder_impl cc_decoder;
-        RepackBitsByte repacker;
 
         // BER test buffers
         int8_t ber_test_buffer[TEST_BITS_LENGTH];
