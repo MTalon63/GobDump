@@ -12,8 +12,6 @@
 // Return filesize
 size_t getFilesize(std::string filepath);
 
-#include "common/repack_bits_byte.h"
-
 namespace terra
 {
     TerraDBDecoderModule::TerraDBDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters) : ProcessingModule(input_file, output_file_hint, parameters),
@@ -47,8 +45,6 @@ namespace terra
         // Other buffers
         uint8_t frame_buffer[FRAME_SIZE * 10];
         uint8_t viterbi_out_buffer[BUFFER_SIZE];
-
-        RepackBitsByte repack;
 
         while (input_data_type == DATA_FILE ? !data_in.eof() : input_active.load())
         {
