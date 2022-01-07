@@ -43,6 +43,8 @@ namespace ccsds
     class CCSDSConvR2ConcatDecoderModule : public ProcessingModule
     {
     protected:
+        const bool is_ccsds; // Just to know if we should output .cadu or .frm
+
         const std::string d_constellation_str;     // Constellation type string
         dsp::constellation_type_t d_constellation; // Constellation type
         bool d_bpsk_90;                            // Special case for BPSK shifted by 90 degs + IQ-swapped
@@ -78,7 +80,7 @@ namespace ccsds
         std::shared_ptr<deframing::BPSK_CCSDS_Deframer> deframer;
         std::shared_ptr<reedsolomon::ReedSolomon> reed_solomon;
 
-        int errors[4];
+        int errors[10];
 
         // UI Stuff
         float ber_history[200];

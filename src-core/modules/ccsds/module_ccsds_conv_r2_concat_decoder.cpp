@@ -12,6 +12,8 @@ namespace ccsds
 {
     CCSDSConvR2ConcatDecoderModule::CCSDSConvR2ConcatDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
         : ProcessingModule(input_file, output_file_hint, parameters),
+          is_ccsds(parameters.count("ccsds") > 0 ? parameters["ccsds"].get<bool>() : true),
+
           d_constellation_str(parameters["constellation"].get<std::string>()),
 
           d_cadu_size(parameters["cadu_size"].get<int>()),
@@ -107,13 +109,16 @@ namespace ccsds
             filesize = getFilesize(d_input_file);
         else
             filesize = 0;
+
+        std::string extension = is_ccsds ? ".cadu" : ".frm";
+
         if (input_data_type == DATA_FILE)
             data_in = std::ifstream(d_input_file, std::ios::binary);
-        data_out = std::ofstream(d_output_file_hint + ".cadu", std::ios::binary);
-        d_output_files.push_back(d_output_file_hint + ".cadu");
+        data_out = std::ofstream(d_output_file_hint + extension, std::ios::binary);
+        d_output_files.push_back(d_output_file_hint + extension);
 
         logger->info("Using input symbols " + d_input_file);
-        logger->info("Decoding to " + d_output_file_hint + ".cadu");
+        logger->info("Decoding to " + d_output_file_hint + extension);
 
         time_t lastTime = 0;
 
@@ -266,7 +271,7 @@ namespace ccsds
                 ImGui::Button("Reed-Solomon", {200 * ui_scale, 20 * ui_scale});
                 {
                     ImGui::Text("RS    : ");
-                    for (int i = 0; i < 4; i++)
+                    for (int i = 0; i < d_rs_interleaving_depth; i++)
                     {
                         ImGui::SameLine();
 
