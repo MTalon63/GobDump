@@ -8,7 +8,7 @@
 
 // Catch CTRL+C to exit live properly!
 bool live_should_exit = false;
-void sig_handler(int signo)
+void sig_handler_live(int signo)
 {
     if (signo == SIGINT)
         live_should_exit = true;
@@ -120,7 +120,7 @@ int main_live(int argc, char *argv[])
     }
 
     // Attach signal
-    signal(SIGINT, sig_handler);
+    signal(SIGINT, sig_handler_live);
 
     // Now, we wait
     uint64_t start_time = time(0);
