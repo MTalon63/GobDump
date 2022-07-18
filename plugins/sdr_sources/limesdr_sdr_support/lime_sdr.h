@@ -29,9 +29,7 @@ protected:
     void set_gains();
 
     std::thread work_thread;
-
     bool thread_should_run = false, needs_to_run = false;
-
     void mainThread()
     {
         lime::StreamChannel::Metadata md;
