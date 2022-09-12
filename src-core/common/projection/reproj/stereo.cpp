@@ -20,7 +20,7 @@ namespace satdump
                                          float *progress)
         {
             // Build GPU Kernel
-            cl_program warping_program = opencl::buildCLKernel(resources::getResourcePath("opencl/reproj_image_equ_to_stereo_fp32.cl"));
+            cl_program proj_program = opencl::buildCLKernel(resources::getResourcePath("opencl/reproj_image_equ_to_stereo_fp32.cl"));
 
             cl_int err = 0;
             auto &context = satdump::opencl::ocl_context;
@@ -76,12 +76,12 @@ namespace satdump
                 clEnqueueWriteBuffer(queue, buffer_stereo_settings, true, 0, sizeof(float) * 14, ste_settings, 0, NULL, NULL);
 
                 // Init the kernel
-                cl_kernel warping_kernel = clCreateKernel(warping_program, "reproj_image_equ_to_stereo", &err);
-                clSetKernelArg(warping_kernel, 0, sizeof(cl_mem), &buffer_src_img);
-                clSetKernelArg(warping_kernel, 1, sizeof(cl_mem), &buffer_trg_img);
-                clSetKernelArg(warping_kernel, 2, sizeof(cl_mem), &buffer_img_sizes);
-                clSetKernelArg(warping_kernel, 3, sizeof(cl_mem), &buffer_equ_settings);
-                clSetKernelArg(warping_kernel, 4, sizeof(cl_mem), &buffer_stereo_settings);
+                cl_kernel proj_kernel = clCreateKernel(proj_program, "reproj_image_equ_to_stereo", &err);
+                clSetKernelArg(proj_kernel, 0, sizeof(cl_mem), &buffer_src_img);
+                clSetKernelArg(proj_kernel, 1, sizeof(cl_mem), &buffer_trg_img);
+                clSetKernelArg(proj_kernel, 2, sizeof(cl_mem), &buffer_img_sizes);
+                clSetKernelArg(proj_kernel, 3, sizeof(cl_mem), &buffer_equ_settings);
+                clSetKernelArg(proj_kernel, 4, sizeof(cl_mem), &buffer_stereo_settings);
 
                 // Get proper workload size
                 size_t size_wg = 0;
@@ -93,7 +93,7 @@ namespace satdump
 
                 // Run the kernel!
                 size_t total_wg_size = int(size_wg) * int(compute_units);
-                if (clEnqueueNDRangeKernel(queue, warping_kernel, 1, NULL, &total_wg_size, NULL, 0, NULL, NULL) != CL_SUCCESS)
+                if (clEnqueueNDRangeKernel(queue, proj_kernel, 1, NULL, &total_wg_size, NULL, 0, NULL, NULL) != CL_SUCCESS)
                     throw std::runtime_error("Couldn't clEnqueueNDRangeKernel!");
 
                 // Read image result back from VRAM
@@ -105,12 +105,15 @@ namespace satdump
                 clReleaseMemObject(buffer_img_sizes);
                 clReleaseMemObject(buffer_equ_settings);
                 clReleaseMemObject(buffer_stereo_settings);
-                clReleaseKernel(warping_kernel);
-                clReleaseProgram(warping_program);
+                clReleaseKernel(proj_kernel);
+                clReleaseProgram(proj_program);
                 clReleaseCommandQueue(queue);
             }
             auto gpu_time = (std::chrono::system_clock::now() - gpu_start);
             logger->debug("GPU Processing Time {:f}", gpu_time.count() / 1e9);
+
+            if (progress != nullptr)
+                *progress = 1;
         }
 #endif
 
@@ -169,7 +172,6 @@ namespace satdump
                                      float ste_scale,
                                      float *progress)
         {
-
 #ifdef USE_OPENCL
             try
             {
