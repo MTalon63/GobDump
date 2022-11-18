@@ -3,7 +3,6 @@
 
 namespace dsp
 {
-
     template <typename T>
     MMClockRecoveryBlock<T>::MMClockRecoveryBlock(std::shared_ptr<dsp::stream<T>> input, float omega, float omegaGain, float mu, float muGain, float omegaLimit, int nfilt, int ntaps)
         : Block<T, T>(input),
