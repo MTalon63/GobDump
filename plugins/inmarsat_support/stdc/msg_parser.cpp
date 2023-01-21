@@ -10,7 +10,7 @@ namespace inmarsat
             msg_t v;
             v.pkt = msg;
             v.logical_channel = msg["logical_channel_no"].get<int>();
-            v.pkt_no = msg["logical_channel_no"].get<int>();
+            v.pkt_no = msg["packet_no"].get<int>();
             v.timestamp = msg["timestamp"].get<double>();
             v.message = msg["message"].get<std::string>();
             return v;
@@ -36,7 +36,7 @@ namespace inmarsat
             wip_messages[m.logical_channel].push_back(m);
 
             std::sort(wip_messages[m.logical_channel].begin(), wip_messages[m.logical_channel].end(), [](const msg_t &v1, const msg_t &v2)
-                      { return v1.pkt_no > v2.pkt_no; });
+                      { return v1.pkt_no < v2.pkt_no; });
         }
 
         void MessageParser::check_curr_messages()
