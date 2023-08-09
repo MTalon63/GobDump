@@ -29,34 +29,32 @@ namespace fengyun3
             {
                 for (int i = 0; i < 492; i++)
                 {
-                    channels[ch][lines * 492 + 491 - i] = packet[1300 + ch * 1604 + i * 2 + 0] << 8 | packet[1300 + ch * 1604 + i * 2 + 1];
+                    channels[ch][lines * 492 + 491 - i] = packet[1300 - 146 * 2 - 28 * 2 + ch * 1604 + i * 2 + 0] << 8 | packet[1300 - 146 * 2 - 28 * 2 + ch * 1604 + i * 2 + 1];
                 }
             }
 
-#if 0
             // Parse timestamp
             uint8_t timestamp[8];
 
-            timestamp[0] = packet[14];
-            timestamp[1] = packet[15];
+            timestamp[0] = packet[18];
+            timestamp[1] = packet[19];
 
-            timestamp[2] = packet[16];
-            timestamp[3] = packet[17];
+            timestamp[2] = packet[20];
+            timestamp[3] = packet[21];
 
-            timestamp[4] = packet[18];
-            timestamp[5] = packet[19] & 0b11110000;
+            timestamp[4] = packet[22];
+            timestamp[5] = packet[23] & 0b11110000;
 
             uint16_t days = timestamp[0] << 8 | timestamp[1];
             uint64_t milliseconds_of_day = timestamp[2] << 24 | timestamp[3] << 16 | timestamp[4] << 8 | timestamp[5];
             uint16_t subsecond_cnt = (packet[20] & 0b11) << 8 | packet[21];
 
             double currentTime = double(10957 + days) * 86400.0 +
-                                 double(milliseconds_of_day) / double(1e3) +
-                                 double(subsecond_cnt) / 512 + 12 * 3600;
-
+                                 double(milliseconds_of_day) / double(1e4) + 12 * 3600;
+            ; //+
+              //  double(subsecond_cnt) / 512; //+ 12 * 3600;
 
             timestamps.push_back(currentTime);
-#endif
 
             // Frame counter
             lines++;
