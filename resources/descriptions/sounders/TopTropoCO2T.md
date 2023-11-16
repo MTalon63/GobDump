@@ -1,4 +1,4 @@
-# Topo Troposphere CO2 Temperature
+# Top Troposphere CO2 Temperature
 
 This enhancement uses the CO2 absorption wavelength at 14.25 µm to measure the temperature in the top part of the troposphere (CO2 is uniformly mixed in the atmosphere).
 A color temperature scale enhancement is then used to enable easier analysis.
