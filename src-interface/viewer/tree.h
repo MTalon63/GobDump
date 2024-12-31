@@ -4,7 +4,7 @@ struct TreeDrawer
 {
 
     const ImColor TreeLineColor = ImColor(128, 128, 128, 255); // ImGui::GetColorU32(ImGuiCol_Text);
-    const float SmallOffsetX = 11.0f;                          // for now, a hardcoded value; should take into account tree indent size
+    float SmallOffsetX = 11.0f;                                // for now, a hardcoded value; should take into account tree indent size
 
     ImDrawList *drawList;
 
@@ -21,13 +21,14 @@ struct TreeDrawer
         verticalLineEnd = verticalLineStart;
     }
 
-    void node()
+    bool node()
     {
         const float HorizontalTreeLineSize = 8.0f;                                         // chosen arbitrarily
         const ImRect childRect = ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()); // RenderTree(child);
         const float midpoint = (childRect.Min.y + childRect.Max.y) / 2.0f;
         drawList->AddLine(ImVec2(verticalLineStart.x, midpoint), ImVec2(verticalLineStart.x + HorizontalTreeLineSize, midpoint), TreeLineColor);
         verticalLineEnd.y = midpoint;
+        return false;
     }
 
     float end()
