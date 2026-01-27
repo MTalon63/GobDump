@@ -1,6 +1,4 @@
 #include "add.h"
-#include <complex.h>
-#include <cstdint>
 
 namespace satdump
 {
