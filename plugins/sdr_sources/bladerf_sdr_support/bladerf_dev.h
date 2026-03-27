@@ -47,7 +47,9 @@ namespace satdump
 
             bool extclock = false;
 
-            // TODOREWORK, not here but in the config add back bandwidth/manual banwidth?
+            // Bandwidth config
+            bool manual_bw = false;
+            double bandwidth = 6e6;
 
         private:
             int sample_buffer_size = 8192; // TODOREWORK
@@ -215,6 +217,15 @@ namespace satdump
                 p["samplerate"]["disable"] = is_started;
                 p["samplerate"]["range_noslider"] = true;
 
+                add_param_simple(p, "manual_bw", "bool", "Manual Bandwidth");
+                if (manual_bw)
+                {
+                    if (op.contains("bandwidth"))
+                        p["bandwidth"] = op["bandwidth"];
+                    else
+                        add_param_simple(p, "bandwidth", "uint", "Bandwidth");
+                }
+
                 if (rx_ch_number == 1)
                 {
                     add_param_simple(p, "rx_channel_id", "uint", "RX Channel");
@@ -272,6 +283,10 @@ namespace satdump
                     return dev_serial;
                 else if (key == "samplerate")
                     return samplerate;
+                else if (key == "manual_bw")
+                    return manual_bw;
+                else if (key == "bandwidth")
+                    return bandwidth;
                 else if (key == "rx_frequency")
                     return rx_frequency;
                 else if (key == "tx_frequency")
@@ -304,6 +319,7 @@ namespace satdump
 
             void set_frequency();
             void set_gains();
+            void set_bw();
             void set_others();
 
             cfg_res_t set_cfg(std::string key, nlohmann::json v)
@@ -314,6 +330,17 @@ namespace satdump
                     dev_serial = v;
                 else if (key == "samplerate")
                     samplerate = v;
+                else if (key == "manual_bw")
+                {
+                    manual_bw = v;
+                    r = RES_LISTUPD;
+                    set_bw();
+                }
+                else if (key == "bandwidth")
+                {
+                    bandwidth = v;
+                    set_bw();
+                }
                 else if (key == "rx_frequency")
                 {
                     rx_frequency = v;
