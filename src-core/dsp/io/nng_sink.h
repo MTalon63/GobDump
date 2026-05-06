@@ -10,7 +10,6 @@ namespace satdump
         template <typename T>
         class NNGSinkBlock : public Block
         {
-
         private:
             std::string address = "0.0.0.0";
             int port = 8888;
