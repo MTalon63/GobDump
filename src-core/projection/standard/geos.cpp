@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "geos.h"
 
 namespace proj

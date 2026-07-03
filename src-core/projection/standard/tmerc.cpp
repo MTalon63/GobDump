@@ -1,4 +1,5 @@
 #include "tmerc.h"
+#include <cstdlib>
 
 namespace proj
 {

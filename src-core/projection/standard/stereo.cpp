@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "stereo.h"
 
 namespace proj

@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "webmerc.h"
 
 namespace proj
