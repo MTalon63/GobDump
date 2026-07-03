@@ -19,6 +19,7 @@ namespace noaa_apt
 
         name = "NOAA APT Demodulator (FM)";
         show_freq = false;
+        snr_audio_feedback_supported = false;
         play_audio = satdump::satdump_cfg.shouldPlayAudio();
 
         constellation.d_hscale = 1.0; // 80.0 / 100.0;

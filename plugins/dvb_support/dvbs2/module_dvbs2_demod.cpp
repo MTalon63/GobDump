@@ -195,6 +195,8 @@ namespace satdump
                     if (snr > peak_snr)
                         peak_snr = snr;
 
+                    pushSNRAudioFeedback(frame_slot_count * 90, d_symbolrate);
+
                     // Get freq
                     display_freq = dsp::rad_to_hz(current_freq / final_sps, final_samplerate);
 

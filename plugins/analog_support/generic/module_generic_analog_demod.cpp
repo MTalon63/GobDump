@@ -12,6 +12,7 @@ namespace generic_analog
     {
         name = "Generic Analog Demodulator (WIP)";
         show_freq = false;
+        snr_audio_feedback_supported = false;
         play_audio = satdump::satdump_cfg.shouldPlayAudio();
 
         constellation.d_hscale = 1.0; // 80.0 / 100.0;

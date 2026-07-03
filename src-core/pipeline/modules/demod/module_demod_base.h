@@ -10,14 +10,18 @@
 #include "common/dsp/utils/doppler_correct.h"
 #include "common/dsp/utils/freq_shift.h"
 #include "common/dsp/utils/snr_estimator.h"
+#include "common/audio/audio_sink.h"
 #include "common/widgets/constellation.h"
 #include "common/widgets/fft_plot.h"
 #include "common/widgets/snr_plot.h"
 #include "common/widgets/waterfall_plot.h"
 #include "pipeline/module.h"
 #include <atomic>
+#include <ctime>
 #include <fstream>
-#include <thread>
+#include <chrono>
+#include <locale>
+#include <vector>
 
 namespace satdump
 {
@@ -78,6 +82,15 @@ namespace satdump
                 M2M4SNREstimator snr_estimator;
                 float snr, peak_snr;
 
+                bool snr_audio_feedback_supported = true;
+                bool snr_audio_feedback = false;
+                bool snr_audio_feedback_running = false;
+                int snr_audio_samplerate = 48000;
+                double snr_audio_phase = 0.0;
+                float snr_audio_smoothed = 0.0f;
+                std::vector<int16_t> snr_audio_buffer;
+                std::shared_ptr<audio::AudioSink> snr_audio_sink;
+
                 bool show_freq = false;
                 float display_freq = 0;
 
@@ -90,6 +103,15 @@ namespace satdump
 
                 bool showWaterfall = false;
                 void drawFFT();
+                
+                /** @brief Used to render the ETA nicely
+                *
+                * @param seconds Time to render as MM:SS or HH:MM:SS if we are at that point (DD seems excessive)
+                */
+                std::string render_eta_string(time_t seconds);
+                void drawETA();
+                time_t start_time;
+                double averaged_eta = -1;
 
                 // Util
                 int8_t clamp(float x)
@@ -105,6 +127,7 @@ namespace satdump
                 bool demod_should_stop = false;
                 bool demod_should_run() { return (input_data_type == DATA_FILE ? !file_source->eof() : input_active.load()) && !demod_should_stop; }
                 void drawStopButton();
+                void pushSNRAudioFeedback(int input_samples, float input_samplerate);
 
             public:
                 BaseDemodModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
@@ -142,6 +165,7 @@ namespace satdump
                     v["start_timestamp"] = -1;
                     v["min_sps"] = 1.1;
                     v["max_sps"] = 4.0;
+                    v["snr_audio_feedback"] = true;
                     return v;
                 } // TODOREWORK
                 // static std::shared_ptr<ProcessingModule> getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters);

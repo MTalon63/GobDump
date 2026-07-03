@@ -93,6 +93,8 @@ namespace orbcomm
             if (snr > peak_snr)
                 peak_snr = snr;
 
+            pushSNRAudioFeedback(dat_size, d_symbolrate);
+
             for (int i = 0; i < dat_size; i++)
                 bits_buf[i] = rec->output_stream->readBuf[i] > 0;
 

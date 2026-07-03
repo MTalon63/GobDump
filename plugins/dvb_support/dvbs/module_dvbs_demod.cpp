@@ -81,6 +81,8 @@ namespace satdump
                     if (snr > peak_snr)
                         peak_snr = snr;
 
+                    pushSNRAudioFeedback(size, d_symbolrate);
+
                     // Update freq
                     display_freq = dsp::rad_to_hz(pll->getFreq(), final_samplerate);
                 };
