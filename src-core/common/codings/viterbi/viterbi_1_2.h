@@ -57,5 +57,6 @@ namespace viterbi
 
         float ber();
         int getState();
+        void reset() { d_state = 0; } // Force back to ST_IDLE (0)
     };
 }
