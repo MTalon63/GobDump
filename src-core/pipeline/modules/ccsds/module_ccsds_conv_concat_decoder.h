@@ -71,8 +71,12 @@ namespace satdump
 
                 // If > 0: force all viterbi decoders to outsync when deframer hasn't synced for this many seconds
                 const double d_deframer_nosync_timeout;
+                // Timer for deframer nosync detection.
+                // A negative value means the system is in a post-reset cooldown period; the timeout
+                // cannot fire again until the timer climbs back to 0 from its negative start.
                 double d_deframer_nosync_timer = 0;
-                bool d_deframer_was_nosync = false;
+                // Consecutive forced-reset counter for exponential backoff calculation.
+                int d_deframer_nosync_reset_count = 0;
 
                 const bool d_diff_decode; // If NRZ-M Decoding is required or not
 
