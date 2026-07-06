@@ -21,6 +21,17 @@ namespace deframing
         return d_state;
     }
 
+    void BPSK_CCSDS_Deframer::reset()
+    {
+        d_state       = STATE_NOSYNC;
+        in_frame      = false;
+        shifter       = 0;
+        bit_inversion = false;
+        bit_of_frame  = 0;
+        d_invalid_asm = 0;
+        d_good_asm    = 0;
+    }
+
     int BPSK_CCSDS_Deframer::work(uint8_t *input, int size, uint8_t *output)
     {
         int frame_count = 0;

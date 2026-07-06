@@ -227,35 +227,46 @@ namespace satdump
                         // Run deframer
                         int frames = deframer->work(viterbi_out, vitout_cur, frame_buffer);
 
-                        // Deframer nosync timeout: if viterbi is locked but deframer hasn't synced
-                        // for more than d_deframer_nosync_timeout seconds, force viterbi outsync.
+                        // Deframer nosync timeout: if the deframer hasn't reached STATE_SYNCED
+                        // within the configured wall-clock window, force-reset everything.
+                        //
+                        // Timer only resets when the deframer actually syncs (not on viterbi
+                        // lock/unlock churn), so noisy signals that repeatedly lock and unlock
+                        // still accumulate time toward the threshold.
                         if (d_deframer_nosync_timeout > 0.0)
                         {
-                            // Measure elapsed at top of the block — reflects real time between
-                            // buffer reads, not the time spent inside work().
                             auto now = std::chrono::steady_clock::now();
                             double elapsed = std::chrono::duration<double>(now - d_last_buffer_time).count();
                             d_last_buffer_time = now;
 
                             bool deframer_synced = deframer->getState() == deframer->STATE_SYNCED;
 
-                            if (state_cur != 0 && !deframer_synced)
+                            if (!deframer_synced)
                             {
-                                d_deframer_nosync_timer += elapsed;
+                                // Count time only while viterbi is actually doing something;
+                                // don't count while it's in IDLE (nothing useful going on yet)
+                                if (state_cur != 0)
+                                    d_deframer_nosync_timer += elapsed;
+
                                 if (d_deframer_nosync_timer >= d_deframer_nosync_timeout)
                                 {
-                                    logger->warn("Deframer failed to sync for %.1f s — forcing Viterbi outsync", d_deframer_nosync_timeout);
+                                    logger->warn("Deframer failed to sync for %.1f s — forcing outsync", d_deframer_nosync_timeout);
+                                    // Reset all viterbi decoders so they re-search from scratch
                                     for (auto &slot : d_rate_pool)
                                         slot.reset();
                                     d_active_rate_idx = 0;
-                                    // Re-read viterbi_lock so the UI reflects the post-reset state
+                                    // Also reset the deframer so it re-searches from a clean
+                                    // state — without this it can stay stuck in SYNCING at a
+                                    // stale bit position that will never match the new viterbi output
+                                    deframer->reset();
+                                    // Reflect the post-reset state immediately
                                     viterbi_lock = d_rate_pool[0].getState();
                                     d_deframer_nosync_timer = 0;
                                 }
                             }
                             else
                             {
-                                // Reset timer whenever deframer is synced or viterbi is not locked
+                                // Deframer synced — clear the timer
                                 d_deframer_nosync_timer = 0;
                             }
                         }
