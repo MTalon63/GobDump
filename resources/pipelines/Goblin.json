@@ -33,7 +33,9 @@
 					"rs_i": 4,
 					"rs_type": "rs223",
 					"rs_dualbasis": false,
-					"rs_usecheck": true
+					"rs_usecheck": true,
+					"deframer_nosync_timeout": 5.0,
+					"long_poly": true
 				}
 			},
 			"products": {
@@ -108,7 +110,9 @@
 					"rs_i": 4,
 					"rs_type": "rs223",
 					"rs_dualbasis": false,
-					"rs_usecheck": true
+					"rs_usecheck": true,
+					"deframer_nosync_timeout": 5.0,
+					"long_poly": true
 				}
 			},
 			"products": {

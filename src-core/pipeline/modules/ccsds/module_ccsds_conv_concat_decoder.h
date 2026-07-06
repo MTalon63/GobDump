@@ -80,9 +80,10 @@ namespace satdump
 
                 const bool d_diff_decode; // If NRZ-M Decoding is required or not
 
-                const bool d_derand;          // Perform derandomizion or not
-                const bool d_derand_after_rs; // Derandomization after RS
-                const int d_derand_from;      // Byte to start derand on
+                const bool d_derand;            // If we should run the derandomizer
+                const bool d_derand_long_poly;  // If true, use 17-bit LFSR (otherwise standard 8-bit PN)
+                const bool d_derand_after_rs;   // Run it before or after RS
+                const int d_derand_from;        // Start of randomization in the frame
 
                 const std::string d_conv_type; // Conv rate identifier: "1/2", "2/3", "3/4", "5/6", "7/8", or "auto"
 

@@ -33,6 +33,7 @@ namespace satdump
                   d_diff_decode(parameters.count("nrzm") > 0 ? parameters["nrzm"].get<bool>() : false),
 
                   d_derand(parameters.count("derandomize") > 0 ? parameters["derandomize"].get<bool>() : true),
+                  d_derand_long_poly(parameters.count("long_poly") > 0 ? parameters["long_poly"].get<bool>() : false),
                   d_derand_after_rs(parameters.count("derand_after_rs") > 0 ? parameters["derand_after_rs"].get<bool>() : false),
                   d_derand_from(parameters.count("derand_start") > 0 ? parameters["derand_start"].get<int>() : 4),
 
@@ -268,7 +269,12 @@ namespace satdump
                         uint8_t *cadu = &frame_buffer[i * d_cadu_bytes];
 
                         if (d_derand && !d_derand_after_rs) // Derand if required, before RS
-                            derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                        {
+                            if (d_derand_long_poly)
+                                derand_ccsds17(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                            else
+                                derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                        }
 
                         if (d_rs_interleaving_depth != 0) // RS Correction
                             reed_solomon->decode_interlaved(&cadu[4], d_rs_dualbasis, d_rs_interleaving_depth, errors);
@@ -279,7 +285,12 @@ namespace satdump
                                 valid = false;
 
                         if (d_derand && d_derand_after_rs) // Derand if required, after RS
-                            derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                        {
+                            if (d_derand_long_poly)
+                                derand_ccsds17(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                            else
+                                derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                        }
 
                         if (!d_rs_usecheck || valid)
                         {
