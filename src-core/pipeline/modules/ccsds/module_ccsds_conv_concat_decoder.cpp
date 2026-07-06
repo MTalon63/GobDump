@@ -101,6 +101,12 @@ namespace satdump
                     s.rate = rate;
                     s.name = sname;
                     s.out  = new uint8_t[d_buffer_size * 8];
+                    // Store params so reinit() can recreate the object with a clean trellis
+                    s.ber_threshold = d_viterbi_ber_threasold;
+                    s.outsync_after = d_viterbi_outsync_after;
+                    s.buffer_size   = d_buffer_size;
+                    s.phases        = d_phases;
+                    s.oqpsk_mode    = d_oqpsk_mode;
                     if (rate == PUNCRATE_1_2)
                         s.v12 = std::make_shared<viterbi::Viterbi1_2>(d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_2_3)
@@ -270,8 +276,12 @@ namespace satdump
                                     logger->warn("Deframer failed to sync for %.1f s — forcing outsync (attempt %d, cooldown %.1f s)",
                                                  d_deframer_nosync_timeout, d_deframer_nosync_reset_count, cooldown);
 
+                                    // Hard reset: recreate decoder objects from scratch so all
+                                    // trellis path metrics and survivor paths are zeroed — this
+                                    // prevents re-convergence to the same wrong path that caused
+                                    // the deframer not to sync in the first place.
                                     for (auto &slot : d_rate_pool)
-                                        slot.reset();
+                                        slot.reinit();
                                     d_active_rate_idx = 0;
                                     deframer->reset();
                                     viterbi_lock = d_rate_pool[0].getState();

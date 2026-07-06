@@ -111,14 +111,43 @@ namespace satdump
                     uint8_t *out = nullptr; // owned output buffer (d_buffer_size * 8 bytes)
                     int last_vitout = 0;
 
+                    // Stored constructor args so reinit() can recreate the object from scratch
+                    float ber_threshold = 0;
+                    int outsync_after = 0;
+                    int buffer_size = 0;
+                    std::vector<phase_t> phases;
+                    bool oqpsk_mode = false;
+
                     int work(int8_t *input, int size)
                     {
                         last_vitout = v12 ? v12->work(input, size, out) : vp->work(input, size, out);
                         return last_vitout;
                     }
-                    float ber() const { return v12 ? v12->ber() : vp->ber(); }
-                    int getState() const { return v12 ? v12->getState() : vp->getState(); }
+                    float ber()      const { return v12 ? v12->ber()      : vp->ber();      }
+                    int getState()   const { return v12 ? v12->getState() : vp->getState(); }
+
+                    // Soft reset: just flags the decoder back to ST_IDLE.
+                    // The trellis path metrics and survivor paths are preserved, so the decoder
+                    // may re-converge to the same path quickly. Use for normal lock-loss recovery.
                     void reset() { if (v12) v12->reset(); else vp->reset(); }
+
+                    // Hard reset: destroys and recreates the decoder object so all internal
+                    // trellis state (path metrics, survivor paths, BER history) starts from zero.
+                    // Use when the decoder is stuck on a wrong trellis path.
+                    void reinit()
+                    {
+                        if (rate == PUNCRATE_1_2)
+                            v12 = std::make_shared<viterbi::Viterbi1_2>(ber_threshold, outsync_after, buffer_size, phases, oqpsk_mode);
+                        else if (rate == PUNCRATE_2_3)
+                            vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc23>(), ber_threshold, outsync_after, buffer_size, phases, oqpsk_mode);
+                        else if (rate == PUNCRATE_3_4)
+                            vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc34>(), ber_threshold, outsync_after, buffer_size, phases, oqpsk_mode);
+                        else if (rate == PUNCRATE_5_6)
+                            vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), ber_threshold, outsync_after, buffer_size, phases, oqpsk_mode);
+                        else if (rate == PUNCRATE_7_8)
+                            vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), ber_threshold, outsync_after, buffer_size, phases, oqpsk_mode);
+                        last_vitout = 0;
+                    }
                 };
 
                 bool d_auto_rate = false;             // true when conv_rate == "auto"
