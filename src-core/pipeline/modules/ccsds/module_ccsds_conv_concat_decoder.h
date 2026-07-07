@@ -6,6 +6,8 @@
 #include "common/codings/viterbi/viterbi_punc.h"
 #include "common/dsp/demod/constellation.h"
 #include "common/dsp/utils/random.h"
+#include "pipeline/module.h"
+#include <fstream>
 #include "pipeline/modules/base/filestream_to_filestream.h"
 #include <memory>
 #include <string>
@@ -60,6 +62,11 @@ namespace satdump
                 dsp::constellation_type_t d_constellation; // Constellation type
                 bool d_bpsk_90;                            // Special case for BPSK shifted by 90 degs + IQ-swapped
                 bool d_oqpsk_mode;                         // OQPSK does NOT guarantee IQ stability
+                bool d_is_higher_order;
+                std::unique_ptr<dsp::constellation_t> d_constellation_obj;
+                int8_t *temp_soft_buffer;
+                int d_num_phases;
+                int d_current_phase;
                 const bool d_iq_invert;                    // For some QPSK sats, can need to be inverted...
 
                 const int d_cadu_size;   // CADU Size in bits, including ASM

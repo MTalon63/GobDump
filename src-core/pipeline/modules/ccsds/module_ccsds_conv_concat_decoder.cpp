@@ -64,18 +64,46 @@ namespace satdump
                     d_constellation = dsp::QPSK;
                     d_oqpsk_mode = true;
                 }
+                else if (d_constellation_str == "8psk")
+                {
+                    d_constellation = dsp::PSK8;
+                }
+                else if (d_constellation_str == "16apsk")
+                {
+                    d_constellation = dsp::APSK16;
+                }
                 else
                     throw satdump_exception("CCSDS Concatenated 1/2 Decoder : invalid constellation type!");
 
                 std::vector<phase_t> d_phases;
 
-                // Get phases for the viterbi decoder to check
-                if (d_constellation == dsp::BPSK && !d_bpsk_90)
+                d_is_higher_order = (d_constellation == dsp::PSK8 || d_constellation == dsp::APSK16);
+
+                if (d_is_higher_order)
+                {
+                    d_constellation_obj = std::make_unique<dsp::constellation_t>(d_constellation);
+                    // 8PSK -> 3 bits, 16APSK -> 4 bits. Viterbi expects bits. We need temp buffer for bits.
+                    temp_soft_buffer = new int8_t[d_buffer_size * 2]; // Enough space
+                    d_current_phase = 0;
+                    if (d_constellation == dsp::PSK8)
+                        d_num_phases = 8;
+                    else
+                        d_num_phases = 4;
+                    
+                    // We only tell Viterbi to check PHASE_0, we'll do the phase search manually.
                     d_phases = {PHASE_0};
-                else if (d_constellation == dsp::BPSK && d_bpsk_90)
-                    d_phases = {PHASE_90};
-                else if (d_constellation == dsp::QPSK)
-                    d_phases = {PHASE_0, PHASE_90};
+                }
+                else
+                {
+                    temp_soft_buffer = nullptr;
+                    // Get phases for the viterbi decoder to check
+                    if (d_constellation == dsp::BPSK && !d_bpsk_90)
+                        d_phases = {PHASE_0};
+                    else if (d_constellation == dsp::BPSK && d_bpsk_90)
+                        d_phases = {PHASE_90};
+                    else if (d_constellation == dsp::QPSK)
+                        d_phases = {PHASE_0, PHASE_90};
+                }
 
                 // Parse RS
                 reedsolomon::RS_TYPE rstype = reedsolomon::RS223;
@@ -167,6 +195,8 @@ namespace satdump
                     delete[] slot.out; // viterbi_out is a non-owning alias; slots own their buffers
                 delete[] soft_buffer;
                 delete[] frame_buffer;
+                if (temp_soft_buffer != nullptr)
+                    delete[] temp_soft_buffer;
             }
 
             void CCSDSConvConcatDecoderModule::process()
@@ -185,8 +215,94 @@ namespace satdump
                         rotate_soft((int8_t *)soft_buffer, d_buffer_size, PHASE_0, true);
 
                     // Run all viterbi decoders in the pool (1 slot for fixed rate, 5 for auto)
-                    for (auto &slot : d_rate_pool)
-                        slot.work((int8_t *)soft_buffer, d_buffer_size);
+                    if (!d_is_higher_order)
+                    {
+                        for (auto &slot : d_rate_pool)
+                            slot.work((int8_t *)soft_buffer, d_buffer_size);
+                    }
+                    else
+                    {
+                        auto clamp_8 = [](float x) -> int8_t {
+                            if (x < -127.0f) return -127;
+                            if (x > 127.0f) return 127;
+                            return (int8_t)x;
+                        };
+
+                        bool any_synced = false;
+                        for (auto &slot : d_rate_pool)
+                        {
+                            if (slot.getState() != 0)
+                            {
+                                any_synced = true;
+                                break;
+                            }
+                        }
+
+                        if (!any_synced)
+                        {
+                            for (int p = 0; p < d_num_phases; p++)
+                            {
+                                int temp_bits_len = 0;
+                                float phase = p * (2.0f * M_PI / (float)d_num_phases);
+                                float s_p = sin(phase);
+                                float c_p = cos(phase);
+                                int bits_per_sym = d_constellation_obj->get_bits_per_symbol();
+
+                                for (int i = 0; i < d_buffer_size / 2; i++)
+                                {
+                                    int8_t r = soft_buffer[i * 2];
+                                    int8_t c = soft_buffer[i * 2 + 1];
+                                    int8_t vr = clamp_8((r * c_p) - (c * s_p));
+                                    int8_t vc = clamp_8((c * c_p) + (r * s_p));
+                                    d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                                }
+                                temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
+
+                                // Try decoding
+                                for (auto &slot : d_rate_pool)
+                                {
+                                    slot.work(temp_soft_buffer, temp_bits_len);
+                                    if (slot.getState() != 0)
+                                    {
+                                        any_synced = true;
+                                        break;
+                                    }
+                                }
+
+                                if (any_synced)
+                                {
+                                    d_current_phase = p;
+                                    break;
+                                }
+                                else
+                                {
+                                    for (auto &slot : d_rate_pool)
+                                        slot.reset();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            int temp_bits_len = 0;
+                            float phase = d_current_phase * (2.0f * M_PI / (float)d_num_phases);
+                            float s_p = sin(phase);
+                            float c_p = cos(phase);
+                            int bits_per_sym = d_constellation_obj->get_bits_per_symbol();
+
+                            for (int i = 0; i < d_buffer_size / 2; i++)
+                            {
+                                int8_t r = soft_buffer[i * 2];
+                                int8_t c = soft_buffer[i * 2 + 1];
+                                int8_t vr = clamp_8((r * c_p) - (c * s_p));
+                                int8_t vc = clamp_8((c * c_p) + (r * s_p));
+                                d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                            }
+                            temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
+
+                            for (auto &slot : d_rate_pool)
+                                slot.work(temp_soft_buffer, temp_bits_len);
+                        }
+                    }
 
                     // Rate selection — Option A (hysteresis):
                     // Keep the active slot while it stays locked.
