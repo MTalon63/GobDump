@@ -91,7 +91,7 @@
 				"module": "psk_demod",
 				"parameters": {
 					"constellation": "oqpsk",
-					"symbolrate": 200000,
+					"symbolrate": 250000,
 					"pll_bw": 0.002,
 					"rrc_alpha": 0.25
 				}
@@ -101,7 +101,7 @@
 				"parameters": {
 					"ccsds": true,
 					"constellation": "oqpsk",
-					"conv_rate": "auto",
+					"conv_rate": "3/4",
 					"cadu_size": 8192,
 					"viterbi_ber_thresold": 0.3,
 					"viterbi_outsync_after": 20,
@@ -111,7 +111,7 @@
 					"rs_type": "rs223",
 					"rs_dualbasis": false,
 					"rs_usecheck": true,
-					"deframer_nosync_timeout": 5.0,
+					"deframer_nosync_timeout": 2.5,
 					"long_poly": true
 				}
 			},
@@ -174,18 +174,17 @@
 				}
 			},
 			"cadu": {
-				"module": "ccsds_ldpc_concat_decoder",
+				"module": "ccsds_ldpc_decoder",
 				"parameters": {
-					"ccsds": true,
 					"constellation": "oqpsk",
 					"ldpc_rate": "7/8",
-					"cadu_size": 8192,
+					"ldpc_iterations": 10,
+					"internal_stream": false,
+					"internal_cadu_size": 0,
+					"long_poly": true,
 					"derandomize": true,
 					"nrzm": false,
-					"rs_type": "rs223",
-					"rs_dualbasis": false,
-					"rs_usecheck": true,
-					"long_poly": true
+					"cadu_size": 8192
 				}
 			},
 			"products": {
