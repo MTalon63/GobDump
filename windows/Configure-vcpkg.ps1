@@ -1,6 +1,21 @@
 param([string]$platform="x64-windows") #or x86-windows, arm64-windows
 $ErrorActionPreference = "Stop"
 $PSDefaultParameterValues['*:ErrorAction']='Stop'
+$env:MSBUILDDISABLENODEREUSE = "1"
+
+function Remove-DirWithRetry([string]$path) {
+    if (Test-Path $path) {
+        for ($i = 0; $i -lt 5; $i++) {
+            try {
+                Remove-Item -Recurse -Force $path -ErrorAction Stop
+                return
+            } catch {
+                Start-Sleep -Milliseconds 500
+            }
+        }
+        cmd /c rmdir /s /q "$path" 2>$null
+    }
+}
 
 if(!!(Get-Command 'tf' -ErrorAction SilentlyContinue) -eq $false -and $Env:GITHUB_WORKSPACE -eq $null)
 {
@@ -131,7 +146,7 @@ cp -Force ..\build\$toolset_used\$generator\Debug\dll\libusb-1.0.pdb ..\..\..\in
 cp -Force ..\build\$toolset_used\$generator\Debug\dll\libusb-1.0.lib ..\..\..\installed\$platform\Debug\lib
 cp -force ..\libusb\libusb.h ..\..\..\installed\$platform\include
 cd ..\..
-rm -recurse -force libusb
+Remove-DirWithRetry "libusb"
 
 Write-Output "Building cpu_features..."
 git clone https://github.com/google/cpu_features -b v0.10.1
@@ -142,7 +157,7 @@ cmake $build_args -DBUILD_TESTING=OFF -DBUILD_EXECUTABLE=OFF ..
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..
-rm -recurse -force cpu_features
+Remove-DirWithRetry "cpu_features"
 
 Write-Output "Building Volk..."
 #git clone https://github.com/gnuradio/volk --depth 1 -b v3.1.2
@@ -154,7 +169,7 @@ cmake $build_args -DENABLE_TESTING=OFF -DENABLE_MODTOOL=OFF ..
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..
-rm -recurse -force volk
+Remove-DirWithRetry "volk"
 
 Write-Output "Building Airspy..."
 #git clone https://github.com/airspy/airspyone_host --depth 1 #-b v1.0.10
@@ -167,7 +182,7 @@ cmake $build_args -DLIBUSB_INCLUDE_DIR="$($libusb_include)" -DLIBUSB_LIBRARIES="
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..\..
-rm -recurse -force airspyone_host
+Remove-DirWithRetry "airspyone_host"
 
 Write-Output "Building Airspy HF..."
 #git clone https://github.com/airspy/airspyhf --depth 1 #-b 1.6.8
@@ -180,7 +195,7 @@ cmake $build_args -DLIBUSB_INCLUDE_DIR="$($libusb_include)" -DLIBUSB_LIBRARIES="
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..\..
-rm -recurse -force airspyhf
+Remove-DirWithRetry "airspyhf"
 
 Write-Output "Building RTL-SDR..."
 #git clone https://github.com/osmocom/rtl-sdr --depth 1 -b v2.0.2
@@ -193,7 +208,7 @@ cmake $build_args -DLIBUSB_INCLUDE_DIRS="$($libusb_include)" -DLIBUSB_LIBRARIES=
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..
-rm -recurse -force librtlsdr
+Remove-DirWithRetry "librtlsdr"
 
 Write-Output "Building HackRF..."
 #git clone https://github.com/greatscottgadgets/hackrf --depth 1 -b v2024.02.1
@@ -206,7 +221,7 @@ cmake $build_args -DLIBUSB_INCLUDE_DIR="$($libusb_include)" -DLIBUSB_LIBRARIES="
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..\..\..
-rm -recurse -force hackrf
+Remove-DirWithRetry "hackrf"
 
 Write-Output "Building HydraSDR..."
 git clone https://github.com/hydrasdr/rfone_host -b v1.0.1 #TODO: Patch for Raw IO support to avoid sample drops?
@@ -218,7 +233,7 @@ cmake $build_args -DLIBUSB_INCLUDE_DIR="$($libusb_include)" -DLIBUSB_LIBRARIES="
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..\..
-rm -recurse -force rfone_host
+Remove-DirWithRetry "rfone_host"
 
 Write-Output "Building FobosSDR..."
 git clone https://github.com/rigexpert/libfobos -b v.2.2.2 #TODO: Patch for Raw IO support to avoid sample drops?
@@ -240,7 +255,7 @@ cmake $build_args -DLIBUSB_INCLUDE_DIRS="$fobos_inc" -DLIBUSB_LIBRARIES="$fobos_
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..
-rm -recurse -force libfobos
+Remove-DirWithRetry "libfobos"
 
 Write-Output "Building libiio..."
 git clone https://github.com/analogdevicesinc/libiio --depth 1 -b v0.26
@@ -252,7 +267,7 @@ cmake $build_args -DWITH_IIOD=OFF -DWITH_TESTS=OFF -DWITH_ZSTD=ON -DLIBUSB_INCLU
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..
-rm -recurse -force libiio
+Remove-DirWithRetry "libiio"
 
 Write-Output "Building libad9361-iio..."
 git clone https://github.com/analogdevicesinc/libad9361-iio --depth 1 -b v0.3
@@ -264,7 +279,7 @@ cmake $build_args -DLIBIIO_LIBRARIES="$($(Get-Item ..\..\..\installed\$platform\
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..
-rm -recurse -force libad9361-iio
+Remove-DirWithRetry "libad9361-iio"
 
 # Broken after satdump page update
 # Not compatible with ARM at this time
@@ -297,12 +312,13 @@ cmake $build_args $fx3_arg -DTREAT_WARNINGS_AS_ERRORS=OFF -DLIBPTHREADSWIN32_INC
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..\..
-rm -recurse -force bladeRF
+Remove-DirWithRetry "bladeRF"
 
 # Not compatible with ARM at this time
 if($platform -eq "x64-windows" -or $platform -eq "x86-windows")
 {
-    rm -recurse -force FX3-SDK, FX3-SDK.zip
+    Remove-DirWithRetry "FX3-SDK"
+    Remove-DirWithRetry "FX3-SDK.zip"
 }
 
 Write-Output "Building UHD..."
@@ -314,10 +330,10 @@ cmake $build_args -DENABLE_MAN_PAGES=OFF -DENABLE_MANUAL=OFF -DENABLE_PYTHON_API
 cmake --build . --config Release --parallel
 cmake --install .
 cd ..\..\..
-rm -recurse -force uhd
+Remove-DirWithRetry "uhd"
 
 cd ..
-rm -recurse -force build
+Remove-DirWithRetry "build"
 
 #Install SDRPlay API
 # Broken after satdump page update
