@@ -23,9 +23,9 @@
 class M2M4SNREstimator
 {
 private:
-    float d_y1, d_y2;
-    float d_alpha, d_beta;
-    float d_signal, d_noise;
+    double d_y1, d_y2;   // widened: 4th moment loses precision fast in float
+    double d_alpha, d_beta;
+    double d_signal, d_noise;
 
 public:
     /*! Constructor
@@ -36,7 +36,7 @@ public:
      */
     M2M4SNREstimator(float alpha = 0.001);
     ~M2M4SNREstimator() {}
-
+    
     void update(complex_t *input, int size);
     float snr();
     float signal();

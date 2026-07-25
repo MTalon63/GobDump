@@ -1,14 +1,13 @@
 #include "snr_estimator.h"
 #include <algorithm>
+#include <cmath>
 
 M2M4SNREstimator::M2M4SNREstimator(float alpha)
 {
     d_y1 = 0;
     d_y2 = 0;
-
     d_signal = 0;
     d_noise = 0;
-
     d_alpha = alpha;
     d_beta = 1.0 - alpha;
 }
@@ -17,33 +16,42 @@ void M2M4SNREstimator::update(complex_t *input, int size)
 {
     for (int i = 0; i < size; i++)
     {
-        float y1 = abs((std::complex<float>)input[i]) * abs((std::complex<float>)input[i]);
-        d_y1 = d_alpha * y1 + d_beta * d_y1;
+        std::complex<float> c = (std::complex<float>)input[i];
+        double mag2 = (double)c.real() * c.real() + (double)c.imag() * c.imag();
 
-        float y2 = abs((std::complex<float>)input[i]) * abs((std::complex<float>)input[i]) * abs((std::complex<float>)input[i]) * abs((std::complex<float>)input[i]);
+        double y1 = mag2;
+        double y2 = mag2 * mag2;
+
+        d_y1 = d_alpha * y1 + d_beta * d_y1;
         d_y2 = d_alpha * y2 + d_beta * d_y2;
     }
 
-    if (d_y1 != d_y1)
-        d_y1 = 0;
-    if (d_y2 != d_y2)
-        d_y2 = 0;
+    if (d_y1 != d_y1) d_y1 = 0;
+    if (d_y2 != d_y2) d_y2 = 0;
 }
 
 float M2M4SNREstimator::snr()
 {
-    float y1_2 = d_y1 * d_y1;
-    d_signal = sqrt(2 * y1_2 - d_y2);
-    d_noise = d_y1 - sqrt(2 * y1_2 - d_y2);
-    return std::max<float>(0, 10.0 * log10(d_signal / d_noise));
+    double y1_2 = d_y1 * d_y1;
+    double disc = 2.0 * y1_2 - d_y2;
+
+    if (disc < 0.0) disc = 0.0;
+
+    double root = sqrt(disc);
+    d_signal = root;
+    d_noise = d_y1 - root;
+
+    if (d_noise <= 0.0) d_noise = 1e-12;
+
+    return std::max<float>(0.0f, 10.0f * log10f((float)(d_signal / d_noise)));
 }
 
 float M2M4SNREstimator::signal()
 {
-    return 10.0 * log10(d_signal);
+    return 10.0f * log10f((float)d_signal);
 }
 
 float M2M4SNREstimator::noise()
 {
-    return 10.0 * log10(d_noise);
+    return 10.0f * log10f((float)d_noise);
 }
