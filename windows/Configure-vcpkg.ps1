@@ -86,13 +86,20 @@ vcpkg_cmake_configure(
 
 # Core packages. libxml2 is for libiio
 # hdf5: [core,cpp,zlib] explicitly excludes the szip default feature, which pulls in libaec from gitlab.dkrz.de
-.\vcpkg install --triplet $platform pthreads libjpeg-turbo tiff libpng glfw3 libusb fftw3 libxml2 portaudio nng zstd opencl curl[schannel] hdf5[core,cpp,zlib] sqlite3 armadillo 
+.\vcpkg install --triplet $platform pthreads libjpeg-turbo tiff libpng glfw3 libusb fftw3 libxml2 portaudio nng zstd opencl curl hdf5[core,cpp,zlib] sqlite3 armadillo 
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Core packages installation failed with exit code $LASTEXITCODE"
+}
 
 # Entirely for UHD...
 .\vcpkg install --triplet $platform boost-chrono boost-date-time boost-filesystem boost-program-options boost-system boost-serialization boost-thread `
                                     boost-test boost-format boost-asio boost-math boost-graph boost-units boost-lockfree boost-circular-buffer        `
                                     boost-assign boost-dll
 
+if ($LASTEXITCODE -ne 0) {
+    throw "Boost packages installation failed with exit code $LASTEXITCODE"
+}
 #Start Building Dependencies
 $null = mkdir build
 cd build
