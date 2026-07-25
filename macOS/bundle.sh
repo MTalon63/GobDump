@@ -82,7 +82,7 @@ dylibbundler $SIGN_FLAG \
   $plugin_args
 
 # SDRPlay is custom, not staticaly linked; we can copy it manually
-cp $GITHUB_WORKSPACE/deps/lib/libsdrplay*.dylib MacApp/GobDump.app/Contents/libs
+#cp $GITHUB_WORKSPACE/deps/lib/libsdrplay*.dylib MacApp/GobDump.app/Contents/libs
 
 
 # Some libraries are processed more than once, dylibbundler is silly and doesn't check whether

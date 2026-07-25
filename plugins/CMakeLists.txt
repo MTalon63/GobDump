@@ -346,7 +346,7 @@ if(PLUGIN_HACKRF_SDR_SUPPORT)
   add_subdirectory(sdr_sources/hackrf_sdr_support)
 endif()
 
-option(PLUGIN_LIMESDR_SDR_SUPPORT "Enable LimeSDR SDR Support plugin" ON)
+option(PLUGIN_LIMESDR_SDR_SUPPORT "Enable LimeSDR SDR Support plugin" OFF)
 
 if(PLUGIN_LIMESDR_SDR_SUPPORT)
   add_subdirectory(sdr_sources/limesdr_sdr_support)

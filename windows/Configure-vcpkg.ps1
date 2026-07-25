@@ -1,4 +1,4 @@
-﻿param([string]$platform="x64-windows") #or x86-windows, arm64-windows
+param([string]$platform="x64-windows") #or x86-windows, arm64-windows
 $ErrorActionPreference = "Stop"
 $PSDefaultParameterValues['*:ErrorAction']='Stop'
 
@@ -260,23 +260,24 @@ cmake --install .
 cd ..\..
 rm -recurse -force libad9361-iio
 
+# Broken after satdump page update
 # Not compatible with ARM at this time
-if($platform -eq "x64-windows" -or $platform -eq "x86-windows")
-{
-    Write-Output "Building LimeSuite..."
-    Invoke-WebRequest -Uri "https://www.satdump.org/FX3-SDK.zip" -OutFile FX3-SDK.zip
-    Expand-Archive FX3-SDK.zip .
-    $fx3_arg = "-DFX3_SDK_PATH=$($(Get-Item .\FX3-SDK).FullName)"
-    git clone https://github.com/myriadrf/LimeSuite # v23.11.0 (latest as of this writing) is not compatible with the latest MSVC
-    cd LimeSuite
-    $null = mkdir build-dir
-    cd build-dir
-    cmake $build_args -DENABLE_GUI=OFF $fx3_arg ..
-    cmake --build . --config Release --parallel
-    cmake --install .
-    cd ..\..
-    rm -recurse -force LimeSuite
-}
+#if($platform -eq "x64-windows" -or $platform -eq "x86-windows")
+#{
+#    Write-Output "Building LimeSuite..."
+#    Invoke-WebRequest -Uri "https://www.satdump.org/FX3-SDK.zip" -OutFile FX3-SDK.zip
+#    Expand-Archive FX3-SDK.zip .
+#    $fx3_arg = "-DFX3_SDK_PATH=$($(Get-Item .\FX3-SDK).FullName)"
+#    git clone https://github.com/myriadrf/LimeSuite # v23.11.0 (latest as of this writing) is not compatible with the latest MSVC
+#    cd LimeSuite
+#    $null = mkdir build-dir
+#    cd build-dir
+#    cmake $build_args -DENABLE_GUI=OFF $fx3_arg ..
+#    cmake --build . --config Release --parallel
+#    cmake --install .
+#    cd ..\..
+#    rm -recurse -force LimeSuite
+#}
 
 Write-Output "Building bladeRF..."
 git clone https://github.com/Nuand/bladeRF --depth 1 -b 2024.05
@@ -313,14 +314,15 @@ cd ..
 rm -recurse -force build
 
 #Install SDRPlay API
-Invoke-WebRequest -Uri "https://www.satdump.org/SDRPlay.zip" -OutFile sdrplay.zip
-mkdir sdrplay | Out-Null
-Expand-Archive sdrplay.zip .
-cp sdrplay\API\inc\*.h installed\$platform\include
-cp sdrplay\API\$sdrplay_arch\sdrplay_api.dll installed\$platform\bin
-cp sdrplay\API\$sdrplay_arch\sdrplay_api.lib installed\$platform\lib
-Remove-Item sdrplay -Force -Recurse -ErrorAction SilentlyContinue
-Remove-Item sdrplay.zip
+# Broken after satdump page update
+#Invoke-WebRequest -Uri "https://www.satdump.org/SDRPlay.zip" -OutFile sdrplay.zip
+#mkdir sdrplay | Out-Null
+#Expand-Archive sdrplay.zip .
+#cp sdrplay\API\inc\*.h installed\$platform\include
+#cp sdrplay\API\$sdrplay_arch\sdrplay_api.dll installed\$platform\bin
+#cp sdrplay\API\$sdrplay_arch\sdrplay_api.lib installed\$platform\lib
+#Remove-Item sdrplay -Force -Recurse -ErrorAction SilentlyContinue
+#Remove-Item sdrplay.zip
 
 #Clean Up (Some packages are silly)
 mv installed\$platform\lib\*.dll installed\$platform\bin\
