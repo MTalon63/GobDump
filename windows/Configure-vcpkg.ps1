@@ -61,13 +61,11 @@ if($env:PROCESSOR_ARCHITECTURE -ne $arch)
 #Setup vcpkg
 Write-Output "Configuring vcpkg..."
 cd "$(Split-Path -Parent $MyInvocation.MyCommand.Path)\.."
-git clone https://github.com/microsoft/vcpkg -b 2025.04.09
+git clone https://github.com/microsoft/vcpkg -b 2026.06.24
 cd vcpkg
 .\bootstrap-vcpkg.bat
 
 # New CMake version enforces policies that break compatibility with some older CMakeLists.txt files. Patch them here to avoid build failures.
-Write-Output "Patching legacy libraries for modern CMake compatibility..."
-
 (Get-Content -raw .\ports\openblas\portfile.cmake) -replace '(?s)(vcpkg_cmake_configure\(.*?OPTIONS)', '$1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5' | Set-Content -Encoding ASCII .\ports\openblas\portfile.cmake
 
 (Get-Content -raw .\ports\fftw3\portfile.cmake) -replace '(?s)(vcpkg_cmake_configure\(.*?OPTIONS)', '$1 -DCMAKE_POLICY_VERSION_MINIMUM=3.5' | Set-Content -Encoding ASCII .\ports\fftw3\portfile.cmake
