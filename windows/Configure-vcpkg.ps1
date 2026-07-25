@@ -87,7 +87,8 @@ vcpkg_cmake_configure(
 (Get-Content -raw .\ports\lapack-reference\portfile.cmake) -replace 'vcpkg_cmake_configure\s*\(', $lapack_patch | Set-Content -Encoding ASCII .\ports\lapack-reference\portfile.cmake
 
 # Core packages. libxml2 is for libiio
-.\vcpkg install --triplet $platform pthreads libjpeg-turbo tiff libpng glfw3 libusb fftw3 libxml2 portaudio nng zstd opencl curl[schannel] hdf5[cpp] sqlite3
+# hdf5: [core,cpp,zlib] explicitly excludes the szip default feature, which pulls in libaec from gitlab.dkrz.de
+.\vcpkg install --triplet $platform pthreads libjpeg-turbo tiff libpng glfw3 libusb fftw3 libxml2 portaudio nng zstd opencl curl[schannel] hdf5[core,cpp,zlib] sqlite3 armadillo 
 
 # Entirely for UHD...
 .\vcpkg install --triplet $platform boost-chrono boost-date-time boost-filesystem boost-program-options boost-system boost-serialization boost-thread `
