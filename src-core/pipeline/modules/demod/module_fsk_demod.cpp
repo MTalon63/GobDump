@@ -124,8 +124,8 @@ namespace satdump
                     constellation.pushFloatAndGaussian(rec->output_stream->readBuf, rec->output_stream->getDataSize());
 
                     // Estimate SNR
-                    snr_estimator.update((complex_t *)rec->output_stream->readBuf, dat_size / 2);
-                    snr = snr_estimator.snr();
+                    snr_update((complex_t *)rec->output_stream->readBuf, dat_size / 2);
+                    snr = snr_read();
 
                     if (snr > peak_snr)
                         peak_snr = snr;

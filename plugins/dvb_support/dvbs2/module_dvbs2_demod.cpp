@@ -189,8 +189,8 @@ namespace satdump
                     constellation_s2.pushComplexSlots(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
 
                     // Estimate SNR over slots
-                    snr_estimator.update(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
-                    snr = snr_estimator.snr();
+                    snr_update(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
+                    snr = snr_read();
 
                     if (snr > peak_snr)
                         peak_snr = snr;

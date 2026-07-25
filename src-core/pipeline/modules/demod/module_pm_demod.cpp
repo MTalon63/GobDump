@@ -133,8 +133,8 @@ namespace satdump
                     constellation.pushComplex(rec->output_stream->readBuf, dat_size);
 
                     // Estimate SNR
-                    snr_estimator.update(rec->output_stream->readBuf, dat_size);
-                    snr = snr_estimator.snr();
+                    snr_update(rec->output_stream->readBuf, dat_size);
+                    snr = snr_read();
 
                     if (snr > peak_snr)
                         peak_snr = snr;

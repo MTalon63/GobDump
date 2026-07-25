@@ -75,8 +75,8 @@ namespace satdump
                     constellation.pushComplex(buf, size);
 
                     // Estimate SNR
-                    snr_estimator.update(buf, size);
-                    snr = snr_estimator.snr();
+                    snr_update(buf, size);
+                    snr = snr_read();
 
                     if (snr > peak_snr)
                         peak_snr = snr;

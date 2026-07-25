@@ -42,3 +42,31 @@ public:
     float signal();
     float noise();
 };
+
+//! \brief Decision-directed SNR estimator using error-vector magnitude (EVM).
+/*!
+ *  Uses recovered, phase/timing-corrected M-PSK symbols. For each symbol,
+ *  decides the nearest ideal constellation point (constant modulus, so only
+ *  phase matters) and measures the direct error power against it. Requires
+ *  post-recovery symbols (e.g. output of a Costas loop + clock recovery),
+ *  NOT raw pre-demod IQ.
+ */
+class EVMSNREstimator
+{
+private:
+    int    d_order;     // 2 = BPSK, 4 = QPSK/OQPSK, 8 = 8PSK
+    double d_pwr, d_err; // EMA of total power / error power
+    double d_alpha, d_beta;
+    double d_signal, d_noise;
+    double d_step;       // 2*PI / order, precomputed
+
+public:
+    EVMSNREstimator(int order = 4, float alpha = 0.001);
+    EVMSNREstimator() : EVMSNREstimator(4, 0.001) {}
+    ~EVMSNREstimator() {}
+
+    void update(complex_t *input, int size);
+    float snr();
+    float signal();
+    float noise();
+};
