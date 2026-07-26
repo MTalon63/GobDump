@@ -1,5 +1,6 @@
 #include "vincentys_calculations.h"
 #include "wgs84.h"
+#include <algorithm>
 
 #define M_2PI (M_PI * 2)
 
