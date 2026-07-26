@@ -290,9 +290,7 @@ namespace satdump
             // } // TODOREWORK
 
             std::shared_ptr<ProcessingModule> PSKDemodModule::getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
-            {
-                return std::make_shared<PSKDemodModule>(input_file, output_file_hint, parameters);
-            }
+            { return std::make_shared<PSKDemodModule>(input_file, output_file_hint, parameters); }
         } // namespace demod
     } // namespace pipeline
 } // namespace satdump

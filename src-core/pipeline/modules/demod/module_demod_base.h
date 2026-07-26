@@ -16,10 +16,11 @@
 #include "common/widgets/waterfall_plot.h"
 #include "pipeline/module.h"
 #include <atomic>
+#include <chrono>
 #include <ctime>
 #include <fstream>
-#include <chrono>
 #include <locale>
+
 
 namespace satdump
 {
@@ -89,10 +90,7 @@ namespace satdump
                         snr_estimator.update(buf, n);
                 }
 
-                float snr_read()
-                {
-                    return d_use_evm_snr ? snr_evm.snr() : snr_estimator.snr();
-                }
+                float snr_read() { return d_use_evm_snr ? snr_evm.snr() : snr_estimator.snr(); }
 
                 float snr, peak_snr;
 
@@ -108,11 +106,11 @@ namespace satdump
 
                 bool showWaterfall = false;
                 void drawFFT();
-                
+
                 /** @brief Used to render the ETA nicely
-                *
-                * @param seconds Time to render as MM:SS or HH:MM:SS if we are at that point (DD seems excessive)
-                */
+                 *
+                 * @param seconds Time to render as MM:SS or HH:MM:SS if we are at that point (DD seems excessive)
+                 */
                 std::string render_eta_string(time_t seconds);
                 void drawETA();
                 time_t start_time;
