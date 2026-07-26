@@ -525,6 +525,12 @@ namespace satdump
                 ImGui::Begin(window_title.c_str(), NULL, window ? 0 : NOWINDOW_FLAGS);
                 float &ber = viterbi_ber;
 
+                float avail_x = ImGui::GetContentRegionAvail().x;
+                float spacing = ImGui::GetStyle().ItemSpacing.x;
+                int num_columns = d_is_streaming_input ? 2 : 3;
+                float col_w = (avail_x - spacing * (num_columns - 1)) / num_columns;
+                if (col_w < 50.0f * ui_scale) col_w = 50.0f * ui_scale;
+
                 ImGui::Dummy({0, 0}); // Stupid ImGui stuff?
 
                 ImGui::BeginGroup();
@@ -533,7 +539,7 @@ namespace satdump
                     // Constellation
                     ImDrawList *draw_list = ImGui::GetWindowDrawList();
                     ImVec2 rect_min = ImGui::GetCursorScreenPos();
-                    ImVec2 rect_max = {rect_min.x + 200 * ui_scale, rect_min.y + 200 * ui_scale};
+                    ImVec2 rect_max = {rect_min.x + col_w, rect_min.y + col_w};
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
@@ -541,25 +547,25 @@ namespace satdump
                     {
                         for (int i = 0; i < 2048; i++)
                         {
-                            float x_off = std::clamp(100 * ui_scale + (((int8_t *)soft_buffer)[i] / 127.0f) * 130 * ui_scale, 0.0f, 200 * ui_scale);
-                            float y_off = std::clamp(100 * ui_scale + (float)rng.gasdev() * 14 * ui_scale, 0.0f, 200 * ui_scale);
+                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i] / 127.0f) * col_w * 0.65f, 0.0f, col_w);
+                            float y_off = std::clamp(col_w / 2.0f + (float)rng.gasdev() * col_w * 0.07f, 0.0f, col_w);
                             draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       2 * ui_scale, style::theme.constellation);
+                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
                         }
                     }
                     else
                     {
                         for (int i = 0; i < 2048; i++)
                         {
-                            float x_off = std::clamp(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * 100 * ui_scale, 0.0f, 200 * ui_scale);
-                            float y_off = std::clamp(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * 100 * ui_scale, 0.0f, 200 * ui_scale);
+                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
+                            float y_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
                             draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       2 * ui_scale, style::theme.constellation);
+                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
                         }
                     }
 
                     draw_list->PopClipRect();
-                    ImGui::Dummy(ImVec2(200 * ui_scale + 3, 200 * ui_scale + 3));
+                    ImGui::Dummy(ImVec2(col_w, col_w));
                 }
                 ImGui::EndGroup();
 
@@ -567,7 +573,7 @@ namespace satdump
 
                 ImGui::BeginGroup();
                 {
-                    ImGui::Button("Viterbi", {200 * ui_scale, 20 * ui_scale});
+                    ImGui::Button("Viterbi", {col_w, 20 * ui_scale});
                     {
                         ImGui::Text("State : ");
 
@@ -585,7 +591,7 @@ namespace satdump
                         std::memmove(&ber_history[0], &ber_history[1], (200 - 1) * sizeof(float));
                         ber_history[200 - 1] = ber;
 
-                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##ber", ber_history, IM_ARRAYSIZE(ber_history), 0, "", 0.0f, 1.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##ber", ber_history, IM_ARRAYSIZE(ber_history), 0, "", 0.0f, 1.0f, ImVec2(col_w, 50 * ui_scale));
 
                         if (d_auto_rate)
                         {
@@ -597,7 +603,7 @@ namespace satdump
 
                     ImGui::Spacing();
 
-                    ImGui::Button("Deframer", {200 * ui_scale, 20 * ui_scale});
+                    ImGui::Button("Deframer", {col_w, 20 * ui_scale});
                     {
                         ImGui::Text("State : ");
 
@@ -622,7 +628,7 @@ namespace satdump
 
                     if (d_rs_interleaving_depth != 0)
                     {
-                        ImGui::Button("Reed-Solomon", {200 * ui_scale, 20 * ui_scale});
+                        ImGui::Button("Reed-Solomon", {col_w, 20 * ui_scale});
                         {
                             ImGui::Text("RS    : ");
                             for (int i = 0; i < d_rs_interleaving_depth; i++)
@@ -653,7 +659,7 @@ namespace satdump
                 // MER panel — third column to the right of Viterbi/Deframer/RS
                 ImGui::BeginGroup();
                 {
-                    ImGui::Button("MER", {200 * ui_scale, 20 * ui_scale});
+                    ImGui::Button("MER", {col_w, 20 * ui_scale});
                     {
                         ImGui::Text("MER     : ");
                         ImGui::SameLine();
@@ -679,7 +685,7 @@ namespace satdump
                         std::memmove(&mer_history[0], &mer_history[1], (200 - 1) * sizeof(float));
                         mer_history[200 - 1] = viterbi_lock != 0 ? mer_db : 0.0f;
 
-                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##mer", mer_history, IM_ARRAYSIZE(mer_history), 0, "", 0.0f, 30.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##mer", mer_history, IM_ARRAYSIZE(mer_history), 0, "", 0.0f, 30.0f, ImVec2(col_w, 50 * ui_scale));
                     }
                 }
                 ImGui::EndGroup();
