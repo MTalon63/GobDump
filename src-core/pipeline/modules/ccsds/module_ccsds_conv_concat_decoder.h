@@ -184,6 +184,9 @@ namespace satdump
                 // MER estimation (decision-directed EVM, computed when Viterbi is locked)
                 EVMSNREstimator mer_estimator;
                 float mer_db = 0.0f;
+                float mer_history[200] = {0};
+                float peak_mer = 0.0f;
+                float avg_mer = 0.0f;
 
             public:
                 CCSDSConvConcatDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);

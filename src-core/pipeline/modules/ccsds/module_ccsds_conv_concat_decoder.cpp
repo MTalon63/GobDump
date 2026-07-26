@@ -382,6 +382,9 @@ namespace satdump
                             }
                             mer_estimator.update(mer_buf.data(), n_syms);
                             mer_db = mer_estimator.snr();
+                            if (mer_db > peak_mer)
+                                peak_mer = mer_db;
+                            avg_mer = avg_mer * 0.99f + mer_db * 0.01f;
                         }
 
                         if (d_diff_decode) // Diff decoding if required
@@ -579,17 +582,10 @@ namespace satdump
                         ImGui::SameLine();
                         ImGui::TextColored(viterbi_lock == 0 ? style::theme.red : style::theme.green, UITO_C_STR(ber));
 
-                        ImGui::Text("MER   : ");
-                        ImGui::SameLine();
-                        if (viterbi_lock == 0)
-                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
-                        else
-                            ImGui::TextColored(style::theme.green, "%.2f dB", mer_db);
-
                         std::memmove(&ber_history[0], &ber_history[1], (200 - 1) * sizeof(float));
                         ber_history[200 - 1] = ber;
 
-                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", ber_history, IM_ARRAYSIZE(ber_history), 0, "", 0.0f, 1.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##ber", ber_history, IM_ARRAYSIZE(ber_history), 0, "", 0.0f, 1.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
 
                         if (d_auto_rate)
                         {
@@ -648,6 +644,42 @@ namespace satdump
                                 }
                             }
                         }
+                    }
+                }
+                ImGui::EndGroup();
+
+                ImGui::SameLine();
+
+                // MER panel — third column to the right of Viterbi/Deframer/RS
+                ImGui::BeginGroup();
+                {
+                    ImGui::Button("MER", {200 * ui_scale, 20 * ui_scale});
+                    {
+                        ImGui::Text("MER     : ");
+                        ImGui::SameLine();
+                        if (viterbi_lock == 0)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", mer_db);
+
+                        ImGui::Text("Peak MER: ");
+                        ImGui::SameLine();
+                        if (peak_mer <= 0.0f)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", peak_mer);
+
+                        ImGui::Text("Avg MER : ");
+                        ImGui::SameLine();
+                        if (avg_mer <= 0.0f)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", avg_mer);
+
+                        std::memmove(&mer_history[0], &mer_history[1], (200 - 1) * sizeof(float));
+                        mer_history[200 - 1] = viterbi_lock != 0 ? mer_db : 0.0f;
+
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##mer", mer_history, IM_ARRAYSIZE(mer_history), 0, "", 0.0f, 30.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
                     }
                 }
                 ImGui::EndGroup();
