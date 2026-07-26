@@ -56,14 +56,15 @@ jobs:
               if: steps.win-deps-x64.outputs.cache-hit != 'true'
               run: rm -recurse -force $Env:GITHUB_WORKSPACE/vcpkg/packages, $Env:GITHUB_WORKSPACE/vcpkg/downloads, $Env:GITHUB_WORKSPACE/vcpkg/buildtrees
 
-            - name: Download Aaronia RTSA API
-              if: steps.win-deps-x64.outputs.cache-hit != 'true'
-              shell: powershell
-              run: Invoke-WebRequest -Uri "https://www.satdump.org/Aaronia_RTSA_Suite_PRO_2.2.0.12821_Setup_64bit.exe" -OutFile $Env:GITHUB_WORKSPACE/vcpkg/rtsa.exe
-
-            - name: Install Aaronia RTSA API
-              shell: cmd
-              run: start /wait vcpkg\rtsa.exe /q2 /install
+# I FUCKING HATE AARONIA
+#            - name: Download Aaronia RTSA API
+#              if: steps.win-deps-x64.outputs.cache-hit != 'true'
+#              shell: powershell
+#              run: Invoke-WebRequest -Uri "https://www.satdump.org/Aaronia_RTSA_Suite_PRO_2.2.0.12821_Setup_64bit.exe" -OutFile $Env:GITHUB_WORKSPACE/vcpkg/rtsa.exe
+#
+#            - name: Install Aaronia RTSA API
+#              shell: cmd
+#              run: start /wait vcpkg\rtsa.exe /q2 /install
 
             - name: Add support to NSIS for long PATHs
               shell: powershell
