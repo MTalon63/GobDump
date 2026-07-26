@@ -198,6 +198,7 @@ namespace geodetic
 
             // eq. 17    Careful!  sin2sigma might be almost 0!
             double sinalpha = (sin2sigma == 0) ? 0.0 : cosU1cosU2 * sinlambda / sinsigma;
+            sinalpha = std::clamp(sinalpha, -1.0, 1.0);
             double alpha = asin(sinalpha);
             double cosalpha = cos(alpha);
             double cos2alpha = cosalpha * cosalpha;

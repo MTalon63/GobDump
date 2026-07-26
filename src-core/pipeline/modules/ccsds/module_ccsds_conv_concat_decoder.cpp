@@ -5,6 +5,7 @@
 #include "core/exception.h"
 #include "imgui/imgui.h"
 #include "logger.h"
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 
@@ -474,15 +475,10 @@ namespace satdump
 
             void CCSDSConvConcatDecoderModule::drawUI(bool window)
             {
-                // Build window title once; only recompute if rate changed (auto mode)
-                static std::string s_window_title;
-                if (s_window_title.empty() || d_auto_rate)
-                {
-                    s_window_title = d_auto_rate
-                        ? "CCSDS Auto-Rate Concatenated Decoder"
-                        : ("CCSDS r=" + d_rate_pool[0].name + " Concatenated Decoder");
-                }
-                ImGui::Begin(s_window_title.c_str(), NULL, window ? 0 : NOWINDOW_FLAGS);
+                std::string window_title = d_auto_rate
+                    ? "CCSDS Auto-Rate Concatenated Decoder"
+                    : ("CCSDS r=" + d_rate_pool[0].name + " Concatenated Decoder");
+                ImGui::Begin(window_title.c_str(), NULL, window ? 0 : NOWINDOW_FLAGS);
                 float &ber = viterbi_ber;
 
                 ImGui::Dummy({0, 0}); // Stupid ImGui stuff?
@@ -501,8 +497,9 @@ namespace satdump
                     {
                         for (int i = 0; i < 2048; i++)
                         {
-                            draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i] / 127.0) * 130 * ui_scale) % int(200 * ui_scale),
-                                                              ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + rng.gasdev() * 14 * ui_scale) % int(200 * ui_scale)),
+                            float x_off = std::clamp(100 * ui_scale + (((int8_t *)soft_buffer)[i] / 127.0f) * 130 * ui_scale, 0.0f, 200 * ui_scale);
+                            float y_off = std::clamp(100 * ui_scale + (float)rng.gasdev() * 14 * ui_scale, 0.0f, 200 * ui_scale);
+                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
                                                        2 * ui_scale, style::theme.constellation);
                         }
                     }
@@ -510,10 +507,10 @@ namespace satdump
                     {
                         for (int i = 0; i < 2048; i++)
                         {
-                            draw_list->AddCircleFilled(
-                                ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0) * 100 * ui_scale) % int(200 * ui_scale),
-                                       ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0) * 100 * ui_scale) % int(200 * ui_scale)),
-                                2 * ui_scale, style::theme.constellation);
+                            float x_off = std::clamp(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * 100 * ui_scale, 0.0f, 200 * ui_scale);
+                            float y_off = std::clamp(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * 100 * ui_scale, 0.0f, 200 * ui_scale);
+                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
+                                                       2 * ui_scale, style::theme.constellation);
                         }
                     }
 

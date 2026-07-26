@@ -38,6 +38,7 @@ namespace satdump
             Block::stop(stop_now, force);
 
             nng_listener_close(listener);
+            nng_close(sock);
         }
 
         template <typename T>

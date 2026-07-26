@@ -78,9 +78,9 @@ namespace satdump
 
                     // Also freq-limit
                     if (freq > freq_limit_max)
-                        freq = freq_limit_max, fre_re = freq_limit_min_cpx.real, fre_im = freq_limit_min_cpx.imag;
+                        freq = freq_limit_max, fre_re = freq_limit_max_cpx.real, fre_im = freq_limit_max_cpx.imag;
                     if (freq < freq_limit_min)
-                        freq = freq_limit_min, fre_re = freq_limit_max_cpx.real, fre_im = freq_limit_max_cpx.imag;
+                        freq = freq_limit_min, fre_re = freq_limit_min_cpx.real, fre_im = freq_limit_min_cpx.imag;
                 }
             }
 

@@ -14,6 +14,7 @@ namespace satdump
         if (!tle.has_value())
         {
             logger->warn("NORAD #%d is not available! Skipping pass calculation", norad);
+            predict_destroy_observer(observer_station);
             return passes;
         }
 

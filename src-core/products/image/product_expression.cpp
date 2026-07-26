@@ -96,7 +96,7 @@ namespace satdump
                 image::Image *img = (image::Image *)userdata;
                 if (img->size() == 0)
                     return -1;
-                if (ch > img->channels())
+                if (ch >= img->channels())
                     return -1;
                 if (chvalx < 0)
                     chvalx = 0;
@@ -534,6 +534,7 @@ namespace satdump
                 // Free up tokens
                 for (int i = 0; i < ntkts; i++)
                     delete tkts[i];
+                delete[] tkts;
                 delete[] other_images;
 
                 return out;

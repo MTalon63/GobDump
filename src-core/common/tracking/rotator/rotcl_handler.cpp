@@ -119,7 +119,7 @@ namespace rotator
             return ROT_ERROR_CON;
 
         char command_out[30];
-        sprintf(command_out, "P %.2f %.2f\x0a", az, el);
+        snprintf(command_out, sizeof(command_out), "P %.2f %.2f\x0a", az, el);
         int ret_sz = 0;
         std::string cmd = command(std::string(command_out), &ret_sz);
         int result = 0;

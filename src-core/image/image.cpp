@@ -171,7 +171,7 @@ namespace satdump
                 memcpy((uint8_t *)d_data + type_size * d_width * d_height * 2, tmp.d_data, d_width * d_height * type_size);
 
                 // Copy over RGBA
-                memcpy((uint8_t *)d_data + type_size * d_width * d_height * 3, (uint8_t *)tmp.d_data + d_width * d_height, d_width * d_height * type_size);
+                memcpy((uint8_t *)d_data + type_size * d_width * d_height * 3, (uint8_t *)tmp.d_data + type_size * d_width * d_height, d_width * d_height * type_size);
             }
             else if (d_channels == 3)
             {
