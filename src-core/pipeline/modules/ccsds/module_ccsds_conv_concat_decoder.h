@@ -6,6 +6,7 @@
 #include "common/codings/viterbi/viterbi_punc.h"
 #include "common/dsp/demod/constellation.h"
 #include "common/dsp/utils/random.h"
+#include "common/dsp/utils/snr_estimator.h"
 #include "pipeline/module.h"
 #include <fstream>
 #include "pipeline/modules/base/filestream_to_filestream.h"
@@ -179,6 +180,10 @@ namespace satdump
 
                 float viterbi_ber = 0;
                 int viterbi_lock = 0;
+
+                // MER estimation (decision-directed EVM, computed when Viterbi is locked)
+                EVMSNREstimator mer_estimator;
+                float mer_db = 0.0f;
 
             public:
                 CCSDSConvConcatDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);

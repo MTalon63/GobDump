@@ -80,6 +80,16 @@ namespace satdump
 
                 d_is_higher_order = (d_constellation == dsp::PSK8 || d_constellation == dsp::APSK16);
 
+                // Init MER estimator with correct order
+                {
+                    int mer_order = 4; // default QPSK
+                    if (d_constellation == dsp::BPSK)
+                        mer_order = 2;
+                    else if (d_constellation == dsp::PSK8)
+                        mer_order = 8;
+                    mer_estimator = EVMSNREstimator(mer_order, 0.001f);
+                }
+
                 if (d_is_higher_order)
                 {
                     d_constellation_obj = std::make_unique<dsp::constellation_t>(d_constellation);
@@ -345,6 +355,35 @@ namespace satdump
                         if (viterbi_rate_str != active_slot.name)
                             viterbi_rate_str = active_slot.name;
 
+                        // Update MER when Viterbi is locked.
+                        // EVMSNREstimator is decision-directed: MER = P_signal / P_error
+                        // where error = received symbol - nearest ideal constellation point.
+                        // Rotation-invariant for BPSK/QPSK so phase ambiguity doesn't matter.
+                        if (state_cur != 0)
+                        {
+                            // soft_buffer is int8_t I/Q pairs, scale to float [-1, 1]
+                            int n_syms = d_buffer_size / 2; // pairs for QPSK; BPSK half of that but EVM handles it
+                            if (d_constellation == dsp::BPSK)
+                                n_syms = d_buffer_size;
+                            // Reinterpret as complex_t* — int8_t pairs match layout when scaled
+                            // We need float, so build a small float complex view
+                            static thread_local std::vector<complex_t> mer_buf;
+                            if ((int)mer_buf.size() < n_syms)
+                                mer_buf.resize(n_syms);
+                            if (d_constellation == dsp::BPSK)
+                            {
+                                for (int i = 0; i < n_syms; i++)
+                                    mer_buf[i] = complex_t(soft_buffer[i] / 127.0f, 0.0f);
+                            }
+                            else
+                            {
+                                for (int i = 0; i < n_syms; i++)
+                                    mer_buf[i] = complex_t(soft_buffer[i * 2] / 127.0f, soft_buffer[i * 2 + 1] / 127.0f);
+                            }
+                            mer_estimator.update(mer_buf.data(), n_syms);
+                            mer_db = mer_estimator.snr();
+                        }
+
                         if (d_diff_decode) // Diff decoding if required
                             diff.decode_bits(viterbi_out, vitout_cur);
 
@@ -470,6 +509,8 @@ namespace satdump
                 std::string deframer_state = deframer->getState() == deframer->STATE_NOSYNC ? "NOSYNC" : (deframer->getState() == deframer->STATE_SYNCING ? "SYNCING" : "SYNCED");
                 v["viterbi_state"] = viterbi_state;
                 v["deframer_state"] = deframer_state;
+                if (viterbi_lock != 0)
+                    v["mer_db"] = mer_db;
                 return v;
             }
 
@@ -537,6 +578,13 @@ namespace satdump
                         ImGui::Text("BER   : ");
                         ImGui::SameLine();
                         ImGui::TextColored(viterbi_lock == 0 ? style::theme.red : style::theme.green, UITO_C_STR(ber));
+
+                        ImGui::Text("MER   : ");
+                        ImGui::SameLine();
+                        if (viterbi_lock == 0)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", mer_db);
 
                         std::memmove(&ber_history[0], &ber_history[1], (200 - 1) * sizeof(float));
                         ber_history[200 - 1] = ber;
