@@ -6,7 +6,16 @@
 			2,
 			3
 		],
-		"frequencies": [],
+		"frequencies": [
+			[
+				"VHF Lower",
+				144.45e6
+			],
+			[
+				"VHF Upper",
+				145.55e6
+			]
+		],
 		"parameters": {},
 		"work": {
 			"baseband": {},
@@ -16,7 +25,7 @@
 					"constellation": "bpsk",
 					"symbolrate": 20000,
 					"pll_bw": 0.02,
-					"rrc_alpha": 0.5
+					"rrc_alpha": 0.35
 				}
 			},
 			"cadu": {
@@ -83,7 +92,16 @@
 			2,
 			3
 		],
-		"frequencies": [],
+		"frequencies": [
+			[
+				"UHF Lower",
+				436.5e6
+			],
+			[
+				"UHF Upper",
+				437e6
+			]
+		],
 		"parameters": {},
 		"work": {
 			"baseband": {},
@@ -91,9 +109,9 @@
 				"module": "psk_demod",
 				"parameters": {
 					"constellation": "oqpsk",
-					"symbolrate": 250000,
-					"pll_bw": 0.002,
-					"rrc_alpha": 0.25
+					"symbolrate": 400000,
+					"pll_bw": 0.003,
+					"rrc_alpha": 0.35
 				}
 			},
 			"cadu": {
@@ -101,7 +119,7 @@
 				"parameters": {
 					"ccsds": true,
 					"constellation": "oqpsk",
-					"conv_rate": "3/4",
+					"conv_rate": "2/3",
 					"cadu_size": 8192,
 					"viterbi_ber_thresold": 0.3,
 					"viterbi_outsync_after": 20,
@@ -111,7 +129,7 @@
 					"rs_type": "rs223",
 					"rs_dualbasis": false,
 					"rs_usecheck": true,
-					"deframer_nosync_timeout": 2.5,
+					"deframer_nosync_timeout": 2.0,
 					"long_poly": true
 				}
 			},
