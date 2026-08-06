@@ -42,7 +42,7 @@ int open_nb_socket(const char* addr, const char* port) {
         if (sockfd == -1) continue;
 
         /* connect to server */
-        rv = connect(sockfd, p->ai_addr, p->ai_addrlen);
+        rv = connect(sockfd, p->ai_addr, (int)p->ai_addrlen);
         if(rv == -1) {
 #if !defined(WIN32)
           close(sockfd);
@@ -63,7 +63,7 @@ int open_nb_socket(const char* addr, const char* port) {
     if (sockfd != -1) fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL) | O_NONBLOCK);
 #else
     if (sockfd != INVALID_SOCKET) {
-        int iMode = 1;
+        u_long iMode = 1;
         ioctlsocket(sockfd, FIONBIO, &iMode);
     }
 #endif

@@ -399,7 +399,7 @@ ssize_t mqtt_pal_recvall(mqtt_pal_socket_handle fd, void* buf, size_t bufsz, int
 ssize_t mqtt_pal_sendall(mqtt_pal_socket_handle fd, const void* buf, size_t len, int flags) {
     size_t sent = 0;
     while(sent < len) {
-        ssize_t tmp = send(fd, (char*)buf + sent, len - sent, flags);
+        ssize_t tmp = send(fd, (char*)buf + sent, (int)(len - sent), flags);
         if (tmp < 1) {
             return MQTT_ERROR_SOCKET_ERROR;
         }
@@ -412,7 +412,7 @@ ssize_t mqtt_pal_recvall(mqtt_pal_socket_handle fd, void* buf, size_t bufsz, int
     const char *const start = buf;
     ssize_t rv;
     do {
-        rv = recv(fd, buf, bufsz, flags);
+        rv = recv(fd, buf, (int)bufsz, flags);
         if (rv > 0) {
             /* successfully read bytes from the socket */
             buf = (char*)buf + rv;
