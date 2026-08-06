@@ -1,10 +1,10 @@
-#include <unistd.h>
 #if !defined(__POSIX_SOCKET_TEMPLATE_H__)
 #define __POSIX_SOCKET_TEMPLATE_H__
 
 #include <stdio.h>
 #include <sys/types.h>
 #if !defined(WIN32)
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #else
@@ -44,7 +44,11 @@ int open_nb_socket(const char* addr, const char* port) {
         /* connect to server */
         rv = connect(sockfd, p->ai_addr, p->ai_addrlen);
         if(rv == -1) {
+#if !defined(WIN32)
           close(sockfd);
+#else
+          closesocket(sockfd);
+#endif
           sockfd = -1;
           continue;
         }
