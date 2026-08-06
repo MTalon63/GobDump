@@ -123,7 +123,7 @@ namespace satdump
         bool success = true;
         std::vector<TLE> new_registry;
 
-        std::string url_str = satdump_cfg.main_cfg["tle_settings"]["url_template"].get<std::string>();
+        std::string url_str = satdump_cfg.main_cfg["kepler_settings"]["url_template"].get<std::string>();
         while (url_str.find("%NORAD%") != std::string::npos)
             url_str.replace(url_str.find("%NORAD%"), 7, std::to_string(norad));
 
