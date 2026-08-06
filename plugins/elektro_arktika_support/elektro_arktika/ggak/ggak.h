@@ -26,6 +26,7 @@ namespace elektro_arktika
         }
 #ifdef _WIN32
         ;
+#pragma pack(pop)
 #else
         __attribute__((packed));
 #endif

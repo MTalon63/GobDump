@@ -104,7 +104,8 @@ namespace elektro_arktika
                     last_time = dat;
                 }
 
-                ImPlot::PlotLine("Data", time.data(), data.data(), std::min(time.size(), data.size()));
+                int plot_size = time.size() < data.size() ? (int)time.size() : (int)data.size();
+                ImPlot::PlotLine("Data", time.data(), data.data(), plot_size);
 
                 ImPlot::EndPlot();
 

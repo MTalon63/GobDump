@@ -40,7 +40,11 @@ namespace elektro_arktika
                     {
                         timeS.tm_year -= 1900;
                         timeS.tm_mon -= 1;
+#ifdef _WIN32
+                        rec.time = _mkgmtime(&timeS);
+#else
                         rec.time = timegm(&timeS);
+#endif
                     }
 
                     bool anyisbelow0 = false;
@@ -137,7 +141,7 @@ namespace elektro_arktika
 
                     ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, max, ImPlotCond_Always);
 
-                    ImPlot::PlotLine(off ? "SKL Off" : "SKL GGAK", times.data(), data.data(), times.size());
+                    ImPlot::PlotLine(off ? "SKL Off" : "SKL GGAK", times.data(), data.data(), (int)times.size());
                 }
 
                 ImPlot::EndPlot();
@@ -222,7 +226,7 @@ namespace elektro_arktika
 
                     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, max);
 
-                    ImPlot::PlotLine("SKL Off", times.data(), data.data(), times.size());
+                    ImPlot::PlotLine("SKL Off", times.data(), data.data(), (int)times.size());
                 }
 
                 {
@@ -254,7 +258,7 @@ namespace elektro_arktika
 
                     // ImPlot::SetupAxisLimits(ImAxis_Y1, 0, max);
 
-                    ImPlot::PlotLine("SKL GGAK", times.data(), data.data(), times.size());
+                    ImPlot::PlotLine("SKL GGAK", times.data(), data.data(), (int)times.size());
                 }
 
                 ImPlot::EndPlot();
