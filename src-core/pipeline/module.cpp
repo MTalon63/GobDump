@@ -66,7 +66,12 @@ namespace satdump
                 if (t == type)
                     found = true;
             if (!found)
-                throw satdump_exception("Module output type not supported!");
+            {
+                std::string ts;
+                for (auto &t : getOutputTypes())
+                    ts += std::to_string(t) + " ";
+                throw satdump_exception("Module output type not supported! (" + getIDM() + " wants " + std::to_string(type) + " has " + ts + ")");
+            }
         }
 
         ModuleDataType ProcessingModule::getInputType() { return input_data_type; }
