@@ -88,6 +88,10 @@ namespace satdump
                 std::unique_ptr<dvbs2::BBFrameBCH> bch_decoder;
                 std::unique_ptr<dvbs2::BBFrameDescrambler> descramber;
 
+                // Adaptive LLR scaling
+                int frame_counter = 0;
+                static constexpr int LLR_UPDATE_INTERVAL = 10;  // Update LUT every N frames
+
             public:
                 DVBS2DemodModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
                 ~DVBS2DemodModule();

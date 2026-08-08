@@ -189,13 +189,26 @@ namespace satdump
                     constellation_s2.pushComplexSlots(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
 
                     // Estimate SNR over slots
-                    snr_update(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
-                    snr = snr_read();
+                    snr_estimator.update(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
+                    snr = snr_estimator.snr();
 
                     if (snr > peak_snr)
                         peak_snr = snr;
 
-                    pushSNRAudioFeedback(frame_slot_count * 90, d_symbolrate);
+                    // Adaptive LLR scaling: update constellation LUTs based on measured SNR
+                    frame_counter++;
+                    if (frame_counter >= LLR_UPDATE_INTERVAL)
+                    {
+                        frame_counter = 0;
+                        // npwr = 2 * scale * 10^(-SNR/20) where scale = const_amp * const_prescale
+                        // This matches the constellation scaling used in demod_soft_calc
+                        float scale_pll = s2_pll->constellation->get_scale_factor();
+                        float scale_bb = s2_bb_to_soft->constellation->get_scale_factor();
+                        float npwr_pll = 2.0f * scale_pll * powf(10.0f, -snr / 20.0f);
+                        float npwr_bb = 2.0f * scale_bb * powf(10.0f, -snr / 20.0f);
+                        s2_pll->constellation->set_noise_power(npwr_pll);
+                        s2_bb_to_soft->constellation->set_noise_power(npwr_bb);
+                    }
 
                     // Get freq
                     display_freq = dsp::rad_to_hz(current_freq / final_sps, final_samplerate);
