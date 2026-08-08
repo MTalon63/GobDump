@@ -103,7 +103,7 @@ void loadPlugins(std::map<std::string, std::shared_ptr<satdump::Plugin>> &loaded
                 loaded_plugins.insert({pl->getID(), pl});
                 already_loaded_plugins.push_back(currfile);
             }
-            catch (std::runtime_error &e)
+            catch (const std::exception &e)
             {
                 failed_plugins.push_back(path);
             }
@@ -129,7 +129,7 @@ void loadPlugins(std::map<std::string, std::shared_ptr<satdump::Plugin>> &loaded
                 std::shared_ptr<satdump::Plugin> pl = loadPlugin(s);
                 loaded_plugins.insert({pl->getID(), pl});
             }
-            catch (std::runtime_error &e)
+            catch (const std::exception &e)
             {
                 if (dependencies_layers == (max_dependencies_layers - 1))
                     logger->error(e.what());

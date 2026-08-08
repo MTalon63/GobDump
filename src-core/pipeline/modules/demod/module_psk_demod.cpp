@@ -81,6 +81,18 @@ namespace satdump
 
                 // Show freq
                 show_freq = true;
+
+                int snr_order = 4;
+                if (constellation_type == "bpsk")
+                    snr_order = 2;
+                else if (constellation_type == "qpsk" || constellation_type == "oqpsk")
+                    snr_order = 4;
+                else if (constellation_type == "8psk")
+                    snr_order = 8;
+                snr_evm = EVMSNREstimator(snr_order, 0.001f);
+
+                if (parameters.count("snr_estimator") > 0)
+                    d_use_evm_snr = (parameters["snr_estimator"].get<std::string>() == "evm");
             }
 
             void PSKDemodModule::init()
@@ -187,8 +199,8 @@ namespace satdump
                     constellation.pushComplex(rec->output_stream->readBuf, dat_size);
 
                     // Estimate SNR
-                    snr_estimator.update(rec->output_stream->readBuf, dat_size);
-                    snr = snr_estimator.snr();
+                    snr_update(rec->output_stream->readBuf, dat_size);
+                    snr = snr_read();
 
                     if (snr > peak_snr)
                         peak_snr = snr;
@@ -280,9 +292,7 @@ namespace satdump
             // } // TODOREWORK
 
             std::shared_ptr<ProcessingModule> PSKDemodModule::getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
-            {
-                return std::make_shared<PSKDemodModule>(input_file, output_file_hint, parameters);
-            }
+            { return std::make_shared<PSKDemodModule>(input_file, output_file_hint, parameters); }
         } // namespace demod
     } // namespace pipeline
 } // namespace satdump

@@ -6,7 +6,16 @@
 			2,
 			3
 		],
-		"frequencies": [],
+		"frequencies": [
+			[
+				"VHF Lower",
+				144.45e6
+			],
+			[
+				"VHF Upper",
+				145.55e6
+			]
+		],
 		"parameters": {},
 		"work": {
 			"baseband": {},
@@ -16,7 +25,7 @@
 					"constellation": "bpsk",
 					"symbolrate": 20000,
 					"pll_bw": 0.02,
-					"rrc_alpha": 0.5
+					"rrc_alpha": 0.35
 				}
 			},
 			"cadu": {
@@ -33,7 +42,9 @@
 					"rs_i": 4,
 					"rs_type": "rs223",
 					"rs_dualbasis": false,
-					"rs_usecheck": true
+					"rs_usecheck": true,
+					"deframer_nosync_timeout": 5.0,
+					"long_poly": true
 				}
 			},
 			"products": {
@@ -81,6 +92,92 @@
 			2,
 			3
 		],
+		"frequencies": [
+			[
+				"UHF Lower",
+				436.5e6
+			],
+			[
+				"UHF Upper",
+				437e6
+			]
+		],
+		"parameters": {},
+		"work": {
+			"baseband": {},
+			"soft": {
+				"module": "psk_demod",
+				"parameters": {
+					"constellation": "oqpsk",
+					"symbolrate": 400000,
+					"pll_bw": 0.003,
+					"rrc_alpha": 0.35
+				}
+			},
+			"cadu": {
+				"module": "ccsds_conv_concat_decoder",
+				"parameters": {
+					"ccsds": true,
+					"constellation": "oqpsk",
+					"conv_rate": "2/3",
+					"cadu_size": 8192,
+					"viterbi_ber_thresold": 0.3,
+					"viterbi_outsync_after": 20,
+					"derandomize": true,
+					"nrzm": false,
+					"rs_i": 4,
+					"rs_type": "rs223",
+					"rs_dualbasis": false,
+					"rs_usecheck": true,
+					"deframer_nosync_timeout": 2.0,
+					"long_poly": true
+				}
+			},
+			"products": {
+				"module": "apid_sender",
+				"parameters": {
+					"server_address": "127.0.0.1",
+					"save_cadu": true,
+					"apids": [
+						{
+							"apid": 0,
+							"port": 9000
+						},
+						{
+							"apid": 1,
+							"port": 9001
+						},
+						{
+							"apid": 2,
+							"port": 9002
+						},
+						{
+							"apid": 10,
+							"port": 9010,
+							"packet_size": 246
+						},
+						{
+							"apid": 11,
+							"port": 9011,
+							"packet_size": 246
+						},
+						{
+							"apid": 20,
+							"port": 9020,
+							"packet_size": 752
+						}
+					]
+				}
+			}
+		}
+	},
+	"goblin_high_rate_ldpc": {
+		"name": "Goblin High Rate Data LDPC",
+		"live": [
+			1,
+			2,
+			3
+		],
 		"frequencies": [],
 		"parameters": {},
 		"work": {
@@ -88,27 +185,24 @@
 			"soft": {
 				"module": "psk_demod",
 				"parameters": {
-					"constellation": "bpsk",
-					"symbolrate": 100000,
-					"pll_bw": 0.02,
+					"constellation": "oqpsk",
+					"symbolrate": 200000,
+					"pll_bw": 0.002,
 					"rrc_alpha": 0.25
 				}
 			},
 			"cadu": {
-				"module": "ccsds_conv_concat_decoder",
+				"module": "ccsds_ldpc_decoder",
 				"parameters": {
-					"ccsds": true,
-					"constellation": "bpsk",
-					"conv_rate": "7/8",
-					"cadu_size": 8192,
-					"viterbi_ber_thresold": 0.2,
-					"viterbi_outsync_after": 20,
+					"constellation": "oqpsk",
+					"ldpc_rate": "7/8",
+					"ldpc_iterations": 10,
+					"internal_stream": false,
+					"internal_cadu_size": 0,
+					"long_poly": true,
 					"derandomize": true,
 					"nrzm": false,
-					"rs_i": 4,
-					"rs_type": "rs223",
-					"rs_dualbasis": false,
-					"rs_usecheck": true
+					"cadu_size": 8192
 				}
 			},
 			"products": {

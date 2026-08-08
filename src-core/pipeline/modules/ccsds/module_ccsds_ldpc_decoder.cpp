@@ -26,6 +26,7 @@ namespace satdump
                   // d_iq_invert(parameters.count("iq_invert") > 0 ? parameters["iq_invert"].get<bool>() : false),
 
                   d_derand(parameters.count("derandomize") > 0 ? parameters["derandomize"].get<bool>() : true),
+                  d_derand_long_poly(parameters.count("long_poly") > 0 ? parameters["long_poly"].get<bool>() : false),
 
                   d_ldpc_rate_str(parameters["ldpc_rate"].get<std::string>()), d_ldpc_block_size(parameters.count("ldpc_block_size") > 0 ? parameters["ldpc_block_size"].get<int>() : 0),
                   d_ldpc_iterations(parameters["ldpc_iterations"].get<int>()),
@@ -178,7 +179,12 @@ namespace satdump
 
                     // Derand
                     if (d_derand)
-                        derand_ccsds_soft(&soft_buffer[d_ldpc_asm_size], d_ldpc_codeword_size);
+                    {
+                        if (d_derand_long_poly)
+                            derand_ccsds17_soft(&soft_buffer[d_ldpc_asm_size], d_ldpc_codeword_size);
+                        else
+                            derand_ccsds_soft(&soft_buffer[d_ldpc_asm_size], d_ldpc_codeword_size);
+                    }
 
                     // LDPC Decoding
                     memcpy(&ldpc_input_buffer[frames_in_ldpc_buffer * d_ldpc_codeword_size], &soft_buffer[d_ldpc_asm_size], d_ldpc_codeword_size);

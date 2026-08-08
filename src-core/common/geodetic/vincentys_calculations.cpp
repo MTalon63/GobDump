@@ -1,5 +1,6 @@
 #include "vincentys_calculations.h"
 #include "wgs84.h"
+#include <algorithm>
 
 #define M_2PI (M_PI * 2)
 
@@ -198,6 +199,7 @@ namespace geodetic
 
             // eq. 17    Careful!  sin2sigma might be almost 0!
             double sinalpha = (sin2sigma == 0) ? 0.0 : cosU1cosU2 * sinlambda / sinsigma;
+            sinalpha = std::clamp(sinalpha, -1.0, 1.0);
             double alpha = asin(sinalpha);
             double cosalpha = cos(alpha);
             double cos2alpha = cosalpha * cosalpha;

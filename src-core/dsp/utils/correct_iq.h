@@ -41,7 +41,7 @@ namespace satdump
 
             uint32_t process(T *input, uint32_t nsamples, T *output);
 
-            void init() {}
+            void init() { acc = 0; }
 
             nlohmann::json get_cfg(std::string key) { throw satdump_exception(key); }
 

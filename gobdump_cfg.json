@@ -233,7 +233,7 @@
 		},
 		"kepler_update_interval": {
 			"type": "options",
-			"value": "Never",
+			"value": "3 days",
 			"name": "Kepler Auto Update Interval",
 			"options": [
 				"4 hours",
@@ -342,10 +342,10 @@
 	// TLE settings
 	"kepler_settings": {
 		"urls_to_fetch": [
-			"http://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=omm" // Most sats
+			"https://retlector.eu/csv/active" // Most sats, use ReTLEctor because why not.
 		],
 		"url_template": "http://celestrak.org/NORAD/elements/gp.php?CATNR=%NORAD%&FORMAT=omm",
-		"tles_to_fetch": [
+		"norads_to_fetch": [
 			63251, // UVSQSat-NG
 			6235, // NOAA-2
 			29499, // MetOp-A

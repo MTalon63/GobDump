@@ -80,6 +80,19 @@ namespace satdump
                 std::atomic<uint64_t> progress;
 
                 M2M4SNREstimator snr_estimator;
+                EVMSNREstimator snr_evm;
+                bool d_use_evm_snr = false;
+
+                void snr_update(complex_t *buf, int n)
+                {
+                    if (d_use_evm_snr)
+                        snr_evm.update(buf, n);
+                    else
+                        snr_estimator.update(buf, n);
+                }
+
+                float snr_read() { return d_use_evm_snr ? snr_evm.snr() : snr_estimator.snr(); }
+
                 float snr, peak_snr;
 
                 bool snr_audio_feedback_supported = true;
@@ -108,6 +121,15 @@ namespace satdump
                 *
                 * @param seconds Time to render as MM:SS or HH:MM:SS if we are at that point (DD seems excessive)
                 */
+                std::string render_eta_string(time_t seconds);
+                void drawETA();
+                time_t start_time;
+                double averaged_eta = -1;
+
+                /** @brief Used to render the ETA nicely
+                 *
+                 * @param seconds Time to render as MM:SS or HH:MM:SS if we are at that point (DD seems excessive)
+                 */
                 std::string render_eta_string(time_t seconds);
                 void drawETA();
                 time_t start_time;
@@ -165,7 +187,10 @@ namespace satdump
                     v["start_timestamp"] = -1;
                     v["min_sps"] = 1.1;
                     v["max_sps"] = 4.0;
+
                     v["snr_audio_feedback"] = true;
+                    v["snr_estimator"] = "m2m4";
+
                     return v;
                 } // TODOREWORK
                 // static std::shared_ptr<ProcessingModule> getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters);

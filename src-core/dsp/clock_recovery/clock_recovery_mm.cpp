@@ -57,7 +57,7 @@ namespace satdump
         template <typename T>
         MMClockRecoveryBlock<T>::~MMClockRecoveryBlock()
         {
-            if (buffer == nullptr)
+            if (buffer != nullptr)
                 volk_free(buffer);
         }
 

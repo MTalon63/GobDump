@@ -30,7 +30,8 @@ namespace satdump
                 dsp::constellation_type_t d_constellation; // Constellation type
                 // const bool d_iq_invert;                    // For some QPSK sats, can need to be inverted...
 
-                const bool d_derand; // Perform derandomizion or not
+                const bool d_derand;           // Perform derandomizion or not
+                const bool d_derand_long_poly; // If true, use 17-bit LFSR
 
                 std::string d_ldpc_rate_str;            // LDPC Rate string
                 codings::ldpc::ldpc_rate_t d_ldpc_rate; // LDPC Rate

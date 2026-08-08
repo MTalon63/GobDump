@@ -5,6 +5,8 @@
 #include "core/exception.h"
 #include "imgui/imgui.h"
 #include "logger.h"
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 
 namespace satdump
@@ -24,9 +26,12 @@ namespace satdump
 
                   d_viterbi_outsync_after(parameters["viterbi_outsync_after"].get<int>()), d_viterbi_ber_threasold(parameters["viterbi_ber_thresold"].get<float>()),
 
+                  d_deframer_nosync_timeout(parameters.count("deframer_nosync_timeout") > 0 ? parameters["deframer_nosync_timeout"].get<double>() : 0.0),
+
                   d_diff_decode(parameters.count("nrzm") > 0 ? parameters["nrzm"].get<bool>() : false),
 
                   d_derand(parameters.count("derandomize") > 0 ? parameters["derandomize"].get<bool>() : true),
+                  d_derand_long_poly(parameters.count("long_poly") > 0 ? parameters["long_poly"].get<bool>() : false),
                   d_derand_after_rs(parameters.count("derand_after_rs") > 0 ? parameters["derand_after_rs"].get<bool>() : false),
                   d_derand_from(parameters.count("derand_start") > 0 ? parameters["derand_start"].get<int>() : 4),
 
@@ -37,7 +42,6 @@ namespace satdump
                   d_rs_type(parameters.count("rs_type") > 0 ? parameters["rs_type"].get<std::string>() : "none"),
                   d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false)
             {
-                viterbi_out = new uint8_t[d_buffer_size * 8];
                 soft_buffer = new int8_t[d_buffer_size];
                 frame_buffer = new uint8_t[d_buffer_size * 8]; // Larger by safety
                 d_bpsk_90 = false;
@@ -61,18 +65,56 @@ namespace satdump
                     d_constellation = dsp::QPSK;
                     d_oqpsk_mode = true;
                 }
+                else if (d_constellation_str == "8psk")
+                {
+                    d_constellation = dsp::PSK8;
+                }
+                else if (d_constellation_str == "16apsk")
+                {
+                    d_constellation = dsp::APSK16;
+                }
                 else
                     throw satdump_exception("CCSDS Concatenated 1/2 Decoder : invalid constellation type!");
 
                 std::vector<phase_t> d_phases;
 
-                // Get phases for the viterbi decoder to check
-                if (d_constellation == dsp::BPSK && !d_bpsk_90)
+                d_is_higher_order = (d_constellation == dsp::PSK8 || d_constellation == dsp::APSK16);
+
+                // Init MER estimator with correct order
+                {
+                    int mer_order = 4; // default QPSK
+                    if (d_constellation == dsp::BPSK)
+                        mer_order = 2;
+                    else if (d_constellation == dsp::PSK8)
+                        mer_order = 8;
+                    mer_estimator = EVMSNREstimator(mer_order, 0.001f);
+                }
+
+                if (d_is_higher_order)
+                {
+                    d_constellation_obj = std::make_unique<dsp::constellation_t>(d_constellation);
+                    // 8PSK -> 3 bits, 16APSK -> 4 bits. Viterbi expects bits. We need temp buffer for bits.
+                    temp_soft_buffer = new int8_t[d_buffer_size * 2]; // Enough space
+                    d_current_phase = 0;
+                    if (d_constellation == dsp::PSK8)
+                        d_num_phases = 8;
+                    else
+                        d_num_phases = 4;
+                    
+                    // We only tell Viterbi to check PHASE_0, we'll do the phase search manually.
                     d_phases = {PHASE_0};
-                else if (d_constellation == dsp::BPSK && d_bpsk_90)
-                    d_phases = {PHASE_90};
-                else if (d_constellation == dsp::QPSK)
-                    d_phases = {PHASE_0, PHASE_90};
+                }
+                else
+                {
+                    temp_soft_buffer = nullptr;
+                    // Get phases for the viterbi decoder to check
+                    if (d_constellation == dsp::BPSK && !d_bpsk_90)
+                        d_phases = {PHASE_0};
+                    else if (d_constellation == dsp::BPSK && d_bpsk_90)
+                        d_phases = {PHASE_90};
+                    else if (d_constellation == dsp::QPSK)
+                        d_phases = {PHASE_0, PHASE_90};
+                }
 
                 // Parse RS
                 reedsolomon::RS_TYPE rstype = reedsolomon::RS223;
@@ -91,31 +133,59 @@ namespace satdump
                 if (parameters.count("asm") > 0)
                     asm_sync = std::stoul(parameters["asm"].get<std::string>(), nullptr, 16);
 
-                if (d_conv_type == "1/2")
-                    viterbi_coderate = PUNCRATE_1_2;
-                else if (d_conv_type == "2/3")
-                    viterbi_coderate = PUNCRATE_2_3;
-                else if (d_conv_type == "3/4")
-                    viterbi_coderate = PUNCRATE_3_4;
-                else if (d_conv_type == "5/6")
-                    viterbi_coderate = PUNCRATE_5_6;
-                else if (d_conv_type == "7/8")
-                    viterbi_coderate = PUNCRATE_7_8;
+                // Build viterbi decoder pool.
+                // conv_rate "auto" creates all 5 rate slots in parallel;
+                // a specific rate ("1/2" etc.) creates a single slot (zero overhead vs old code).
+                auto makeSlot = [&](vitrate_t rate, const char *sname) -> ViterbiSlot {
+                    ViterbiSlot s;
+                    s.rate = rate;
+                    s.name = sname;
+                    s.out  = new uint8_t[d_buffer_size * 8];
+                    // Store params so reinit() can recreate the object with a clean trellis
+                    s.ber_threshold = d_viterbi_ber_threasold;
+                    s.outsync_after = d_viterbi_outsync_after;
+                    s.buffer_size   = d_buffer_size;
+                    s.phases        = d_phases;
+                    s.oqpsk_mode    = d_oqpsk_mode;
+                    if (rate == PUNCRATE_1_2)
+                        s.v12 = std::make_shared<viterbi::Viterbi1_2>(d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                    else if (rate == PUNCRATE_2_3)
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc23>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                    else if (rate == PUNCRATE_3_4)
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc34>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                    else if (rate == PUNCRATE_5_6)
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                    else if (rate == PUNCRATE_7_8)
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                    return s;
+                };
 
-                if (viterbi_coderate == PUNCRATE_1_2)
-                    viterbi = std::make_shared<viterbi::Viterbi1_2>(d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
-                else if (viterbi_coderate == PUNCRATE_2_3)
-                    viterbip = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc23>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases,
-                                                                         d_oqpsk_mode);
-                else if (viterbi_coderate == PUNCRATE_3_4)
-                    viterbip = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc34>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases,
-                                                                         d_oqpsk_mode);
-                else if (viterbi_coderate == PUNCRATE_5_6)
-                    viterbip = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases,
-                                                                         d_oqpsk_mode);
-                else if (viterbi_coderate == PUNCRATE_7_8)
-                    viterbip = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases,
-                                                                         d_oqpsk_mode);
+                if (d_conv_type == "auto")
+                {
+                    d_auto_rate = true;
+                    d_rate_pool.push_back(makeSlot(PUNCRATE_1_2, "1/2"));
+                    d_rate_pool.push_back(makeSlot(PUNCRATE_2_3, "2/3"));
+                    d_rate_pool.push_back(makeSlot(PUNCRATE_3_4, "3/4"));
+                    d_rate_pool.push_back(makeSlot(PUNCRATE_5_6, "5/6"));
+                    d_rate_pool.push_back(makeSlot(PUNCRATE_7_8, "7/8"));
+                }
+                else
+                {
+                    d_auto_rate = false;
+                    vitrate_t rate;
+                    const char *rname;
+                    if (d_conv_type == "1/2")      { rate = PUNCRATE_1_2; rname = "1/2"; }
+                    else if (d_conv_type == "2/3") { rate = PUNCRATE_2_3; rname = "2/3"; }
+                    else if (d_conv_type == "3/4") { rate = PUNCRATE_3_4; rname = "3/4"; }
+                    else if (d_conv_type == "5/6") { rate = PUNCRATE_5_6; rname = "5/6"; }
+                    else if (d_conv_type == "7/8") { rate = PUNCRATE_7_8; rname = "7/8"; }
+                    else throw satdump_exception("CCSDS Concatenated Decoder : invalid conv_rate!");
+                    d_rate_pool.push_back(makeSlot(rate, rname));
+                }
+
+                d_active_rate_idx = 0;
+                viterbi_rate_str  = d_rate_pool[0].name;
+                viterbi_out       = d_rate_pool[0].out;
 
                 deframer = std::make_shared<deframing::BPSK_CCSDS_Deframer>(d_cadu_size, asm_sync);
                 if (d_rs_interleaving_depth != 0)
@@ -132,14 +202,20 @@ namespace satdump
 
             CCSDSConvConcatDecoderModule::~CCSDSConvConcatDecoderModule()
             {
-                delete[] viterbi_out;
+                for (auto &slot : d_rate_pool)
+                    delete[] slot.out; // viterbi_out is a non-owning alias; slots own their buffers
                 delete[] soft_buffer;
                 delete[] frame_buffer;
+                if (temp_soft_buffer != nullptr)
+                    delete[] temp_soft_buffer;
             }
 
             void CCSDSConvConcatDecoderModule::process()
             {
                 diff::NRZMDiff diff;
+                // Measured at the TOP of each iteration so elapsed reflects real wall-clock
+                // time between buffer reads, not decode time.
+                auto d_last_buffer_time = std::chrono::steady_clock::now();
 
                 while (should_run())
                 {
@@ -149,49 +225,269 @@ namespace satdump
                     if (d_bpsk_90 || d_iq_invert) // Symbols are swapped for some Q/BPSK sats
                         rotate_soft((int8_t *)soft_buffer, d_buffer_size, PHASE_0, true);
 
-                    // Perform Viterbi decoding
-                    int vitout = 0;
-                    if (viterbi_coderate == PUNCRATE_1_2)
+                    // Run all viterbi decoders in the pool (1 slot for fixed rate, 5 for auto)
+                    if (!d_is_higher_order)
                     {
-                        vitout = viterbi->work((int8_t *)soft_buffer, d_buffer_size, viterbi_out);
-                        viterbi_ber = viterbi->ber();
-                        viterbi_lock = viterbi->getState();
+                        for (auto &slot : d_rate_pool)
+                            slot.work((int8_t *)soft_buffer, d_buffer_size);
                     }
                     else
                     {
-                        vitout = viterbip->work((int8_t *)soft_buffer, d_buffer_size, viterbi_out);
-                        viterbi_ber = viterbip->ber();
-                        viterbi_lock = viterbip->getState();
+                        auto clamp_8 = [](float x) -> int8_t {
+                            if (x < -127.0f) return -127;
+                            if (x > 127.0f) return 127;
+                            return (int8_t)x;
+                        };
+
+                        bool any_synced = false;
+                        for (auto &slot : d_rate_pool)
+                        {
+                            if (slot.getState() != 0)
+                            {
+                                any_synced = true;
+                                break;
+                            }
+                        }
+
+                        if (!any_synced)
+                        {
+                            for (int p = 0; p < d_num_phases; p++)
+                            {
+                                int temp_bits_len = 0;
+                                float phase = p * (2.0f * M_PI / (float)d_num_phases);
+                                float s_p = sin(phase);
+                                float c_p = cos(phase);
+                                int bits_per_sym = d_constellation_obj->get_bits_per_symbol();
+
+                                for (int i = 0; i < d_buffer_size / 2; i++)
+                                {
+                                    int8_t r = soft_buffer[i * 2];
+                                    int8_t c = soft_buffer[i * 2 + 1];
+                                    int8_t vr = clamp_8((r * c_p) - (c * s_p));
+                                    int8_t vc = clamp_8((c * c_p) + (r * s_p));
+                                    d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                                }
+                                temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
+
+                                // Try decoding
+                                for (auto &slot : d_rate_pool)
+                                {
+                                    slot.work(temp_soft_buffer, temp_bits_len);
+                                    if (slot.getState() != 0)
+                                    {
+                                        any_synced = true;
+                                        break;
+                                    }
+                                }
+
+                                if (any_synced)
+                                {
+                                    d_current_phase = p;
+                                    break;
+                                }
+                                else
+                                {
+                                    for (auto &slot : d_rate_pool)
+                                        slot.reset();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            int temp_bits_len = 0;
+                            float phase = d_current_phase * (2.0f * M_PI / (float)d_num_phases);
+                            float s_p = sin(phase);
+                            float c_p = cos(phase);
+                            int bits_per_sym = d_constellation_obj->get_bits_per_symbol();
+
+                            for (int i = 0; i < d_buffer_size / 2; i++)
+                            {
+                                int8_t r = soft_buffer[i * 2];
+                                int8_t c = soft_buffer[i * 2 + 1];
+                                int8_t vr = clamp_8((r * c_p) - (c * s_p));
+                                int8_t vc = clamp_8((c * c_p) + (r * s_p));
+                                d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                            }
+                            temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
+
+                            for (auto &slot : d_rate_pool)
+                                slot.work(temp_soft_buffer, temp_bits_len);
+                        }
                     }
 
-                    if (d_diff_decode) // Diff decoding if required
-                        diff.decode_bits(viterbi_out, vitout);
-
-                    // Run deframer
-                    int frames = deframer->work(viterbi_out, vitout, frame_buffer);
-
-                    for (int i = 0; i < frames; i++)
+                    // Rate selection — Option A (hysteresis):
+                    // Keep the active slot while it stays locked.
+                    // Only switch when it drops lock; pick lowest-BER locked alternative.
+                    if (d_auto_rate && d_rate_pool[d_active_rate_idx].getState() == 0)
                     {
-                        uint8_t *cadu = &frame_buffer[i * d_cadu_bytes];
-
-                        if (d_derand && !d_derand_after_rs) // Derand if required, before RS
-                            derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
-
-                        if (d_rs_interleaving_depth != 0) // RS Correction
-                            reed_solomon->decode_interlaved(&cadu[4], d_rs_dualbasis, d_rs_interleaving_depth, errors);
-
-                        bool valid = true;
-                        for (int i = 0; i < d_rs_interleaving_depth; i++)
-                            if (errors[i] == -1)
-                                valid = false;
-
-                        if (d_derand && d_derand_after_rs) // Derand if required, after RS
-                            derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
-
-                        if (!d_rs_usecheck || valid)
+                        int best_idx  = -1;
+                        float best_ber = 999.0f;
+                        for (int i = 0; i < (int)d_rate_pool.size(); i++)
                         {
-                            // Write it out
-                            write_data(cadu, d_cadu_bytes);
+                            if (d_rate_pool[i].getState() != 0)
+                            {
+                                float b = d_rate_pool[i].ber();
+                                if (b < best_ber) { best_ber = b; best_idx = i; }
+                            }
+                        }
+                        if (best_idx >= 0)
+                        {
+                            logger->info("Puncture rate switch: %s -> %s",
+                                         d_rate_pool[d_active_rate_idx].name.c_str(),
+                                         d_rate_pool[best_idx].name.c_str());
+                            d_active_rate_idx = best_idx;
+                        }
+                    }
+
+                    // Update active-slot aliases used by the rest of the loop.
+                    // Cache ber()/getState() to avoid calling virtual dispatch twice.
+                    {
+                        ViterbiSlot &active_slot = d_rate_pool[d_active_rate_idx];
+                        int vitout_cur       = active_slot.last_vitout;
+                        uint8_t *vout_cur    = active_slot.out;
+                        float    ber_cur     = active_slot.ber();
+                        int      state_cur   = active_slot.getState();
+
+                        viterbi_out      = vout_cur;
+                        viterbi_ber      = ber_cur;
+                        viterbi_lock     = state_cur;
+                        // Only copy string when the active slot actually changed
+                        if (viterbi_rate_str != active_slot.name)
+                            viterbi_rate_str = active_slot.name;
+
+                        // Update MER when Viterbi is locked.
+                        // EVMSNREstimator is decision-directed: MER = P_signal / P_error
+                        // where error = received symbol - nearest ideal constellation point.
+                        // Rotation-invariant for BPSK/QPSK so phase ambiguity doesn't matter.
+                        if (state_cur != 0)
+                        {
+                            // soft_buffer is int8_t I/Q pairs, scale to float [-1, 1]
+                            int n_syms = d_buffer_size / 2; // pairs for QPSK; BPSK half of that but EVM handles it
+                            if (d_constellation == dsp::BPSK)
+                                n_syms = d_buffer_size;
+                            // Reinterpret as complex_t* — int8_t pairs match layout when scaled
+                            // We need float, so build a small float complex view
+                            static thread_local std::vector<complex_t> mer_buf;
+                            if ((int)mer_buf.size() < n_syms)
+                                mer_buf.resize(n_syms);
+                            if (d_constellation == dsp::BPSK)
+                            {
+                                for (int i = 0; i < n_syms; i++)
+                                    mer_buf[i] = complex_t(soft_buffer[i] / 127.0f, 0.0f);
+                            }
+                            else
+                            {
+                                for (int i = 0; i < n_syms; i++)
+                                    mer_buf[i] = complex_t(soft_buffer[i * 2] / 127.0f, soft_buffer[i * 2 + 1] / 127.0f);
+                            }
+                            mer_estimator.update(mer_buf.data(), n_syms);
+                            mer_db = mer_estimator.snr();
+                            if (mer_db > peak_mer)
+                                peak_mer = mer_db;
+                            avg_mer = avg_mer * 0.99f + mer_db * 0.01f;
+                        }
+
+                        if (d_diff_decode) // Diff decoding if required
+                            diff.decode_bits(viterbi_out, vitout_cur);
+
+                        // Run deframer
+                        int frames = deframer->work(viterbi_out, vitout_cur, frame_buffer);
+
+                        // Deframer nosync timeout with exponential backoff.
+                        //
+                        // d_deframer_nosync_timer is used as a signed accumulator:
+                        //   >= d_deframer_nosync_timeout  → fire forced reset
+                        //   0 .. threshold                → counting toward next reset
+                        //   < 0                           → post-reset cooldown; can't fire yet
+                        //
+                        // After each reset the timer is pre-charged to a negative cooldown equal to
+                        // timeout × min(2^reset_count, 8), so consecutive failures back off
+                        // exponentially:  1s timeout → 1s, 2s, 4s, 8s, 8s, ... cooldown before retry.
+                        // The counter resets to 0 the moment the deframer actually syncs.
+                        if (d_deframer_nosync_timeout > 0.0)
+                        {
+                            auto now = std::chrono::steady_clock::now();
+                            double elapsed = std::chrono::duration<double>(now - d_last_buffer_time).count();
+                            d_last_buffer_time = now;
+
+                            bool deframer_synced = deframer->getState() == deframer->STATE_SYNCED;
+
+                            if (deframer_synced)
+                            {
+                                // Deframer reached lock — clear everything
+                                d_deframer_nosync_timer      = 0;
+                                d_deframer_nosync_reset_count = 0;
+                            }
+                            else
+                            {
+                                // Count time only while viterbi has a lock.
+                                // Timer may be negative (in cooldown); we still advance it
+                                // so it naturally climbs toward 0 and then toward the threshold.
+                                if (state_cur != 0)
+                                    d_deframer_nosync_timer += elapsed;
+
+                                if (d_deframer_nosync_timer >= d_deframer_nosync_timeout)
+                                {
+                                    d_deframer_nosync_reset_count++;
+                                    // Cooldown = timeout × clamped power-of-two backoff (max 8×)
+                                    int backoff_mult = 1 << std::min(d_deframer_nosync_reset_count - 1, 3); // 1, 2, 4, 8
+                                    double cooldown  = d_deframer_nosync_timeout * backoff_mult;
+
+                                    logger->warn("Deframer failed to sync for %.1f s — forcing outsync (attempt %d, cooldown %.1f s)",
+                                                 d_deframer_nosync_timeout, d_deframer_nosync_reset_count, cooldown);
+
+                                    // Hard reset: recreate decoder objects from scratch so all
+                                    // trellis path metrics and survivor paths are zeroed — this
+                                    // prevents re-convergence to the same wrong path that caused
+                                    // the deframer not to sync in the first place.
+                                    for (auto &slot : d_rate_pool)
+                                        slot.reinit();
+                                    d_active_rate_idx = 0;
+                                    deframer->reset();
+                                    viterbi_lock = d_rate_pool[0].getState();
+
+                                    // Pre-charge the timer with a negative cooldown debt.
+                                    // The next reset cannot fire until the timer has climbed
+                                    // through the entire cooldown and then the full timeout period.
+                                    d_deframer_nosync_timer = -cooldown;
+                                }
+                            }
+                        }
+
+
+                        for (int i = 0; i < frames; i++)
+                        {
+                            uint8_t *cadu = &frame_buffer[i * d_cadu_bytes];
+
+                            if (d_derand && !d_derand_after_rs) // Derand if required, before RS
+                            {
+                                if (d_derand_long_poly)
+                                    derand_ccsds17(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                                else
+                                    derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                            }
+
+                            if (d_rs_interleaving_depth != 0) // RS Correction
+                                reed_solomon->decode_interlaved(&cadu[4], d_rs_dualbasis, d_rs_interleaving_depth, errors);
+
+                            bool valid = true;
+                            for (int j = 0; j < d_rs_interleaving_depth; j++)
+                                if (errors[j] == -1)
+                                    valid = false;
+
+                            if (d_derand && d_derand_after_rs) // Derand if required, after RS
+                            {
+                                if (d_derand_long_poly)
+                                    derand_ccsds17(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                                else
+                                    derand_ccsds(&cadu[d_derand_from], d_cadu_bytes - d_derand_from);
+                            }
+
+                            if (!d_rs_usecheck || valid)
+                            {
+                                // Write it out
+                                write_data(cadu, d_cadu_bytes);
+                            }
                         }
                     }
                 }
@@ -205,28 +501,35 @@ namespace satdump
                 v["deframer_lock"] = deframer->getState() == deframer->STATE_SYNCED;
                 v["viterbi_ber"] = viterbi_ber;
                 v["viterbi_lock"] = viterbi_lock;
+                v["viterbi_rate"] = viterbi_rate_str;
                 if (d_rs_interleaving_depth != 0)
-                    v["rs_avg"] = (errors[0] + errors[1] + errors[2] + errors[3]) / 4;
+                {
+                    int rs_sum = 0;
+                    for (int i = 0; i < d_rs_interleaving_depth; i++) rs_sum += errors[i];
+                    v["rs_avg"] = rs_sum / d_rs_interleaving_depth;
+                }
                 std::string viterbi_state = viterbi_lock == 0 ? "NOSYNC" : "SYNCED";
                 std::string deframer_state = deframer->getState() == deframer->STATE_NOSYNC ? "NOSYNC" : (deframer->getState() == deframer->STATE_SYNCING ? "SYNCING" : "SYNCED");
                 v["viterbi_state"] = viterbi_state;
                 v["deframer_state"] = deframer_state;
+                if (viterbi_lock != 0)
+                    v["mer_db"] = mer_db;
                 return v;
             }
 
             void CCSDSConvConcatDecoderModule::drawUI(bool window)
             {
-                if (viterbi_coderate == PUNCRATE_1_2)
-                    ImGui::Begin("CCSDS r=1/2 Concatenated Decoder", NULL, window ? 0 : NOWINDOW_FLAGS);
-                else if (viterbi_coderate == PUNCRATE_2_3)
-                    ImGui::Begin("CCSDS r=2/3 Concatenated Decoder", NULL, window ? 0 : NOWINDOW_FLAGS);
-                else if (viterbi_coderate == PUNCRATE_3_4)
-                    ImGui::Begin("CCSDS r=3/4 Concatenated Decoder", NULL, window ? 0 : NOWINDOW_FLAGS);
-                else if (viterbi_coderate == PUNCRATE_5_6)
-                    ImGui::Begin("CCSDS r=5/6 Concatenated Decoder", NULL, window ? 0 : NOWINDOW_FLAGS);
-                if (viterbi_coderate == PUNCRATE_7_8)
-                    ImGui::Begin("CCSDS r=7/8 Concatenated Decoder", NULL, window ? 0 : NOWINDOW_FLAGS);
+                std::string window_title = d_auto_rate
+                    ? "CCSDS Auto-Rate Concatenated Decoder"
+                    : ("CCSDS r=" + d_rate_pool[0].name + " Concatenated Decoder");
+                ImGui::Begin(window_title.c_str(), NULL, window ? 0 : NOWINDOW_FLAGS);
                 float &ber = viterbi_ber;
+
+                float avail_x = ImGui::GetContentRegionAvail().x;
+                float spacing = ImGui::GetStyle().ItemSpacing.x;
+                int num_columns = d_is_streaming_input ? 2 : 3;
+                float col_w = (avail_x - spacing * (num_columns - 1)) / num_columns;
+                if (col_w < 50.0f * ui_scale) col_w = 50.0f * ui_scale;
 
                 ImGui::Dummy({0, 0}); // Stupid ImGui stuff?
 
@@ -236,7 +539,7 @@ namespace satdump
                     // Constellation
                     ImDrawList *draw_list = ImGui::GetWindowDrawList();
                     ImVec2 rect_min = ImGui::GetCursorScreenPos();
-                    ImVec2 rect_max = {rect_min.x + 200 * ui_scale, rect_min.y + 200 * ui_scale};
+                    ImVec2 rect_max = {rect_min.x + col_w, rect_min.y + col_w};
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
@@ -244,24 +547,25 @@ namespace satdump
                     {
                         for (int i = 0; i < 2048; i++)
                         {
-                            draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i] / 127.0) * 130 * ui_scale) % int(200 * ui_scale),
-                                                              ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + rng.gasdev() * 14 * ui_scale) % int(200 * ui_scale)),
-                                                       2 * ui_scale, style::theme.constellation);
+                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i] / 127.0f) * col_w * 0.65f, 0.0f, col_w);
+                            float y_off = std::clamp(col_w / 2.0f + (float)rng.gasdev() * col_w * 0.07f, 0.0f, col_w);
+                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
+                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
                         }
                     }
                     else
                     {
                         for (int i = 0; i < 2048; i++)
                         {
-                            draw_list->AddCircleFilled(
-                                ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0) * 100 * ui_scale) % int(200 * ui_scale),
-                                       ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0) * 100 * ui_scale) % int(200 * ui_scale)),
-                                2 * ui_scale, style::theme.constellation);
+                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
+                            float y_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
+                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
+                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
                         }
                     }
 
                     draw_list->PopClipRect();
-                    ImGui::Dummy(ImVec2(200 * ui_scale + 3, 200 * ui_scale + 3));
+                    ImGui::Dummy(ImVec2(col_w, col_w));
                 }
                 ImGui::EndGroup();
 
@@ -269,7 +573,7 @@ namespace satdump
 
                 ImGui::BeginGroup();
                 {
-                    ImGui::Button("Viterbi", {200 * ui_scale, 20 * ui_scale});
+                    ImGui::Button("Viterbi", {col_w, 20 * ui_scale});
                     {
                         ImGui::Text("State : ");
 
@@ -287,12 +591,19 @@ namespace satdump
                         std::memmove(&ber_history[0], &ber_history[1], (200 - 1) * sizeof(float));
                         ber_history[200 - 1] = ber;
 
-                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", ber_history, IM_ARRAYSIZE(ber_history), 0, "", 0.0f, 1.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##ber", ber_history, IM_ARRAYSIZE(ber_history), 0, "", 0.0f, 1.0f, ImVec2(col_w, 50 * ui_scale));
+
+                        if (d_auto_rate)
+                        {
+                            ImGui::Text("Rate  : ");
+                            ImGui::SameLine();
+                            ImGui::TextColored(viterbi_lock == 0 ? style::theme.red : style::theme.green, "%s", viterbi_rate_str.c_str());
+                        }
                     }
 
                     ImGui::Spacing();
 
-                    ImGui::Button("Deframer", {200 * ui_scale, 20 * ui_scale});
+                    ImGui::Button("Deframer", {col_w, 20 * ui_scale});
                     {
                         ImGui::Text("State : ");
 
@@ -317,7 +628,7 @@ namespace satdump
 
                     if (d_rs_interleaving_depth != 0)
                     {
-                        ImGui::Button("Reed-Solomon", {200 * ui_scale, 20 * ui_scale});
+                        ImGui::Button("Reed-Solomon", {col_w, 20 * ui_scale});
                         {
                             ImGui::Text("RS    : ");
                             for (int i = 0; i < d_rs_interleaving_depth; i++)
@@ -339,6 +650,42 @@ namespace satdump
                                 }
                             }
                         }
+                    }
+                }
+                ImGui::EndGroup();
+
+                ImGui::SameLine();
+
+                // MER panel — third column to the right of Viterbi/Deframer/RS
+                ImGui::BeginGroup();
+                {
+                    ImGui::Button("MER", {col_w, 20 * ui_scale});
+                    {
+                        ImGui::Text("MER     : ");
+                        ImGui::SameLine();
+                        if (viterbi_lock == 0)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", mer_db);
+
+                        ImGui::Text("Peak MER: ");
+                        ImGui::SameLine();
+                        if (peak_mer <= 0.0f)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", peak_mer);
+
+                        ImGui::Text("Avg MER : ");
+                        ImGui::SameLine();
+                        if (avg_mer <= 0.0f)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", avg_mer);
+
+                        std::memmove(&mer_history[0], &mer_history[1], (200 - 1) * sizeof(float));
+                        mer_history[200 - 1] = viterbi_lock != 0 ? mer_db : 0.0f;
+
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##mer", mer_history, IM_ARRAYSIZE(mer_history), 0, "", 0.0f, 30.0f, ImVec2(col_w, 50 * ui_scale));
                     }
                 }
                 ImGui::EndGroup();

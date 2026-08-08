@@ -207,7 +207,7 @@ namespace satdump
 
                     if (best_pos != 0 && best_pos < d_frame_size) // Safety
                     {
-                        std::memmove(buffer_soft, &buffer_soft[best_pos], best_pos);
+                        std::memmove(buffer_soft, &buffer_soft[best_pos], d_frame_size - best_pos);
 
                         if (input_data_type == DATA_FILE)
                             data_in.read((char *)&buffer_soft[d_frame_size - best_pos], best_pos);

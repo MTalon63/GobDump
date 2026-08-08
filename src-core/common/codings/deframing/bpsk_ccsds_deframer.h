@@ -65,6 +65,9 @@ namespace deframing
         // Returns current state
         int getState();
 
+        // Force deframer back to NOSYNC state (e.g. when viterbi is force-reset)
+        void reset();
+
         /*
         Actual deframing function. Takes unpacked bits in, 
         returns frames as packed bytes in the output buffer.

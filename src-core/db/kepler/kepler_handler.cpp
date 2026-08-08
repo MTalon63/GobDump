@@ -36,11 +36,13 @@ namespace satdump
 
         // Start auto-update (or update now?)
         autoUpdateKeplers();
+
+        all_ = get_all_tles();
     }
 
     void KeplerDBHandler::autoUpdateKeplers()
     {
-        std::string update_setting = "Never";
+        std::string update_setting = "7 days";
         satdump_cfg.tryAssignValueFromSatDumpGeneral(update_setting, "kepler_update_interval");
         time_t last_update = std::stoull(h->get_meta("kepler_last_updated", "0"));
         bool honor_setting = true;
@@ -64,15 +66,13 @@ namespace satdump
             honor_setting = false;
         }
 
-#if 0
         // Update now, if needed
         time_t now = time(NULL);
-        if (/*(honor_setting && now > last_update + update_interval) ||*/ h->get_table_size("tle") <= 0)
+        if ((honor_setting && now > last_update + update_interval) || h->get_table_size("kepler") <= 0)
         {
-            updateTLEDatabase();
+            updateKeplerDatabase();
             last_update = now;
         }
-#endif
 
         // Schedule updates while running
         if (honor_setting)
@@ -108,40 +108,10 @@ namespace satdump
                 logger->error("There should only be one Kepler per norad! %d (%d)", norad, tles.size());
         }
 
-        {
-            time_t tt = time(0);
-            std::vector<int> norads;
-            for (auto &t : get_all_tles())
-                if (tt - t.time > (3600 * 24 * 2)) // TODOREWORK respect update interval!
-                    norads.push_back(t.norad);
-
-            if (norads.size())
-                logger->error("%d Keplers are too old in database, even after attempting an update. Pulling from space-track. This is NOT optimal!", norads.size());
-
-            while (norads.size() > 0)
-            {
-                std::vector<int> cnorads = norads;
-                cnorads.resize(std::min<int>(2000, cnorads.size()));
-                norads.erase(norads.begin(), norads.begin() + cnorads.size());
-                auto tles = get_from_spacetrack_latest_list(cnorads); // tryFetchTLEsFromFileURL(url_str);
-
-                logger->info("Got %d keplers from space-track!", tles.size());
-
-                h->tr_begin();
-                for (auto &t : tles)
-                {
-                    KeplerData kep;
-                    if (tleToKepler(t, kep))
-                        putKepler(kep);
-                }
-                h->tr_end();
-            }
-        }
-
         // Update last update timestamp & other stuff
         h->set_meta("kepler_last_updated", std::to_string(time(0)));
         logger->info("%d Keplers in database!", h->get_table_size("kepler"));
-        all_.clear();
+        all_ = get_all_tles();
         eventBus->fire_event<TLEsUpdatedEvent>(TLEsUpdatedEvent());
     }
 

@@ -2,9 +2,7 @@ name: Build All
 
 on:
   push:
-    branches: [master]
   pull_request:
-    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -56,14 +54,15 @@ jobs:
               if: steps.win-deps-x64.outputs.cache-hit != 'true'
               run: rm -recurse -force $Env:GITHUB_WORKSPACE/vcpkg/packages, $Env:GITHUB_WORKSPACE/vcpkg/downloads, $Env:GITHUB_WORKSPACE/vcpkg/buildtrees
 
-            - name: Download Aaronia RTSA API
-              if: steps.win-deps-x64.outputs.cache-hit != 'true'
-              shell: powershell
-              run: Invoke-WebRequest -Uri "https://www.satdump.org/Aaronia_RTSA_Suite_PRO_2.2.0.12821_Setup_64bit.exe" -OutFile $Env:GITHUB_WORKSPACE/vcpkg/rtsa.exe
-
-            - name: Install Aaronia RTSA API
-              shell: cmd
-              run: start /wait vcpkg\rtsa.exe /q2 /install
+# I FUCKING HATE AARONIA
+#            - name: Download Aaronia RTSA API
+#              if: steps.win-deps-x64.outputs.cache-hit != 'true'
+#              shell: powershell
+#              run: Invoke-WebRequest -Uri "https://www.satdump.org/Aaronia_RTSA_Suite_PRO_2.2.0.12821_Setup_64bit.exe" -OutFile $Env:GITHUB_WORKSPACE/vcpkg/rtsa.exe
+#
+#            - name: Install Aaronia RTSA API
+#              shell: cmd
+#              run: start /wait vcpkg\rtsa.exe /q2 /install
 
             - name: Add support to NSIS for long PATHs
               shell: powershell
@@ -377,7 +376,7 @@ jobs:
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
               # sqlite3 libtool autoconf libjpeg-turbo libtiff libusb libpng zstd
-              run: brew install ninja dylibbundler automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5
+              run: brew install ninja dylibbundler automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -438,8 +437,7 @@ jobs:
             - name: Install brew dependencies
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
-              # sqlite3 zstd libpng libtiff libjpeg-turbo libusb
-              run: brew install ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5
+              run: brew install ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory

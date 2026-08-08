@@ -77,12 +77,52 @@ void derand_ccsds(uint8_t *data, int length)
     }
 }
 
+struct alignas(4) CCSDSRandomizer17FastLut {
+    uint8_t seq[16384]; // Supports frames up to 16KB without needing to wrap the LFSR
+    constexpr CCSDSRandomizer17FastLut() : seq{} {
+        uint32_t state = 0x38E3; // Initial state (seed) for S1..S17
+        for (int i = 0; i < 16384; i++) {
+            uint8_t byte_val = 0;
+            for (int bit = 0; bit < 8; bit++) {
+                uint8_t out_bit = (state >> 16) & 1;
+                uint8_t feedback = ((state >> 16) ^ (state >> 2)) & 1;
+                state = ((state << 1) | feedback) & 0x1FFFF;
+                byte_val = (byte_val << 1) | out_bit;
+            }
+            seq[i] = byte_val;
+        }
+    }
+};
+
+static constexpr CCSDSRandomizer17FastLut CCSDS_RANDOMIZER17;
+
+void derand_ccsds17(uint8_t *data, int length)
+{
+    // The LFSR repeats every 131071 bits (16383 bytes + 7 bits).
+    // Frames are reset per ASM, so we just iterate through the LUT.
+    for (int i = 0; i < length; i++)
+    {
+        data[i] ^= CCSDS_RANDOMIZER17.seq[i % 16384];
+    }
+}
+
 void derand_ccsds_soft(int8_t *data, int length)
 {
     for (int i = 0; i < length; i++)
     {
         // If the bit is set, invert soft bit. Otherwise, do nothing
         if (ccsds_soft_pn[i % 255])
+            data[i] = ~data[i];
+    }
+}
+
+void derand_ccsds17_soft(int8_t *data, int length)
+{
+    for (int i = 0; i < length; i++)
+    {
+        uint8_t byte_val = CCSDS_RANDOMIZER17.seq[(i / 8) % 16384];
+        bool bit_val = (byte_val >> (7 - (i % 8))) & 1;
+        if (bit_val)
             data[i] = ~data[i];
     }
 }

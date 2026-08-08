@@ -23,9 +23,9 @@
 class M2M4SNREstimator
 {
 private:
-    float d_y1, d_y2;
-    float d_alpha, d_beta;
-    float d_signal, d_noise;
+    double d_y1, d_y2; // widened: 4th moment loses precision fast in float
+    double d_alpha, d_beta;
+    double d_signal, d_noise;
 
 public:
     /*! Constructor
@@ -36,6 +36,37 @@ public:
      */
     M2M4SNREstimator(float alpha = 0.001);
     ~M2M4SNREstimator() {}
+
+    void update(complex_t *input, int size);
+    float snr();
+    float signal();
+    float noise();
+};
+
+//! \brief Decision-directed SNR estimator using error-vector magnitude (EVM).
+/*!
+ *  Uses recovered, phase/timing-corrected M-PSK symbols. Measures EVM
+ *  per I/Q component independently, making it robust to Costas lock
+ *  rotation ambiguity and OQPSK I/Q staggering.
+ *
+ *  For BPSK/QPSK/OQPSK (order 2,4): each component is ±A (hard decision).
+ *  For 8PSK (order 8): nearest constellation point by distance.
+ *
+ *  Requires post-recovery symbols (e.g. output of Costas loop + clock
+ *  recovery), NOT raw pre-demod IQ.
+ */
+class EVMSNREstimator
+{
+private:
+    int d_order;         // 2 = BPSK, 4 = QPSK/OQPSK, 8 = 8PSK
+    double d_pwr, d_err; // EMA of total power / error power
+    double d_pwr_re, d_pwr_im; // EMA of per-component power
+    double d_alpha, d_beta;
+    double d_signal, d_noise;
+
+public:
+    EVMSNREstimator(int order = 4, float alpha = 0.001);
+    ~EVMSNREstimator() {}
 
     void update(complex_t *input, int size);
     float snr();
