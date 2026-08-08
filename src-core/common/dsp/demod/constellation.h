@@ -1,8 +1,8 @@
 #pragma once
 
 #include "common/dsp/complex.h"
-#include <cstdint>
 #include <vector>
+#include <cstdint>
 
 namespace dsp
 {
@@ -54,9 +54,13 @@ namespace dsp
         std::vector<std::vector<SoftResult>> lut;
 
     public:
-        void make_lut(int resolution);
+        void make_lut(int resolution, float npwr = 1.0f);
+        void set_noise_power(float npwr);
+        float get_scale_factor() const { return const_amp * const_prescale; }
         void demod_soft_lut(complex_t sample, int8_t *bits, float *phase_error = nullptr);
-        int get_bits_per_symbol() const { return const_bits; }
+
+    protected:
+        float current_npwr = 1.0f;
 
     public:
         constellation_t(constellation_type_t type, float g1 = 0, float g2 = 0);
@@ -70,4 +74,4 @@ namespace dsp
 
         int getBitsCnt() { return const_bits; }
     };
-}; // namespace dsp
+};

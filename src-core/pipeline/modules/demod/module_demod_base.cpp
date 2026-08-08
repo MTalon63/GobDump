@@ -3,6 +3,8 @@
 #include "core/config.h"
 #include "imgui/imgui.h"
 #include "logger.h"
+#include <algorithm>
+#include <cmath>
 
 namespace satdump
 {
@@ -52,6 +54,9 @@ namespace satdump
 
                 snr = 0;
                 peak_snr = 0;
+                snr_audio_feedback = satdump::satdump_cfg.shouldPlayAudio();
+                if (parameters.count("snr_audio_feedback") > 0)
+                    snr_audio_feedback = parameters["snr_audio_feedback"].get<bool>();
 
                 showWaterfall = satdump::satdump_cfg.main_cfg["user_interface"]["show_waterfall_demod_fft"]["value"].get<bool>();
             }
@@ -264,6 +269,57 @@ namespace satdump
                 if (resample && resampler)
                     resampler->stop();
                 agc->stop();
+
+                if (snr_audio_feedback_running && snr_audio_sink)
+                {
+                    snr_audio_sink->stop();
+                    snr_audio_sink.reset();
+                    snr_audio_feedback_running = false;
+                }
+            }
+
+            void BaseDemodModule::pushSNRAudioFeedback(int input_samples, float input_samplerate)
+            {
+                if (!snr_audio_feedback || input_samples <= 0 || input_samplerate <= 0.0f)
+                    return;
+
+                if (!snr_audio_feedback_running)
+                {
+                    if (input_data_type == DATA_FILE || !snr_audio_feedback_supported || !audio::has_sink())
+                        return;
+
+                    snr_audio_sink = audio::get_default_sink();
+                    snr_audio_sink->set_samplerate(snr_audio_samplerate);
+                    snr_audio_sink->start();
+                    snr_audio_feedback_running = true;
+                }
+
+                if (!snr_audio_sink)
+                    return;
+
+                int output_samples = std::max(1, int(std::round(input_samples * (double)snr_audio_samplerate / input_samplerate)));
+                output_samples = std::min(output_samples, snr_audio_samplerate / 25);
+                snr_audio_buffer.resize(output_samples);
+
+                const float snr_clamped = std::clamp(std::isfinite(snr) ? snr : 0.0f, 0.0f, 25.0f);
+                snr_audio_smoothed = (snr_audio_smoothed == 0.0f) ? snr_clamped : (snr_audio_smoothed * 0.55f) + (snr_clamped * 0.45f);
+
+                const double min_freq = 440.0;
+                const double max_freq = 2400.0;
+                const double tone_freq = min_freq + ((max_freq - min_freq) * (snr_audio_smoothed / 25.0));
+                constexpr double pi = 3.14159265358979323846;
+                const double phase_step = (2.0 * pi * tone_freq) / snr_audio_samplerate;
+                const double amplitude = 32767.0 * 0.08;
+
+                for (int i = 0; i < output_samples; i++)
+                {
+                    snr_audio_buffer[i] = int16_t(std::sin(snr_audio_phase) * amplitude);
+                    snr_audio_phase += phase_step;
+                    if (snr_audio_phase >= 2.0 * pi)
+                        snr_audio_phase -= 2.0 * pi;
+                }
+
+                snr_audio_sink->push_samples(snr_audio_buffer.data(), output_samples);
             }
 
             void BaseDemodModule::drawUI(bool window)
@@ -287,6 +343,8 @@ namespace satdump
                         ImGui::TextColored(style::theme.orange, "%s", format_notated(display_freq, "Hz", 4).c_str());
                     }
                     snr_plot.draw(snr, peak_snr);
+                    if (input_data_type != DATA_FILE && snr_audio_feedback_supported && audio::has_sink())
+                        ImGui::Checkbox("Audible SNR", &snr_audio_feedback);
                     if (!d_is_streaming_input)
                         if (ImGui::Checkbox("Show FFT", &show_fft))
                             fft_splitter->set_enabled("fft", show_fft);

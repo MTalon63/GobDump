@@ -257,7 +257,7 @@ namespace satdump
                                 float phase = p * (2.0f * M_PI / (float)d_num_phases);
                                 float s_p = sin(phase);
                                 float c_p = cos(phase);
-                                int bits_per_sym = d_constellation_obj->get_bits_per_symbol();
+                                int bits_per_sym = d_constellation_obj->getBitsCnt();
 
                                 for (int i = 0; i < d_buffer_size / 2; i++)
                                 {
@@ -298,7 +298,7 @@ namespace satdump
                             float phase = d_current_phase * (2.0f * M_PI / (float)d_num_phases);
                             float s_p = sin(phase);
                             float c_p = cos(phase);
-                            int bits_per_sym = d_constellation_obj->get_bits_per_symbol();
+                            int bits_per_sym = d_constellation_obj->getBitsCnt();
 
                             for (int i = 0; i < d_buffer_size / 2; i++)
                             {

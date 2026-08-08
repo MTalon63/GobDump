@@ -1,4 +1,5 @@
 #include "equirect.h"
+#include <cstdlib>
 
 namespace proj
 {

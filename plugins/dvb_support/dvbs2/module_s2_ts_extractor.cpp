@@ -54,7 +54,7 @@ namespace dvbs2
 
     std::vector<satdump::pipeline::ModuleDataType> S2TStoTCPModule::getInputTypes() { return {satdump::pipeline::DATA_FILE, satdump::pipeline::DATA_STREAM}; }
 
-    std::vector<satdump::pipeline::ModuleDataType> S2TStoTCPModule::getOutputTypes() { return {satdump::pipeline::DATA_FILE}; }
+    std::vector<satdump::pipeline::ModuleDataType> S2TStoTCPModule::getOutputTypes() { return {satdump::pipeline::DATA_FILE, satdump::pipeline::DATA_STREAM}; }
 
     S2TStoTCPModule::~S2TStoTCPModule() {}
 

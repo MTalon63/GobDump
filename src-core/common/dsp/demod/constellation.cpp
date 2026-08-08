@@ -297,8 +297,9 @@ namespace dsp
         return x;
     }
 
-    void constellation_t::make_lut(int resolution)
+    void constellation_t::make_lut(int resolution, float npwr)
     {
+        current_npwr = npwr;
         lut_resolution = resolution;
         lut.resize(resolution);
 
@@ -314,10 +315,19 @@ namespace dsp
                 std::vector<int8_t> bits(const_bits);
                 float phase_err;
 
-                demod_soft_calc(complex_t(x_v, y_v), bits.data(), &phase_err);
+                demod_soft_calc(complex_t(x_v, y_v), bits.data(), &phase_err, npwr);
 
                 lut[x][y] = {bits, phase_err};
             }
+        }
+    }
+
+    void constellation_t::set_noise_power(float npwr)
+    {
+        // Only rebuild LUT if noise power changed significantly (avoid thrashing)
+        if (std::abs(npwr - current_npwr) > 0.01f * current_npwr)
+        {
+            make_lut(lut_resolution, npwr);
         }
     }
 
