@@ -227,7 +227,9 @@ jobs:
               shell: bash
               run: |
                   # Generate the wrapper in a clean dir to avoid evaluating the project's AGP
+                  # Gradle 8.10.2 requires a settings file to exist before running 'gradle wrapper'
                   mkdir -p /tmp/gradle-wrapper && cd /tmp/gradle-wrapper
+                  echo "" > settings.gradle
                   gradle wrapper --gradle-version 8.10.2 --distribution-type bin
                   cp -r gradlew gradlew.bat gradle $GITHUB_WORKSPACE/android/
                   cd $GITHUB_WORKSPACE/android
