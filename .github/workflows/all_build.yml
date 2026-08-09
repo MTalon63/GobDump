@@ -220,10 +220,18 @@ jobs:
 
             - name: Generate Gradle wrapper
               uses: gradle/actions/setup-gradle@v4
+              with:
+                  gradle-version: 8.10.2
 
             - name: Build
               shell: bash
-              run: cd $GITHUB_WORKSPACE/android && gradle wrapper --gradle-version 8.10.2 && ./gradlew assembleRelease
+              run: |
+                  # Generate the wrapper in a clean dir to avoid evaluating the project's AGP
+                  mkdir -p /tmp/gradle-wrapper && cd /tmp/gradle-wrapper
+                  gradle wrapper --gradle-version 8.10.2 --distribution-type bin
+                  cp -r gradlew gradlew.bat gradle $GITHUB_WORKSPACE/android/
+                  cd $GITHUB_WORKSPACE/android
+                  ./gradlew assembleRelease
 
             - name: Upload APK
               uses: actions/upload-artifact@v4
