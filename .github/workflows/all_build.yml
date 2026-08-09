@@ -211,7 +211,11 @@ jobs:
               id: android-deps
               with:
                   path: android/deps
-                  key: android-deps-${{steps.android-deps-ver.outputs.deps_version}}
+                  key: android-deps-v2-${{steps.android-deps-ver.outputs.deps_version}}-${{ hashFiles('android/deps/build.sh') }}
+
+            - name: Install dependency build tools
+              if: steps.android-deps.outputs.cache-hit != 'true'
+              run: sudo apt-get install -y python3-mako
 
             - name: Build dependencies
               if: steps.android-deps.outputs.cache-hit != 'true'
