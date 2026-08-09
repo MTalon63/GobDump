@@ -186,7 +186,7 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
-                  submodules: recursive
+                  submodules: true
 
             - name: Set up JDK
               uses: actions/setup-java@v5
@@ -202,16 +202,12 @@ jobs:
               run: |
                   sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.22.1"
 
-            - name: Get dependency version
-              id: android-deps-ver
-              run: commit=$(git -C $GITHUB_WORKSPACE submodule status | grep android) && echo deps_version=${commit:1:6} >> $GITHUB_OUTPUT
-
             - name: Cache dependencies
               uses: actions/cache@v4
               id: android-deps
               with:
-                  path: android/deps
-                  key: android-deps-v2-${{steps.android-deps-ver.outputs.deps_version}}-${{ hashFiles('android/deps/build.sh') }}
+                  path: android/deps/output
+                  key: android-deps-v3-${{ hashFiles('android/deps/build.sh') }}
 
             - name: Install dependency build tools
               if: steps.android-deps.outputs.cache-hit != 'true'
@@ -220,7 +216,7 @@ jobs:
             - name: Build dependencies
               if: steps.android-deps.outputs.cache-hit != 'true'
               shell: bash
-              run: cd $GITHUB_WORKSPACE/android/deps && sh build.sh && rm .git
+              run: cd $GITHUB_WORKSPACE/android/deps && sh build.sh
 
             - name: Generate Gradle wrapper
               uses: gradle/actions/setup-gradle@v4
