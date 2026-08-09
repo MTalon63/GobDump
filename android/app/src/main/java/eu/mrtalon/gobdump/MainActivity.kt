@@ -15,7 +15,6 @@ import android.content.Intent;
 import android.app.Activity;
 import android.net.Uri;
 
-import RealPathUtil;
 
 import android.Manifest;
 import androidx.core.content.PermissionChecker;
@@ -338,3 +337,4 @@ class MainActivity : NativeActivity(), TextWatcher {
             Log.w(TAG, "Error! " + e.message);
         }
     }
+}
