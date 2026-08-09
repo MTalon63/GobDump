@@ -1,4 +1,4 @@
-package com.altillimity.satdump
+package eu.mrtalon.gobdump
 
 import android.app.NativeActivity
 import android.os.Bundle
@@ -40,7 +40,7 @@ import android.text.InputType;
 import android.view.WindowManager;
 
 import org.woheller69.freeDroidWarn.FreeDroidWarn;
-import org.satdump.SatDump.BuildConfig;
+import eu.mrtalon.gobdump.BuildConfig;
 
 // Extension on intent
 fun Intent?.getFilePath(context: Context): String {
@@ -53,7 +53,7 @@ fun Intent?.getFilePathDir(context: Context): String {
 }
 
 class MainActivity : NativeActivity(), TextWatcher {
-    private val TAG : String = "SatDump";
+    private val TAG : String = "GobDump";
 
     fun checkAndAsk(permission: String) {
         if (PermissionChecker.checkSelfPermission(this, permission) != PermissionChecker.PERMISSION_GRANTED) {
@@ -131,7 +131,7 @@ class MainActivity : NativeActivity(), TextWatcher {
         val aman = getAssets();
         extractDir(aman, fdir + "/resources", "resources");
         // extractDir(aman, fdir + "/plugins", "plugins");
-        extractFile(aman, fdir + "/satdump_cfg.json", "satdump_cfg.json");
+        extractFile(aman, fdir + "/gobdump_cfg.json", "gobdump_cfg.json");
         //createIfDoesntExist(fdir + "/plugins");
 
         return fdir;
@@ -338,4 +338,3 @@ class MainActivity : NativeActivity(), TextWatcher {
             Log.w(TAG, "Error! " + e.message);
         }
     }
-}

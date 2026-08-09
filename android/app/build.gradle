@@ -11,8 +11,8 @@ android {
     }
 
     defaultConfig {
-        applicationId "org.satdump.SatDump"
-        namespace "org.satdump.SatDump"
+        applicationId "eu.mrtalon.gobdump"
+        namespace "eu.mrtalon.gobdump"
         minSdkVersion 26
         targetSdkVersion 27
         versionCode 9
@@ -71,14 +71,14 @@ task copyResources(type: Copy) {
 
 task copyPipelines(type: Copy) {
     description = 'Copy pipelines...'
-    from '../../pipelines'
+    from '../../resources/pipelines'
     into 'assets/pipelines'
     include('**/*')
 }
 
 task copyCfg(type: Copy) {
     description = 'Copy config...'
-    from '../../satdump_cfg.json'
+    from '../../gobdump_cfg.json'
     into 'assets/'
     include('*')
 }
