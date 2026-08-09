@@ -201,7 +201,6 @@ jobs:
               shell: bash
               run: |
                   sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.22.1"
-                  yes | sdkmanager --licenses
 
             - name: Get dependency version
               id: android-deps-ver
