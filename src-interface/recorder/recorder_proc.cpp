@@ -230,7 +230,10 @@ namespace satdump
                     {std::make_shared<handlers::OffProcessingHandler>(pipeline, input_level, input_file, pipeline_output_dir, pipeline_params), false, true});
             }
 
-            live_pipeline.reset();
+            {
+                std::lock_guard<std::mutex> lck(live_pipeline_mtx);
+                live_pipeline.reset();
+            }
         }
     }
 

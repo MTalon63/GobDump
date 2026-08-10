@@ -132,6 +132,7 @@ namespace satdump
         bool automated_live_output_dir = false;
         PipelineUISelector pipeline_selector;
         std::unique_ptr<pipeline::LivePipeline> live_pipeline;
+        std::mutex live_pipeline_mtx; // Guards live_pipeline access between UI draw (main thread) and stop_processing (worker thread)
         std::string pipeline_output_dir;
         nlohmann::json pipeline_params;
 
