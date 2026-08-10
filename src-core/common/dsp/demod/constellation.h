@@ -3,6 +3,7 @@
 #include "common/dsp/complex.h"
 #include <vector>
 #include <cstdint>
+#include <memory>
 
 namespace dsp
 {
@@ -50,8 +51,17 @@ namespace dsp
             float phase_error;
         };
 
-        int lut_resolution;
-        std::vector<std::vector<SoftResult>> lut;
+        // Rebuilt by make_lut() (called from the demod thread when tracking
+        // noise power) while DSP block threads read it via demod_soft_lut().
+        // The table is therefore immutable after construction and swapped
+        // out atomically (copy-on-write), so readers can never observe a
+        // half-built or already-destroyed table.
+        struct SoftLUT
+        {
+            int resolution;
+            std::vector<std::vector<SoftResult>> lut;
+        };
+        std::shared_ptr<const SoftLUT> lut_ptr;
 
     public:
         void make_lut(int resolution, float npwr = 1.0f);
