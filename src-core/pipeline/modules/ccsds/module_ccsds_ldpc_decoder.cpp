@@ -125,6 +125,10 @@ namespace satdump
 
                 memset(llr_scale_history, 0, sizeof(llr_scale_history));
 
+                // Offset Min-Sum beta (0 = plain min-sum, i.e. current behaviour)
+                if (d_parameters.contains("ldpc_oms_beta"))
+                    ldpc_dec->set_oms_beta((int16_t)d_parameters["ldpc_oms_beta"].get<int>());
+
                 is_started = true;
 
                 fsfsm_file_ext = is_ccsds ? ".cadu" : ".frm";
@@ -429,6 +433,10 @@ namespace satdump
                         ImGui::Text("Scale : ");
                         ImGui::SameLine();
                         ImGui::TextColored(style::theme.green, "%.2fx", llr_scale);
+                        ImGui::Text("OMS β: ");
+                        ImGui::SameLine();
+                        int16_t cur_beta = d_parameters.contains("ldpc_oms_beta") ? (int16_t)d_parameters["ldpc_oms_beta"].get<int>() : 0;
+                        ImGui::TextColored(cur_beta > 0 ? style::theme.green : style::theme.orange, "%d", (int)cur_beta);
 
                         std::memmove(&llr_scale_history[0], &llr_scale_history[1], (200 - 1) * sizeof(float));
                         llr_scale_history[200 - 1] = llr_scale;

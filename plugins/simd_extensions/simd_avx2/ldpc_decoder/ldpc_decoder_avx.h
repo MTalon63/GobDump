@@ -57,6 +57,7 @@ namespace codings
             __m256i equ_wip;
             __m256i equ_min1;
             __m256i to_vn;
+            __m256i d_oms_beta_vec;
             int cn_deg;
             int cn_row_base; // offset to base of corresponding row in the PCM
             int vn_offset;

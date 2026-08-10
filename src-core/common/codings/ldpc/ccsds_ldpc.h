@@ -51,6 +51,9 @@ namespace codings
 
             // Decode a LDPC codeword, takes soft-bits floats in, outputs bytes. Retuns corrected bits
             int decode(int8_t *codeword, uint8_t *frame, int iterations = 10);
+
+            // Offset Min-Sum beta. 0 = plain min-sum (default). Call after construction.
+            void set_oms_beta(int16_t b) { ldpc_decoder->set_oms_beta(b); }
         };
     }
 }

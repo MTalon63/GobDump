@@ -121,6 +121,11 @@ namespace satdump
         if (!is_started)
             return;
 
+        // Stop the pipeline before the SDR: splitter->stop_tmp() does NOT call
+        // stopWriter() on its output streams, so any module blocked in
+        // input_stream->read() would deadlock if the pipeline is still running.
+        stop_processing();
+
         splitter->stop_tmp();
         if (current_decimation > 1)
             decim_ptr->stop();

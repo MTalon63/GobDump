@@ -207,6 +207,13 @@ namespace codings
                     ((int16_t *)&equ_wip)[i] = ((int16_t *)&d_abs_msgs[vn_idx])[i] == ((int16_t *)&min1)[i];
                 equ_min1 = vaddq_s16(veorq_s16(vdupq_n_s16(0xFFFF), equ_wip), vdupq_n_s16(1));
                 min = vorrq_s16(vandq_s16(min1, veorq_s16(vdupq_n_s16(0xFFFF), equ_min1)), vandq_s16(min2, equ_min1));
+
+                /* Offset Min-Sum: saturating-subtract beta from magnitude (floor at 0).
+                 * vqsubq_u16 on the reinterpreted vector gives correct unsigned saturation. */
+                if (d_oms_beta > 0)
+                    min = vreinterpretq_s16_u16(
+                        vqsubq_u16(vreinterpretq_u16_s16(min), vdupq_n_u16((uint16_t)d_oms_beta)));
+
                 sign = veorq_s16(parity, d_vns_to_cn_msgs[vn_idx]);
 
                 /* Bit hack in order to multiply by the sign */

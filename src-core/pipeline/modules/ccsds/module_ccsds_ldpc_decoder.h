@@ -73,10 +73,10 @@ namespace satdump
                 float ldpc_history[200];
                 int ldpc_corr;
 
-                // Adaptive LLR scaling (M2M4 SNR-driven, same approach as DVB-S2 demod)
-                M2M4SNREstimator snr_estimator;
+                // Adaptive LLR scaling (EVM SNR-driven, same approach as DVB-S2 demod).
+                EVMSNREstimator snr_estimator{4};
                 float llr_snr = 0;
-                float llr_scale = 1.0f; // current multiplicative scale applied to LLRs
+                float llr_scale = 1.0f;
                 float llr_scale_history[200];
 
                 bool is_started = false;
