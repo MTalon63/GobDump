@@ -235,11 +235,25 @@ jobs:
                   cd $GITHUB_WORKSPACE/android
                   ./gradlew assembleRelease
 
+            - name: Sign APK
+              shell: bash
+              run: |
+                  APK=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-unsigned.apk
+                  SIGNED=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-signed.apk
+                  echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.keystore
+                  $ANDROID_HOME/build-tools/30.0.3/apksigner sign \
+                      --ks /tmp/release.keystore \
+                      --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+                      --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+                      --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
+                      --out $SIGNED \
+                      $APK
+
             - name: Upload APK
               uses: actions/upload-artifact@v4
               with:
                   name: GobDump-release.apk
-                  path: ${{github.workspace}}/android/app/build/outputs/apk/release/app-release-unsigned.apk
+                  path: ${{github.workspace}}/android/app/build/outputs/apk/release/app-release-signed.apk
 
     build_ubuntu_2204:
         # The CMake configure and build commands are platform agnostic and should work equally
@@ -523,7 +537,7 @@ jobs:
               run: sudo apt install -y unzip
 
             - name: Copy files
-              run: mkdir gobdump_out && cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb && cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb && cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/GobDump-macOS-Intel.dmg && cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/GobDump-macOS-Silicon.dmg && (cd GobDump-Windows_x64_Portable && zip -r ../gobdump_out/GobDump-Windows_x64_Portable.zip *) && cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe && cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb && (cd GobDump-Windows_arm64_Portable && zip -r ../gobdump_out/GobDump-Windows_arm64_Portable.zip *) && cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe && cp GobDump-release.apk/app-release-unsigned.apk gobdump_out/GobDump-Android.apk
+              run: mkdir gobdump_out && cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb && cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb && cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/GobDump-macOS-Intel.dmg && cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/GobDump-macOS-Silicon.dmg && (cd GobDump-Windows_x64_Portable && zip -r ../gobdump_out/GobDump-Windows_x64_Portable.zip *) && cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe && cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb && (cd GobDump-Windows_arm64_Portable && zip -r ../gobdump_out/GobDump-Windows_arm64_Portable.zip *) && cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe && cp GobDump-release.apk/app-release-signed.apk gobdump_out/GobDump-Android.apk
 
             - name: Update Nightly
               run: gh release upload nightly gobdump_out/* -R ${{github.repository}} --clobber
