@@ -3,12 +3,16 @@
 #include "common/codings/ldpc/labrador/decoder.h"
 #include "common/codings/randomization.h"
 #include "common/codings/rotation.h"
+#include "common/dsp/complex.h"
 #include "common/utils.h"
 #include "common/widgets/themed_widgets.h"
 #include "core/exception.h"
 #include "logger.h"
 #include "utils/binary.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <vector>
 
 namespace satdump
 {
@@ -119,6 +123,8 @@ namespace satdump
                 ldpc_output_buffer = new uint8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
                 deframer_buffer = new uint8_t[d_ldpc_frame_size * 64];
 
+                memset(llr_scale_history, 0, sizeof(llr_scale_history));
+
                 is_started = true;
 
                 fsfsm_file_ext = is_ccsds ? ".cadu" : ".frm";
@@ -192,6 +198,43 @@ namespace satdump
 
                     if (frames_in_ldpc_buffer == d_ldpc_simd)
                     {
+                        // Adaptive LLR scaling: estimate SNR from soft buffer via M2M4,
+                        // then apply scale = 1/npwr, mirroring the DVB-S2 demod formula.
+                        // Works for BPSK (each int8_t → complex_t with Q=0) and
+                        // QPSK/OQPSK (interleaved I/Q pairs → complex_t).
+                        {
+                            int total_soft = d_ldpc_simd * d_ldpc_codeword_size;
+
+                            if (d_constellation == dsp::BPSK)
+                            {
+                                std::vector<complex_t> tmp(total_soft);
+                                for (int i = 0; i < total_soft; i++)
+                                    tmp[i] = complex_t(ldpc_input_buffer[i] / 127.0f, 0.0f);
+                                snr_estimator.update(tmp.data(), total_soft);
+                            }
+                            else // QPSK / OQPSK: interleaved I, Q soft bits
+                            {
+                                int n = total_soft / 2;
+                                std::vector<complex_t> tmp(n);
+                                for (int i = 0; i < n; i++)
+                                    tmp[i] = complex_t(ldpc_input_buffer[i * 2 + 0] / 127.0f,
+                                                       ldpc_input_buffer[i * 2 + 1] / 127.0f);
+                                snr_estimator.update(tmp.data(), n);
+                            }
+
+                            llr_snr = snr_estimator.snr();
+
+                            // npwr = 2 * 10^(-SNR/20), scale = 1/npwr — same as DVB-S2 demod
+                            float npwr = 2.0f * powf(10.0f, -llr_snr / 20.0f);
+                            llr_scale = std::clamp(1.0f / npwr, 0.25f, 8.0f);
+
+                            for (int i = 0; i < total_soft; i++)
+                            {
+                                float v = ldpc_input_buffer[i] * llr_scale;
+                                ldpc_input_buffer[i] = (int8_t)std::clamp(v, -127.0f, 127.0f);
+                            }
+                        }
+
                         if (use_ldpc2)
                         {
                             for (int i = 0; i < d_ldpc_codeword_size; i++)
@@ -290,6 +333,8 @@ namespace satdump
                 v["correlator_lock"] = correlator_locked;
                 v["correlator_corr"] = correlator_cor;
                 v["ldpc_corr"] = ldpc_corr;
+                v["llr_snr"] = llr_snr;
+                v["llr_scale"] = llr_scale;
                 std::string lock_state = correlator_locked ? "SYNCED" : "NOSYNC";
                 std::string deframer_state;
                 v["lock_state"] = lock_state;
@@ -373,6 +418,22 @@ namespace satdump
                         ldpc_history[200 - 1] = ldpc_corr;
 
                         widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", ldpc_history, IM_ARRAYSIZE(ldpc_history), 0, "", 0.0f, d_ldpc_codeword_size / 20,
+                                                 ImVec2(200 * ui_scale, 50 * ui_scale));
+                    }
+
+                    ImGui::Button("LLR Scaling", {200 * ui_scale, 20 * ui_scale});
+                    {
+                        ImGui::Text("SNR   : ");
+                        ImGui::SameLine();
+                        ImGui::TextColored(style::theme.green, "%.1f dB", llr_snr);
+                        ImGui::Text("Scale : ");
+                        ImGui::SameLine();
+                        ImGui::TextColored(style::theme.green, "%.2fx", llr_scale);
+
+                        std::memmove(&llr_scale_history[0], &llr_scale_history[1], (200 - 1) * sizeof(float));
+                        llr_scale_history[200 - 1] = llr_scale;
+
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##llrscale", llr_scale_history, IM_ARRAYSIZE(llr_scale_history), 0, "", 0.0f, 8.0f,
                                                  ImVec2(200 * ui_scale, 50 * ui_scale));
                     }
 
