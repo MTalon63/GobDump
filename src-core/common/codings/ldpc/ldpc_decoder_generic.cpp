@@ -178,6 +178,11 @@ namespace codings
             {
                 equ_min1 = (~(uint16_t(d_abs_msgs[vn_idx] == min1))) + 1; // 0 or -1
                 min = (min1 & ~equ_min1) | (min2 & equ_min1);
+
+                /* Offset Min-Sum: subtract beta from magnitude, floor at 0 */
+                if (d_oms_beta > 0)
+                    min = (uint16_t)(min > (uint16_t)d_oms_beta ? min - d_oms_beta : 0);
+
                 sign = (parity ^ d_vns_to_cn_msgs[vn_idx]);
 
                 /* Bit hack in order to multiply by the sign */

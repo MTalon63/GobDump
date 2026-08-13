@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="SatDump"
+        android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher_round"
         android:allowBackup="true"
         android:hasCode="true"
@@ -10,7 +10,7 @@
         <!--android:requestLegacyExternalStorage="true"-->
 
         <activity
-            android:name="com.altillimity.satdump.MainActivity"
+            android:name="eu.mrtalon.gobdump.MainActivity"
             android:icon="@mipmap/ic_launcher_round"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|keyboardHidden|screenSize"

@@ -106,10 +106,15 @@ namespace satdump
             if (it->file_sink)
                 it->file_sink->stop_recording();
 
-            splitter->set_vfo_enabled(it->id, false);
-
+            // Stop the live pipeline BEFORE disabling/removing the VFO from the splitter.
+            // The pipeline's first module blocks in input_stream->read() on the VFO stream;
+            // set_vfo_enabled(false) only stops new data, it does NOT unblock the reader.
+            // live_pipeline->stop() calls stopReader/stopWriter on the stream, which is
+            // required to let the module thread exit cleanly.
             if (it->selected_pipeline.id != "")
                 it->live_pipeline->stop();
+
+            splitter->set_vfo_enabled(it->id, false);
 
             if (it->file_sink)
             {

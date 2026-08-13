@@ -18,3 +18,5 @@ srv/
 compile_commands.json
 as.predefined
 deps/
+!android/deps/
+!android/deps/**/

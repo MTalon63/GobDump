@@ -6,6 +6,7 @@
 #include "common/codings/ldpc/labrador/decoder.h"
 #include "common/dsp/demod/constellation.h"
 #include "common/dsp/utils/random.h"
+#include "common/dsp/utils/snr_estimator.h"
 #include "pipeline/modules/base/filestream_to_filestream.h"
 
 namespace satdump
@@ -71,6 +72,12 @@ namespace satdump
 
                 float ldpc_history[200];
                 int ldpc_corr;
+
+                // Adaptive LLR scaling (EVM SNR-driven, same approach as DVB-S2 demod).
+                EVMSNREstimator snr_estimator{4};
+                float llr_snr = 0;
+                float llr_scale = 1.0f;
+                float llr_scale_history[200];
 
                 bool is_started = false;
 

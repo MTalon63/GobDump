@@ -181,43 +181,79 @@ jobs:
                   path: ${{runner.workspace}}/build/Release/*
 
     build_android:
-        if: false
         runs-on: ubuntu-latest
 
         steps:
             - uses: actions/checkout@v4
+              with:
+                  submodules: true
 
             - name: Set up JDK
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@v5
               with:
-                  java-version: "11"
-                  distribution: "temurin"
+                java-version: "17"
+                distribution: "temurin"
 
-            - name: Get dependency version
-              id: android-deps-ver
-              run: commit=$(git -C $GITHUB_WORKSPACE submodule status | grep android) && echo deps_version=${commit:1:6} >> $GITHUB_OUTPUT
+            - name: Set up Android SDK
+              uses: android-actions/setup-android@v3
+
+            - name: Install NDK, platform, and CMake
+              shell: bash
+              run: |
+                  sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.22.1"
 
             - name: Cache dependencies
               uses: actions/cache@v4
               id: android-deps
               with:
-                  path: android/deps
-                  key: android-deps-${{steps.android-deps-ver.outputs.deps_version}}
+                  path: android/deps/output
+                  key: android-deps-v3-${{ hashFiles('android/deps/build.sh') }}
+
+            - name: Install dependency build tools
+              if: steps.android-deps.outputs.cache-hit != 'true'
+              run: sudo apt-get install -y python3-mako
 
             - name: Build dependencies
               if: steps.android-deps.outputs.cache-hit != 'true'
               shell: bash
-              run: git submodule update --init && cd $GITHUB_WORKSPACE/android/deps && sh build.sh && rm .git
+              run: cd $GITHUB_WORKSPACE/android/deps && sh build.sh
+
+            - name: Generate Gradle wrapper
+              uses: gradle/actions/setup-gradle@v4
+              with:
+                  gradle-version: 8.10.2
 
             - name: Build
               shell: bash
-              run: cd $GITHUB_WORKSPACE/android && ./gradlew assembleRelease
+              run: |
+                  # Generate the wrapper in a clean dir to avoid evaluating the project's AGP
+                  # Gradle 8.10.2 requires a settings file to exist before running 'gradle wrapper'
+                  mkdir -p /tmp/gradle-wrapper && cd /tmp/gradle-wrapper
+                  echo "" > settings.gradle
+                  gradle wrapper --gradle-version 8.10.2 --distribution-type bin
+                  cp -r gradlew gradlew.bat gradle $GITHUB_WORKSPACE/android/
+                  cd $GITHUB_WORKSPACE/android
+                  ./gradlew assembleRelease
+
+            - name: Sign APK
+              shell: bash
+              run: |
+                  APK=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-unsigned.apk
+                  SIGNED=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-signed.apk
+                  echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.keystore
+                  $ANDROID_HOME/build-tools/30.0.3/apksigner sign \
+                      --ks /tmp/release.keystore \
+                      --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+                      --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+                      --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
+                      --out $SIGNED \
+                      $APK
 
             - name: Upload APK
               uses: actions/upload-artifact@v4
               with:
                   name: GobDump-release.apk
-                  path: ${{github.workspace}}/android/app/build/outputs/apk/release/app-release.apk
+                  path: ${{github.workspace}}/android/app/build/outputs/apk/release/app-release-signed.apk
 
     build_ubuntu_2204:
         # The CMake configure and build commands are platform agnostic and should work equally
@@ -489,7 +525,7 @@ jobs:
 
     # Yes, since I was asked to do like SDR++ for this I did look at how Ryzerth has done it :-)
     update_nightly_release:
-        needs: ["build_windows_x64", "build_windows_arm64", "build_ubuntu_2204", "build_ubuntu_2404", "build_macos_intel", "build_macos_silicon", "build_linux_arm64"]
+        needs: ["build_windows_x64", "build_windows_arm64", "build_ubuntu_2204", "build_ubuntu_2404", "build_macos_intel", "build_macos_silicon", "build_linux_arm64", "build_android"]
         runs-on: ubuntu-latest
         if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
 
@@ -501,7 +537,7 @@ jobs:
               run: sudo apt install -y unzip
 
             - name: Copy files
-              run: mkdir gobdump_out && cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb && cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb && cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/GobDump-macOS-Intel.dmg && cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/GobDump-macOS-Silicon.dmg && (cd GobDump-Windows_x64_Portable && zip -r ../gobdump_out/GobDump-Windows_x64_Portable.zip *) && cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe && cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb && (cd GobDump-Windows_arm64_Portable && zip -r ../gobdump_out/GobDump-Windows_arm64_Portable.zip *) && cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe
+              run: mkdir gobdump_out && cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb && cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb && cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/GobDump-macOS-Intel.dmg && cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/GobDump-macOS-Silicon.dmg && (cd GobDump-Windows_x64_Portable && zip -r ../gobdump_out/GobDump-Windows_x64_Portable.zip *) && cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe && cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb && (cd GobDump-Windows_arm64_Portable && zip -r ../gobdump_out/GobDump-Windows_arm64_Portable.zip *) && cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe && cp GobDump-release.apk/app-release-signed.apk gobdump_out/GobDump-Android.apk
 
             - name: Update Nightly
               run: gh release upload nightly gobdump_out/* -R ${{github.repository}} --clobber
