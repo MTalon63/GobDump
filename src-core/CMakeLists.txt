@@ -6,7 +6,7 @@ include(CMakePushCheckState)
 include(CheckCCompilerFlag)
 
 # Set the resources path
-if(MSVC OR BUILD_MSVC)
+if(MSVC OR BUILD_MSVC OR MINGW)
     set(RESOURCES_PATH "./")
     set(LIBRARIES_PATH "./")
 else()
@@ -125,6 +125,11 @@ add_library(gobdump_core SHARED ${GobDump_core_CPPS})
 target_include_directories(gobdump_core PUBLIC .)
 #target_precompile_headers(gobdump_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/nlohmann/json.hpp>")
 
+if(MINGW)
+
+    target_compile_definitions(gobdump_core PRIVATE OPJ_STATIC=1)
+endif()
+
 # We have to... For MSVC
 if(BUILD_OPENCL)
     target_compile_definitions(gobdump_core PUBLIC USE_OPENCL=1)
@@ -208,13 +213,17 @@ elseif(ANDROID)
 
     target_include_directories(gobdump_core PUBLIC libs/lua)
 else()
-    if(NOT APPLE)
+    if(NOT APPLE AND NOT MINGW)
         target_link_libraries(gobdump_core PUBLIC stdc++fs)
 
         # Jemalloc
         find_package(Jemalloc REQUIRED)
         target_include_directories(gobdump_core PUBLIC ${JEMALLOC_INCLUDE_DIR})
         target_link_libraries(gobdump_core PUBLIC ${JEMALLOC_LIBRARY})
+    endif()
+
+    if(MINGW)
+        target_link_libraries(gobdump_core PUBLIC ws2_32 shlwapi)
     endif()
 
     # VOLK
@@ -276,8 +285,10 @@ else()
         message("-- Building with SQLite3!")
     endif()
 
-    # Dynamic linking
-    target_link_libraries(gobdump_core PUBLIC dl)
+    # Dynamic linking. Windows uses the bundled libs/dlfcn shim instead of libdl.
+    if(NOT MINGW)
+        target_link_libraries(gobdump_core PUBLIC dl)
+    endif()
 
     # Tiff
     find_library(TIFF_LIBRARY tiff REQUIRED)
@@ -302,6 +313,8 @@ endif()
 # Install
 if(MSVC OR BUILD_MSVC)
     install(TARGETS gobdump_core DESTINATION ${CMAKE_INSTALL_BINDIR} RUNTIME_DEPENDENCY_SET gobdump_deps)
+elseif(MINGW)
+    install(TARGETS gobdump_core RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 else()
     install(TARGETS gobdump_core DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()

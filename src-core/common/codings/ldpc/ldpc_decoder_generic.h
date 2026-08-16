@@ -17,6 +17,8 @@ namespace codings
 
             int simd() { return 1; }
 
+            void set_algorithm(ldpc_algorithm_t a);
+
         private:
             int d_pcm_num_cn;
             int d_pcm_num_vn;
@@ -33,6 +35,10 @@ namespace codings
             /* Buffer to hold all messages from CNs to VNs containing
              * error correcting values. */
             int16_t *d_cn_to_vn_msgs;
+            /* Previous iteration's VN to CN messages, and the sign-flip erased view of
+             * the current ones. Only allocated for self-corrected min-sum. */
+            int16_t *d_prev_vn_to_cn_msgs = nullptr;
+            int16_t *d_sc_msgs = nullptr;
 
             /* Buffer representing the parity check matrix. Instead of having all offsets of
              * each VN in the VN buffer, we store directly its addresses in the buffer */

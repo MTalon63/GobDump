@@ -25,9 +25,7 @@ if(NEON_FOUND)
     target_link_libraries(simd_neon PUBLIC gobdump_core)
     target_include_directories(simd_neon PUBLIC src)
 
-    if(UNIX OR ANDROID)
-        set(FINAL_FLAGS_NEON "${NEON_C_FLAGS}")
-    elseif(MSVC OR BUILD_MSVC)
+    if(UNIX OR ANDROID OR MINGW OR MSVC OR BUILD_MSVC)
         set(FINAL_FLAGS_NEON "${NEON_C_FLAGS}")
     endif()
 

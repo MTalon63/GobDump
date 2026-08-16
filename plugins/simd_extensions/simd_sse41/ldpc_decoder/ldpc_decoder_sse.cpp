@@ -62,8 +62,21 @@ namespace codings
             delete[] d_vns_to_cn_msgs;
             delete[] d_abs_msgs;
             delete[] d_cn_to_vn_msgs;
+            delete[] d_prev_vn_to_cn_msgs;
+            delete[] d_sc_msgs;
             delete[] d_vn_addr;
             delete[] d_row_pos_deg;
+        }
+
+        void LDPCDecoderSSE::set_algorithm(ldpc_algorithm_t a)
+        {
+            d_algorithm = a;
+
+            if (a == LDPC_SELF_CORRECTED_MIN_SUM && d_prev_vn_to_cn_msgs == nullptr)
+            {
+                d_prev_vn_to_cn_msgs = new __m128i[d_pcm_num_cn * d_pcm_max_cn_degree];
+                d_sc_msgs = new __m128i[d_pcm_max_cn_degree];
+            }
         }
 
         int LDPCDecoderSSE::decode(uint8_t *out, const int8_t *in, int it)
@@ -92,6 +105,10 @@ namespace codings
                 // d_cn_to_vn_msgs[i] = 0;
                 d_cn_to_vn_msgs[i] = _mm_set1_epi16(0);
             }
+
+            if (d_algorithm == LDPC_SELF_CORRECTED_MIN_SUM)
+                for (int i = 0; i < d_pcm_num_cn * d_pcm_max_cn_degree; i++)
+                    d_prev_vn_to_cn_msgs[i] = _mm_set1_epi16(0);
 
             /* Decode step */
             while (it--)
@@ -134,6 +151,33 @@ namespace codings
                     _mm_sub_epi16(*d_vn_addr[cn_row_base + vn_idx], d_cn_to_vn_msgs[cn_offset + vn_idx]);
             }
 
+            /* Self-corrected min-sum: erase messages whose sign flipped since the last
+             * iteration, as those are considered unreliable. Only the check node
+             * computation sees the erased values; the VN update below still uses the
+             * true extrinsic, otherwise the VN would lose its channel information. */
+            const __m128i *cn_in = d_vns_to_cn_msgs;
+
+            if (d_algorithm == LDPC_SELF_CORRECTED_MIN_SUM)
+            {
+                for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+                {
+                    __m128i new_m = d_vns_to_cn_msgs[vn_idx];
+                    __m128i prev_m = d_prev_vn_to_cn_msgs[cn_offset + vn_idx];
+
+                    /* Erase where prev != 0 AND signs differ */
+                    __m128i flipped = _mm_srai_epi16(_mm_xor_si128(prev_m, new_m), 15);
+                    __m128i prev_nz = _mm_xor_si128(_mm_cmpeq_epi16(prev_m, _mm_setzero_si128()), _mm_set1_epi16(-1));
+                    __m128i keep = _mm_xor_si128(_mm_and_si128(flipped, prev_nz), _mm_set1_epi16(-1));
+
+                    new_m = _mm_and_si128(new_m, keep);
+
+                    d_prev_vn_to_cn_msgs[cn_offset + vn_idx] = new_m;
+                    d_sc_msgs[vn_idx] = new_m;
+                }
+
+                cn_in = d_sc_msgs;
+            }
+
             parity = _mm_set1_epi16(0);
             min1 = _mm_set1_epi16(UINT8_MAX);
             min2 = _mm_set1_epi16(UINT8_MAX);
@@ -148,7 +192,7 @@ namespace codings
              * to the current CN. */
             for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
             {
-                msg = d_vns_to_cn_msgs[vn_idx];
+                msg = cn_in[vn_idx];
                 parity = _mm_xor_si128(parity, msg);
 
                 /* Bit-hack to compute the absolute value of the message */
@@ -187,11 +231,16 @@ namespace codings
                 equ_min1 = _mm_add_epi16(_mm_xor_si128(_mm_set1_epi16(0xFFFF), equ_wip), _mm_set1_epi16(1));
                 min = _mm_or_si128(_mm_and_si128(min1, _mm_xor_si128(_mm_set1_epi16(0xFFFF), equ_min1)), _mm_and_si128(min2, equ_min1));
 
+                /* Normalized Min-Sum: scale magnitude by alpha (Q8). Magnitudes are
+                 * bounded well under 2^15 so the low half of the product suffices. */
+                if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
+                    min = _mm_srli_epi16(_mm_mullo_epi16(min, _mm_set1_epi16(d_nms_alpha_q8)), 8);
+
                 /* Offset Min-Sum: saturating-subtract beta from magnitude (floor at 0) */
                 if (d_oms_beta > 0)
                     min = _mm_subs_epu16(min, _mm_set1_epi16(d_oms_beta));
 
-                sign = _mm_xor_si128(parity, d_vns_to_cn_msgs[vn_idx]);
+                sign = _mm_xor_si128(parity, cn_in[vn_idx]);
 
                 /* Bit hack in order to multiply by the sign */
                 new_msg = _mm_sign_epi16(min, sign);

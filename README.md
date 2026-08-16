@@ -94,7 +94,21 @@ The fastest way to get started is to head over to the [Releases](https://github.
 
 Our builds are made with Visual Studio 2019 for x64, so the appropriate Visual C++ Runtime will be required (though, likely to be already installed). You can get it [here](https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0). Once downloaded, run either satdump-ui.exe or satdump.exe (CLI) to get started!
 
-For compilation information, see the dedicated documentation [here](https://docs.satdump.org/build_windows.html). _Note : Mingw builds are NOT supported, VOLK will not work._
+For compilation information, see the dedicated documentation [here](https://docs.satdump.org/build_windows.html).
+
+#### Building with MSYS2 (MinGW-w64 UCRT64)
+
+Visual Studio is not required. From an **MSYS2 UCRT64** shell:
+
+```bash
+./windows/Setup-MSYS2.sh          # installs all dependencies (one time)
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON
+cmake --build build
+```
+
+A `Makefile` wrapping the above is provided for convenience — `make`, `make run`, `make clean`, `make distclean`, `make install`. Run `make help` for the full list. It only saves typing; the CMake commands above remain the canonical way to build.
+
+_Note : the SDDC (RX666/RX888) plugin is unavailable on MinGW, as it depends on the MSVC-only Cypress CyAPI library._
 
 ### macOS
 

@@ -6,6 +6,6 @@ namespace satdump
 {
     namespace ndsp
     {
-        SATDUMP_DLL const size_t volk_alignment = volk_get_alignment();
+        SATDUMP_DLL extern const size_t volk_alignment = volk_get_alignment();
     }
 } // namespace satdump

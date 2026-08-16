@@ -292,32 +292,58 @@ namespace satdump
                     snr_audio_sink->set_samplerate(snr_audio_samplerate);
                     snr_audio_sink->start();
                     snr_audio_feedback_running = true;
+                    snr_audio_last_push = std::chrono::steady_clock::now();
+                    snr_audio_sample_debt = 0.0;
                 }
 
                 if (!snr_audio_sink)
                     return;
 
-                int output_samples = std::max(1, int(std::round(input_samples * (double)snr_audio_samplerate / input_samplerate)));
-                output_samples = std::min(output_samples, snr_audio_samplerate / 25);
+                // Generate however much audio real time has advanced by, so the tone
+                // stays continuous no matter how irregularly the DSP calls us.
+                auto now = std::chrono::steady_clock::now();
+                double elapsed = std::chrono::duration<double>(now - snr_audio_last_push).count();
+                snr_audio_last_push = now;
+
+                snr_audio_sample_debt += elapsed * snr_audio_samplerate;
+
+                // A long stall (paused pipeline, tab switch) shouldn't dump a huge burst.
+                snr_audio_sample_debt = std::min(snr_audio_sample_debt, (double)snr_audio_samplerate / 4.0);
+
+                int output_samples = (int)snr_audio_sample_debt;
+                if (output_samples < 1)
+                    return;
+
+                snr_audio_sample_debt -= output_samples;
                 snr_audio_buffer.resize(output_samples);
 
                 const float snr_clamped = std::clamp(std::isfinite(snr) ? snr : 0.0f, 0.0f, 25.0f);
-                snr_audio_smoothed = (snr_audio_smoothed == 0.0f) ? snr_clamped : (snr_audio_smoothed * 0.55f) + (snr_clamped * 0.45f);
+                // Slow: the pitch should track the trend, not every SNR twitch.
+                snr_audio_smoothed = (snr_audio_smoothed == 0.0f) ? snr_clamped : (snr_audio_smoothed * 0.95f) + (snr_clamped * 0.05f);
 
                 const double min_freq = 440.0;
                 const double max_freq = 2400.0;
                 const double tone_freq = min_freq + ((max_freq - min_freq) * (snr_audio_smoothed / 25.0));
                 constexpr double pi = 3.14159265358979323846;
-                const double phase_step = (2.0 * pi * tone_freq) / snr_audio_samplerate;
                 const double amplitude = 32767.0 * 0.08;
+
+                // Glide to the new pitch across the buffer; stepping it at the buffer
+                // boundary is audible as a click.
+                const double step_from = (2.0 * pi * snr_audio_last_freq) / snr_audio_samplerate;
+                const double step_to = (2.0 * pi * tone_freq) / snr_audio_samplerate;
 
                 for (int i = 0; i < output_samples; i++)
                 {
+                    double t = (double)i / output_samples;
+                    double phase_step = step_from + (step_to - step_from) * t;
+
                     snr_audio_buffer[i] = int16_t(std::sin(snr_audio_phase) * amplitude);
                     snr_audio_phase += phase_step;
                     if (snr_audio_phase >= 2.0 * pi)
                         snr_audio_phase -= 2.0 * pi;
                 }
+
+                snr_audio_last_freq = tone_freq;
 
                 snr_audio_sink->push_samples(snr_audio_buffer.data(), output_samples);
             }

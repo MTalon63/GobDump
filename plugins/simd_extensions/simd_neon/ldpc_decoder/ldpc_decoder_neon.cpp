@@ -62,8 +62,21 @@ namespace codings
             delete[] d_vns_to_cn_msgs;
             delete[] d_abs_msgs;
             delete[] d_cn_to_vn_msgs;
+            delete[] d_prev_vn_to_cn_msgs;
+            delete[] d_sc_msgs;
             delete[] d_vn_addr;
             delete[] d_row_pos_deg;
+        }
+
+        void LDPCDecoderNEON::set_algorithm(ldpc_algorithm_t a)
+        {
+            d_algorithm = a;
+
+            if (a == LDPC_SELF_CORRECTED_MIN_SUM && d_prev_vn_to_cn_msgs == nullptr)
+            {
+                d_prev_vn_to_cn_msgs = new int16x8_t[d_pcm_num_cn * d_pcm_max_cn_degree];
+                d_sc_msgs = new int16x8_t[d_pcm_max_cn_degree];
+            }
         }
 
         int LDPCDecoderNEON::decode(uint8_t *out, const int8_t *in, int it)
@@ -92,6 +105,10 @@ namespace codings
                 // d_cn_to_vn_msgs[i] = 0;
                 d_cn_to_vn_msgs[i] = vdupq_n_s16(0);
             }
+
+            if (d_algorithm == LDPC_SELF_CORRECTED_MIN_SUM)
+                for (int i = 0; i < d_pcm_num_cn * d_pcm_max_cn_degree; i++)
+                    d_prev_vn_to_cn_msgs[i] = vdupq_n_s16(0);
 
             /* Decode step */
             while (it--)
@@ -154,6 +171,33 @@ namespace codings
                     vsubq_s16(*d_vn_addr[cn_row_base + vn_idx], d_cn_to_vn_msgs[cn_offset + vn_idx]);
             }
 
+            /* Self-corrected min-sum: erase messages whose sign flipped since the last
+             * iteration, as those are considered unreliable. Only the check node
+             * computation sees the erased values; the VN update below still uses the
+             * true extrinsic, otherwise the VN would lose its channel information. */
+            const int16x8_t *cn_in = d_vns_to_cn_msgs;
+
+            if (d_algorithm == LDPC_SELF_CORRECTED_MIN_SUM)
+            {
+                for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+                {
+                    int16x8_t new_m = d_vns_to_cn_msgs[vn_idx];
+                    int16x8_t prev_m = d_prev_vn_to_cn_msgs[cn_offset + vn_idx];
+
+                    /* Erase where prev != 0 AND signs differ */
+                    uint16x8_t flipped = vreinterpretq_u16_s16(vshrq_n_s16(veorq_s16(prev_m, new_m), 15));
+                    uint16x8_t prev_zero = vceqq_s16(prev_m, vdupq_n_s16(0));
+                    uint16x8_t erase = vbicq_u16(flipped, prev_zero);
+
+                    new_m = vreinterpretq_s16_u16(vbicq_u16(vreinterpretq_u16_s16(new_m), erase));
+
+                    d_prev_vn_to_cn_msgs[cn_offset + vn_idx] = new_m;
+                    d_sc_msgs[vn_idx] = new_m;
+                }
+
+                cn_in = d_sc_msgs;
+            }
+
             parity = vdupq_n_s16(0);
             min1 = vdupq_n_s16(UINT8_MAX);
             min2 = vdupq_n_s16(UINT8_MAX);
@@ -168,7 +212,7 @@ namespace codings
              * to the current CN. */
             for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
             {
-                msg = d_vns_to_cn_msgs[vn_idx];
+                msg = cn_in[vn_idx];
                 parity = veorq_s16(parity, msg);
 
                 /* Bit-hack to compute the absolute value of the message */
@@ -208,13 +252,19 @@ namespace codings
                 equ_min1 = vaddq_s16(veorq_s16(vdupq_n_s16(0xFFFF), equ_wip), vdupq_n_s16(1));
                 min = vorrq_s16(vandq_s16(min1, veorq_s16(vdupq_n_s16(0xFFFF), equ_min1)), vandq_s16(min2, equ_min1));
 
+                /* Normalized Min-Sum: scale magnitude by alpha (Q8). Magnitudes are
+                 * bounded well under 2^15 so the low half of the product suffices. */
+                if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
+                    min = vreinterpretq_s16_u16(vshrq_n_u16(
+                        vreinterpretq_u16_s16(vmulq_s16(min, vdupq_n_s16(d_nms_alpha_q8))), 8));
+
                 /* Offset Min-Sum: saturating-subtract beta from magnitude (floor at 0).
                  * vqsubq_u16 on the reinterpreted vector gives correct unsigned saturation. */
                 if (d_oms_beta > 0)
                     min = vreinterpretq_s16_u16(
                         vqsubq_u16(vreinterpretq_u16_s16(min), vdupq_n_u16((uint16_t)d_oms_beta)));
 
-                sign = veorq_s16(parity, d_vns_to_cn_msgs[vn_idx]);
+                sign = veorq_s16(parity, cn_in[vn_idx]);
 
                 /* Bit hack in order to multiply by the sign */
                 new_msg = _mm_sign_epi16_neon(min, sign);

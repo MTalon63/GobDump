@@ -54,6 +54,11 @@ namespace codings
 
             // Offset Min-Sum beta. 0 = plain min-sum (default). Call after construction.
             void set_oms_beta(int16_t b) { ldpc_decoder->set_oms_beta(b); }
+
+            // Normalized Min-Sum alpha, Q8 fixed-point (256 == 1.0).
+            void set_nms_alpha(int16_t a_q8) { ldpc_decoder->set_nms_alpha(a_q8); }
+
+            void set_algorithm(ldpc_algorithm_t a) { ldpc_decoder->set_algorithm(a); }
         };
     }
 }

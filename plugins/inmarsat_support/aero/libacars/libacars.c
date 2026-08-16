@@ -4,6 +4,7 @@
  *  Copyright (c) 2018-2021 Tomasz Lemiech <szpajder@gmail.com>
  */
 #include <stdbool.h>
+#include <string.h>                 // strcspn
 #ifdef DEBUG
 #include <stdlib.h>                 // getenv, strtoul
 #endif

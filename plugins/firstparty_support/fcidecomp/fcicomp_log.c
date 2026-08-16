@@ -41,7 +41,7 @@ fcicomp_log(msg_severity_t severity, const char *fmt, ...)
 	if (severity <= LOGGING_LEVEL) {
 
 		/* Define the stream where the message is printed */
-		struct _IO_FILE * stream = stdout;
+		FILE * stream = stdout;
 
 		/* Select the stderr stream for errors,
 		 * and stdout for other messages */

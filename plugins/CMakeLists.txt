@@ -376,7 +376,14 @@ if(PLUGIN_LITEXM2SDR_SDR_SUPPORT)
   add_subdirectory(sdr_sources/litexm2sdr_sdr_support)
 endif()
 
-option(PLUGIN_USRP_SDR_SUPPORT "Enable USRP SDR Support plugin" ON)
+# Off by default on MinGW: MSYS2's libuhd segfaults during device discovery,
+# reproducible with its own uhd_find_devices.exe. Re-enable with
+# -DPLUGIN_USRP_SDR_SUPPORT=ON once that package is fixed.
+if(MINGW)
+  option(PLUGIN_USRP_SDR_SUPPORT "Enable USRP SDR Support plugin" OFF)
+else()
+  option(PLUGIN_USRP_SDR_SUPPORT "Enable USRP SDR Support plugin" ON)
+endif()
 
 if(PLUGIN_USRP_SDR_SUPPORT)
   add_subdirectory(sdr_sources/usrp_sdr_support)
@@ -459,7 +466,12 @@ option(PLUGIN_SDDC_SDR_SUPPORT
        "Enable SDDC (RX666, RX888, etc) SDR Support plugin" OFF)
 
 if(PLUGIN_SDDC_SDR_SUPPORT)
-  add_subdirectory(sdr_sources/sddc_sdr_support)
+  if(MINGW)
+    # Windows support here needs Cypress CyAPI, which is MSVC-only.
+    message("SDDC is not supported on MinGW! Not building.")
+  else()
+    add_subdirectory(sdr_sources/sddc_sdr_support)
+  endif()
 endif()
 
 # NOT recommended

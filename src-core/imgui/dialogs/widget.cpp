@@ -4,10 +4,6 @@
 #include "imgui/imgui_stdlib.h"
 #include <filesystem>
 
-#ifdef _MSC_VER
-#include <direct.h>
-#endif
-
 FileSelectWidget::FileSelectWidget(std::string label, std::string selection_text, bool directory, bool allow_url)
     : label(label), selection_text(selection_text), directory(directory), allow_url(allow_url)
 {
@@ -34,14 +30,10 @@ bool FileSelectWidget::draw(std::string hint)
     bool changed = false;
     bool disabled = waiting_for_res;
 
-#ifdef _MSC_VER
+    // Windows shell dialogs reject relative paths, so resolve "." to the cwd.
+#ifdef _WIN32
     if (default_dir == ".")
-    {
-        char *cwd;
-        cwd = _getcwd(NULL, 0);
-        if (cwd != 0)
-            default_dir = cwd;
-    }
+        default_dir = std::filesystem::current_path().string();
 #endif
 
     if (disabled)

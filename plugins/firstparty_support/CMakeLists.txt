@@ -28,6 +28,11 @@ if(${HDF5_FOUND})
   target_link_libraries(firstparty_support PUBLIC gobdump_core)
   target_include_directories(firstparty_support PUBLIC src ${CMAKE_SOURCE_DIR}/plugins/xrit_support)
 
+
+  if(MINGW)
+    target_compile_definitions(firstparty_support PRIVATE CHARLS_STATIC=1)
+  endif()
+
   target_include_directories(firstparty_support
                              PUBLIC ${HDF5_INCLUDE_DIRS})
   target_link_directories(firstparty_support PUBLIC ${HDF5_LIBRARY_DIRS})

@@ -101,6 +101,11 @@ namespace satdump
                 int snr_audio_samplerate = 48000;
                 double snr_audio_phase = 0.0;
                 float snr_audio_smoothed = 0.0f;
+                // Tone length is driven by elapsed wall-clock time, not by how many
+                // samples the DSP happened to hand us, which is far too irregular.
+                std::chrono::steady_clock::time_point snr_audio_last_push;
+                double snr_audio_sample_debt = 0.0;
+                double snr_audio_last_freq = 440.0;
                 std::vector<int16_t> snr_audio_buffer;
                 std::shared_ptr<audio::AudioSink> snr_audio_sink;
 

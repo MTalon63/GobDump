@@ -25,7 +25,7 @@ if(SSE41_FOUND)
     target_link_libraries(simd_sse41 PUBLIC gobdump_core)
     target_include_directories(simd_sse41 PUBLIC src)
 
-    if(UNIX OR ANDROID)
+    if(UNIX OR ANDROID OR MINGW)
         set(FINAL_FLAGS_SSE41 "-msse4.1")
     elseif(MSVC OR BUILD_MSVC)
         set(FINAL_FLAGS_SSE41 "${SSE41_C_FLAGS}")

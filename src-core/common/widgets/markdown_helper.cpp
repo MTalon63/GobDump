@@ -9,6 +9,7 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#include <shellapi.h>
 #elif defined(__ANDROID__)
 #include <android_native_app_glue.h>
 struct android_app *g_App;

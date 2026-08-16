@@ -4,11 +4,8 @@
 #include "logger.h"
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <sstream>
-
-#ifdef _MSC_VER
-#include <direct.h>
-#endif
 
 #include "image/io.h"
 
@@ -46,14 +43,9 @@ namespace satdump
         *default_ext = satdump_cfg.getValueFromSatDumpGeneral<std::string>("image_format");
 #endif
 
-#if defined(_MSC_VER)
+#if defined(_WIN32)
         if (default_path == ".")
-        {
-            char *cwd;
-            cwd = _getcwd(NULL, 0);
-            if (cwd != 0)
-                default_path = cwd;
-        }
+            default_path = std::filesystem::current_path().string();
         default_path += "\\";
 #elif defined(__ANDROID__)
         if (default_path == ".")

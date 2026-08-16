@@ -25,7 +25,7 @@ if(CXX_HAS_AVX_2)
     target_link_libraries(simd_avx2 PUBLIC gobdump_core)
     target_include_directories(simd_avx2 PUBLIC src)
 
-    if(UNIX OR ANDROID)
+    if(UNIX OR ANDROID OR MINGW)
         set(FINAL_FLAGS_AVX2 "-mavx2")
     elseif(MSVC OR BUILD_MSVC)
         set(FINAL_FLAGS_AVX2 "${AVX2_C_FLAGS}")

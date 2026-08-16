@@ -6,10 +6,10 @@
 #include "main_ui.h"
 #include "utils/time.h"
 
-#ifndef _MSC_VER
-#include <sys/statvfs.h>
-#else
+#ifdef _WIN32
 #include <Windows.h>
+#else
+#include <sys/statvfs.h>
 #endif
 
 namespace satdump
@@ -274,9 +274,9 @@ namespace satdump
         recording_path += "/";
 #endif
 
-#if defined(_MSC_VER)
+#if defined(_WIN32)
         ULARGE_INTEGER bytes_available;
-        if (GetDiskFreeSpaceEx(recording_path.c_str(), &bytes_available, NULL, NULL))
+        if (GetDiskFreeSpaceExA(recording_path.c_str(), &bytes_available, NULL, NULL))
             disk_available = bytes_available.QuadPart;
 
 #elif defined(__APPLE__)

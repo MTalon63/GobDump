@@ -8,6 +8,7 @@
 #include "common/dsp/utils/random.h"
 #include "common/dsp/utils/snr_estimator.h"
 #include "pipeline/modules/base/filestream_to_filestream.h"
+#include <vector>
 
 namespace satdump
 {
@@ -38,6 +39,9 @@ namespace satdump
                 codings::ldpc::ldpc_rate_t d_ldpc_rate; // LDPC Rate
                 int d_ldpc_block_size;                  // LDPC Block size (for AR4JA only)
                 int d_ldpc_iterations;                  // LDPC Iterations
+
+                codings::ldpc::ldpc_algorithm_t d_ldpc_algorithm = codings::ldpc::LDPC_MIN_SUM;
+                int16_t d_ldpc_nms_alpha_q8 = 205; // ~0.8, only used by normalized min-sum
 
                 const bool d_internal_stream; // Does this have an internal CADU stream?
                 const int d_cadu_size;        // CADU Size in bits, including ASM
@@ -73,8 +77,10 @@ namespace satdump
                 float ldpc_history[200];
                 int ldpc_corr;
 
-                // Adaptive LLR scaling (EVM SNR-driven, same approach as DVB-S2 demod).
+                static constexpr int SNR_ESTIMATOR_SAMPLES = 4096;
                 EVMSNREstimator snr_estimator{4};
+                std::vector<complex_t> snr_sample_buffer = std::vector<complex_t>(SNR_ESTIMATOR_SAMPLES);
+                int8_t llr_scale_lut[256];
                 float llr_snr = 0;
                 float llr_scale = 1.0f;
                 float llr_scale_history[200];

@@ -62,8 +62,21 @@ namespace codings
             delete[] d_vns_to_cn_msgs;
             delete[] d_abs_msgs;
             delete[] d_cn_to_vn_msgs;
+            delete[] d_prev_vn_to_cn_msgs;
+            delete[] d_sc_msgs;
             delete[] d_vn_addr;
             delete[] d_row_pos_deg;
+        }
+
+        void LDPCDecoderGeneric::set_algorithm(ldpc_algorithm_t a)
+        {
+            d_algorithm = a;
+
+            if (a == LDPC_SELF_CORRECTED_MIN_SUM && d_prev_vn_to_cn_msgs == nullptr)
+            {
+                d_prev_vn_to_cn_msgs = new int16_t[d_pcm_num_cn * d_pcm_max_cn_degree];
+                d_sc_msgs = new int16_t[d_pcm_max_cn_degree];
+            }
         }
 
         int LDPCDecoderGeneric::decode(uint8_t *out, const int8_t *in, int it)
@@ -88,6 +101,10 @@ namespace codings
             {
                 d_cn_to_vn_msgs[i] = 0;
             }
+
+            if (d_algorithm == LDPC_SELF_CORRECTED_MIN_SUM)
+                for (int i = 0; i < d_pcm_num_cn * d_pcm_max_cn_degree; i++)
+                    d_prev_vn_to_cn_msgs[i] = 0;
 
             /* Decode step */
             while (it--)
@@ -126,6 +143,29 @@ namespace codings
                 // printf("%d \n", d_vns_to_cn_msgs[vn_idx]);
             }
 
+            /* Self-corrected min-sum: erase messages whose sign flipped since the last
+             * iteration, as those are considered unreliable. Only the check node
+             * computation sees the erased values; the VN update below still uses the
+             * true extrinsic, otherwise the VN would lose its channel information. */
+            const int16_t *cn_in = d_vns_to_cn_msgs;
+
+            if (d_algorithm == LDPC_SELF_CORRECTED_MIN_SUM)
+            {
+                for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+                {
+                    int16_t new_m = d_vns_to_cn_msgs[vn_idx];
+                    int16_t prev_m = d_prev_vn_to_cn_msgs[cn_offset + vn_idx];
+
+                    if (prev_m != 0 && ((prev_m ^ new_m) < 0)) // Signs differ
+                        new_m = 0;
+
+                    d_prev_vn_to_cn_msgs[cn_offset + vn_idx] = new_m;
+                    d_sc_msgs[vn_idx] = new_m;
+                }
+
+                cn_in = d_sc_msgs;
+            }
+
             parity = 0;
             min1 = UINT8_MAX;
             min2 = UINT8_MAX;
@@ -140,7 +180,7 @@ namespace codings
              * to the current CN. */
             for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
             {
-                msg = d_vns_to_cn_msgs[vn_idx];
+                msg = cn_in[vn_idx];
                 parity ^= msg;
 
                 /* Bit-hack to compute the absolute value of the message */
@@ -179,11 +219,15 @@ namespace codings
                 equ_min1 = (~(uint16_t(d_abs_msgs[vn_idx] == min1))) + 1; // 0 or -1
                 min = (min1 & ~equ_min1) | (min2 & equ_min1);
 
+                /* Normalized Min-Sum: scale magnitude by alpha (Q8) */
+                if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
+                    min = (uint16_t)(((uint32_t)min * (uint32_t)d_nms_alpha_q8) >> 8);
+
                 /* Offset Min-Sum: subtract beta from magnitude, floor at 0 */
                 if (d_oms_beta > 0)
                     min = (uint16_t)(min > (uint16_t)d_oms_beta ? min - d_oms_beta : 0);
 
-                sign = (parity ^ d_vns_to_cn_msgs[vn_idx]);
+                sign = (parity ^ cn_in[vn_idx]);
 
                 /* Bit hack in order to multiply by the sign */
                 sign = (sign >> (sizeof(sign) * 8 - 1));

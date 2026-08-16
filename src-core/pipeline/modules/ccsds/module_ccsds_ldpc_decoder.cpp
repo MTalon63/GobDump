@@ -125,9 +125,27 @@ namespace satdump
 
                 memset(llr_scale_history, 0, sizeof(llr_scale_history));
 
+                // Decoding algorithm. Defaults to plain min-sum, i.e. previous behaviour.
+                if (d_parameters.contains("ldpc_algorithm"))
+                    d_ldpc_algorithm = codings::ldpc::ldpc_algorithm_from_string(d_parameters["ldpc_algorithm"].get<std::string>());
+
+                if (d_parameters.contains("ldpc_nms_alpha"))
+                {
+                    float a = d_parameters["ldpc_nms_alpha"].get<float>();
+                    if (a <= 0.0f || a > 1.0f)
+                        throw satdump_exception("CCSDS LDPC Decoder : ldpc_nms_alpha must be in (0, 1]!");
+                    d_ldpc_nms_alpha_q8 = (int16_t)lroundf(a * 256.0f);
+                }
+
+                ldpc_dec->set_nms_alpha(d_ldpc_nms_alpha_q8);
+                ldpc_dec->set_algorithm(d_ldpc_algorithm);
+
                 // Offset Min-Sum beta (0 = plain min-sum, i.e. current behaviour)
-                if (d_parameters.contains("ldpc_oms_beta"))
-                    ldpc_dec->set_oms_beta((int16_t)d_parameters["ldpc_oms_beta"].get<int>());
+                int16_t oms_beta = d_parameters.contains("ldpc_oms_beta") ? (int16_t)d_parameters["ldpc_oms_beta"].get<int>() : 0;
+                ldpc_dec->set_oms_beta(oms_beta);
+
+                logger->info("LDPC algorithm: %s (alpha %.3f, beta %d), %d iterations", codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm).c_str(),
+                             d_ldpc_nms_alpha_q8 / 256.0f, (int)oms_beta, d_ldpc_iterations);
 
                 is_started = true;
 
@@ -209,22 +227,25 @@ namespace satdump
                         {
                             int total_soft = d_ldpc_simd * d_ldpc_codeword_size;
 
+                            // The estimator is a slow EMA, so a strided subset per batch
+                            // tracks the channel just as well at a fraction of the cost.
+                            int navail = d_constellation == dsp::BPSK ? total_soft : total_soft / 2;
+                            int nuse = std::min(navail, SNR_ESTIMATOR_SAMPLES);
+                            int stride = navail / nuse;
+
                             if (d_constellation == dsp::BPSK)
                             {
-                                std::vector<complex_t> tmp(total_soft);
-                                for (int i = 0; i < total_soft; i++)
-                                    tmp[i] = complex_t(ldpc_input_buffer[i] / 127.0f, 0.0f);
-                                snr_estimator.update(tmp.data(), total_soft);
+                                for (int i = 0; i < nuse; i++)
+                                    snr_sample_buffer[i] = complex_t(ldpc_input_buffer[i * stride] / 127.0f, 0.0f);
                             }
                             else // QPSK / OQPSK: interleaved I, Q soft bits
                             {
-                                int n = total_soft / 2;
-                                std::vector<complex_t> tmp(n);
-                                for (int i = 0; i < n; i++)
-                                    tmp[i] = complex_t(ldpc_input_buffer[i * 2 + 0] / 127.0f,
-                                                       ldpc_input_buffer[i * 2 + 1] / 127.0f);
-                                snr_estimator.update(tmp.data(), n);
+                                for (int i = 0; i < nuse; i++)
+                                    snr_sample_buffer[i] = complex_t(ldpc_input_buffer[i * stride * 2 + 0] / 127.0f,
+                                                                     ldpc_input_buffer[i * stride * 2 + 1] / 127.0f);
                             }
+
+                            snr_estimator.update(snr_sample_buffer.data(), nuse);
 
                             llr_snr = snr_estimator.snr();
 
@@ -232,11 +253,13 @@ namespace satdump
                             float npwr = 2.0f * powf(10.0f, -llr_snr / 20.0f);
                             llr_scale = std::clamp(1.0f / npwr, 0.25f, 8.0f);
 
+                            // Scaling is a function of the int8 input only, so resolve it
+                            // once per batch into a 256-entry table instead of per sample.
+                            for (int v = -128; v < 128; v++)
+                                llr_scale_lut[v + 128] = (int8_t)std::clamp(v * llr_scale, -127.0f, 127.0f);
+
                             for (int i = 0; i < total_soft; i++)
-                            {
-                                float v = ldpc_input_buffer[i] * llr_scale;
-                                ldpc_input_buffer[i] = (int8_t)std::clamp(v, -127.0f, 127.0f);
-                            }
+                                ldpc_input_buffer[i] = llr_scale_lut[ldpc_input_buffer[i] + 128];
                         }
 
                         if (use_ldpc2)
@@ -337,6 +360,8 @@ namespace satdump
                 v["correlator_lock"] = correlator_locked;
                 v["correlator_corr"] = correlator_cor;
                 v["ldpc_corr"] = ldpc_corr;
+                v["ldpc_algorithm"] = codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm);
+                v["ldpc_nms_alpha"] = d_ldpc_nms_alpha_q8 / 256.0f;
                 v["llr_snr"] = llr_snr;
                 v["llr_scale"] = llr_scale;
                 std::string lock_state = correlator_locked ? "SYNCED" : "NOSYNC";
@@ -414,6 +439,15 @@ namespace satdump
 
                     ImGui::Button("LDPC", {200 * ui_scale, 20 * ui_scale});
                     {
+                        ImGui::Text("Algo  : ");
+                        ImGui::SameLine();
+                        if (d_ldpc_algorithm == codings::ldpc::LDPC_NORMALIZED_MIN_SUM)
+                            ImGui::TextColored(style::theme.green, "NMS a=%.2f", d_ldpc_nms_alpha_q8 / 256.0f);
+                        else if (d_ldpc_algorithm == codings::ldpc::LDPC_SELF_CORRECTED_MIN_SUM)
+                            ImGui::TextColored(style::theme.green, "SCMS");
+                        else
+                            ImGui::TextColored(style::theme.green, "Min-Sum");
+
                         ImGui::Text("Diff  : ");
                         ImGui::SameLine();
                         ImGui::TextColored(ldpc_corr > 10 ? style::theme.orange : style::theme.green, UITO_C_STR(ldpc_corr));

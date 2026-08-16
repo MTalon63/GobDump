@@ -1,6 +1,7 @@
 #include "backend.h"
 #include "core/backend.h"
 #include "core/style.h"
+#include "logger.h"
 #include <GLFW/glfw3.h>
 #include <mutex>
 #include <vector>
@@ -99,8 +100,29 @@ void funcSetIcon(uint8_t *image, int w, int h)
 //
 
 #include "imgui/portable-file-dialogs.h"
+
+#ifdef _WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#endif
 #include "nfd/include/nfd.hpp"
 #include "nfd/include/nfd_glfw3.h"
+
+#include <filesystem>
+
+// The Windows shell rejects relative or nonexistent paths outright, which aborts
+// the whole dialog. Drop anything it won't accept and let it pick a default.
+static std::string sanitizeDialogPath(const std::string &path)
+{
+    if (path.empty())
+        return "";
+
+    std::error_code ec;
+    auto abs = std::filesystem::absolute(path, ec);
+    if (ec || !std::filesystem::is_directory(abs, ec))
+        return "";
+
+    return abs.string();
+}
 
 std::string selectFolderDialog(std::string default_path)
 {
@@ -122,19 +144,23 @@ std::string selectFolderDialog(std::string default_path)
     NFD::UniquePath outPath;
 
     // show the dialog
-    nfdwindowhandle_t h;
+    nfdwindowhandle_t h = {};
     NFD_GetNativeWindowFromGLFWWindow(window, &h);
 
     glfw_frame_mtx.unlock();
 
-    nfdresult_t result = NFD::PickFolder(outPath, default_path == "" ? nullptr : default_path.c_str(), h);
+    std::string safe_path = sanitizeDialogPath(default_path);
+    nfdresult_t result = NFD::PickFolder(outPath, safe_path.empty() ? nullptr : safe_path.c_str(), h);
 
     if (result == NFD_OKAY)
         return outPath.get();
     else if (result == NFD_CANCEL)
-        return ""; //"User pressed cancel.";
+        return "";
     else
-        return ""; // "Error: " + std::string(NFD::GetError());
+    {
+        logger->error("Folder dialog failed: %s", NFD::GetError());
+        return "";
+    }
 #endif
 }
 
@@ -164,7 +190,7 @@ std::string selectFileDialog(std::vector<std::pair<std::string, std::string>> fi
 
     NFD::UniquePath outPath;
     // show the dialog
-    nfdwindowhandle_t h;
+    nfdwindowhandle_t h = {};
     NFD_GetNativeWindowFromGLFWWindow(window, &h);
 
     glfw_frame_mtx.unlock();
@@ -173,14 +199,18 @@ std::string selectFileDialog(std::vector<std::pair<std::string, std::string>> fi
     for (auto &f : filters)
         filt.push_back({f.first.c_str(), f.second.c_str()});
 
-    nfdresult_t result = NFD::OpenDialog(outPath, filt.data(), filt.size(), default_path == "" ? nullptr : default_path.c_str(), h);
+    std::string safe_path = sanitizeDialogPath(default_path);
+    nfdresult_t result = NFD::OpenDialog(outPath, filt.data(), filt.size(), safe_path.empty() ? nullptr : safe_path.c_str(), h);
 
     if (result == NFD_OKAY)
         return outPath.get();
     else if (result == NFD_CANCEL)
-        return ""; //"User pressed cancel.";
+        return "";
     else
-        return ""; // "Error: " + std::string(NFD::GetError());
+    {
+        logger->error("File dialog failed: %s", NFD::GetError());
+        return "";
+    }
 #endif
 }
 
@@ -210,7 +240,7 @@ std::string saveFileDialog(std::vector<std::pair<std::string, std::string>> filt
 
     NFD::UniquePath outPath;
     // show the dialog
-    nfdwindowhandle_t h;
+    nfdwindowhandle_t h = {};
     NFD_GetNativeWindowFromGLFWWindow(window, &h);
 
     glfw_frame_mtx.unlock();
@@ -219,14 +249,18 @@ std::string saveFileDialog(std::vector<std::pair<std::string, std::string>> filt
     for (auto &f : filters)
         filt.push_back({f.first.c_str(), f.second.c_str()});
 
-    nfdresult_t result = NFD::SaveDialog(outPath, filt.data(), filt.size(), default_path.c_str(), default_name.c_str(), h);
+    std::string safe_path = sanitizeDialogPath(default_path);
+    nfdresult_t result = NFD::SaveDialog(outPath, filt.data(), filt.size(), safe_path.empty() ? nullptr : safe_path.c_str(), default_name.c_str(), h);
 
     if (result == NFD_OKAY)
         return outPath.get();
     else if (result == NFD_CANCEL)
-        return ""; //"User pressed cancel.";
+        return "";
     else
-        return ""; // "Error: " + std::string(NFD::GetError());
+    {
+        logger->error("Save dialog failed: %s", NFD::GetError());
+        return "";
+    }
 #endif
 }
 

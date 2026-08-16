@@ -4,7 +4,7 @@
 #ifdef __APPLE__
 #include <libkern/OSByteOrder.h>
 #define __builtin_bswap16 OSSwapInt16
-#elif _WIN32
+#elif defined(_MSC_VER)
 #define __builtin_bswap16 _byteswap_ushort
 #elif __ANDROID__
 #include <byteswap.h>

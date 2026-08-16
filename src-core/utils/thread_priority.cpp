@@ -1,15 +1,19 @@
 #include "thread_priority.h"
 
 #include "logger.h"
+
 #ifdef _WIN32
 #include <windows.h>
+#endif
+#if defined(_WIN32) && !defined(__MINGW32__)
+#define SATDUMP_WIN32_THREADS 1
 #endif
 
 namespace satdump
 {
     void setThreadPriority(std::thread &th, thread_priority_t priority)
     {
-#ifdef _WIN32
+#ifdef SATDUMP_WIN32_THREADS
         if (SetThreadPriority(th.native_handle(), priority) == 0)
             logger->error("Could not set thread priority!");
 #else
@@ -24,10 +28,10 @@ namespace satdump
 
     void setLowestThreadPriority(std::thread &th)
     {
-#ifdef _WIN32
+#ifdef SATDUMP_WIN32_THREADS
         if (SetThreadPriority(th.native_handle(), -2) == 0)
             logger->error("Could not set thread priority!");
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) || defined(__MINGW32__) // No SCHED_IDLE on either
         sched_param sch_params;
         int policy = 0;
         pthread_getschedparam(th.native_handle(), &policy, &sch_params);

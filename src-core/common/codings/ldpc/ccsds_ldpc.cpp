@@ -80,8 +80,7 @@ namespace codings
                 for (int i = 0; i < d_simd; i++)
                 {
                     memcpy(&depunc_buffer_in[i * d_codeword_size + 18], &codeword[i * d_frame_size], 8158);
-                    for (int i = 0; i < d_simd; i++) // First 18s are 0s
-                        memset(&depunc_buffer_in[i * d_codeword_size], 0, 18);
+                    memset(&depunc_buffer_in[i * d_codeword_size], 0, 18); // First 18 are 0s
                 }
             }
             else

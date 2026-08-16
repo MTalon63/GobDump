@@ -4,6 +4,10 @@ include(CheckCXXSourceCompiles)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# The bundled C libraries predate C23, which GCC 15+ defaults to.
+set(CMAKE_C_STANDARD 11)
+
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -90,7 +94,7 @@ if(APPLE)
     endif()
 endif()
 
-if(UNIX)
+if(UNIX OR MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
@@ -154,6 +158,30 @@ if(MSVC OR BUILD_MSVC)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
     include_directories(vcpkg/installed/${VCPKG_TARGET_TRIPLET}/include)
     link_directories(vcpkg/installed/${VCPKG_TARGET_TRIPLET}/lib)
+endif()
+
+if(MINGW)
+    add_compile_definitions(
+        _USE_MATH_DEFINES
+        WIN32_LEAN_AND_MEAN
+        _WIN32_WINNT=0x0601
+    )
+
+    # Plugins resolve satdump symbols against gobdump_core at load time.
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+    # MSYS2 ships everything under the active MINGW_PREFIX.
+    if(DEFINED ENV{MINGW_PREFIX})
+        list(APPEND CMAKE_PREFIX_PATH "$ENV{MINGW_PREFIX}")
+        set(MINGW_RUNTIME_BIN "$ENV{MINGW_PREFIX}/bin")
+    else()
+        get_filename_component(MINGW_RUNTIME_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    endif()
+
+    # Large object files: several translation units here exceed the COFF section limit.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wa,-mbig-obj")
+
+
 endif()
 
 if((NOT DEFINED ENV{CI}) AND NOT DEFINED ANDROID)
@@ -287,9 +315,36 @@ endif()
 
 add_subdirectory(plugins)
 
+if(MINGW)
+    find_program(OBJDUMP_EXECUTABLE objdump REQUIRED)
+
+    add_custom_target(copy-runtime-dlls ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DDEST_DIR=${CMAKE_BINARY_DIR}
+            -DMINGW_BIN=${MINGW_RUNTIME_BIN}
+            -DOBJDUMP=${OBJDUMP_EXECUTABLE}
+            -P ${CMAKE_SOURCE_DIR}/cmake/MinGWCopyRuntime.cmake
+        COMMENT "Copying MSYS2 runtime DLLs"
+        VERBATIM
+    )
+
+    add_dependencies(copy-runtime-dlls gobdump_core)
+    if(TARGET gobdump-ui)
+        add_dependencies(copy-runtime-dlls gobdump-ui)
+    endif()
+endif()
+
+configure_file(${CMAKE_SOURCE_DIR}/cmake/cmake_distclean.cmake ${CMAKE_CURRENT_BINARY_DIR}/cmake_distclean.cmake @ONLY)
+add_custom_target(distclean
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_distclean.cmake
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Emptying ${CMAKE_BINARY_DIR}"
+    VERBATIM
+)
+
 # Install configuration
 if((NOT ANDROID) AND ENABLE_INSTALL)
-    if(MSVC OR BUILD_MSVC)
+    if(MSVC OR BUILD_MSVC OR MINGW)
         # On Windows, install resources adjacent to executables for easier portability
         install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources DESTINATION ./)
         install(FILES ${CMAKE_SOURCE_DIR}/gobdump_cfg.json DESTINATION ./)
@@ -304,6 +359,13 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
 
     if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
         install(FILES ${CMAKE_CURRENT_BINARY_DIR}/gobdump.desktop DESTINATION share/applications)
+    endif()
+
+    if(MINGW)
+        install(DIRECTORY ${CMAKE_BINARY_DIR}/ DESTINATION ${CMAKE_INSTALL_BINDIR}
+                FILES_MATCHING PATTERN "*.dll"
+                PATTERN "plugins" EXCLUDE
+                PATTERN "CMakeFiles" EXCLUDE)
     endif()
 
     # Create uninstall target

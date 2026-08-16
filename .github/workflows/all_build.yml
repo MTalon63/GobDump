@@ -18,6 +18,47 @@ permissions:
     contents: write
 
 jobs:
+    build_windows_msys2:
+        runs-on: windows-2022
+
+        defaults:
+            run:
+                shell: msys2 {0}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up MSYS2 UCRT64
+              uses: msys2/setup-msys2@v2
+              with:
+                  msystem: UCRT64
+                  update: true
+                  install: base-devel git
+
+            - name: Install dependencies
+              run: ./windows/Setup-MSYS2.sh
+
+            - name: Configure CMake
+              run: |
+                  cmake -S . -B build -G Ninja \
+                      -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+                      -DPLUGINS_ALL=ON \
+                      -DBUILD_TESTING=OFF
+
+            - name: Build
+              run: cmake --build build --parallel
+
+            - name: Package portable
+              run: |
+                  cmake --install build --prefix install
+                  cp -r resources pipelines install/ 2>/dev/null || true
+
+            - name: Upload Portable
+              uses: actions/upload-artifact@v4
+              with:
+                  name: GobDump-Windows_MSYS2_UCRT64_Portable
+                  path: install
+
     build_windows_x64:
         runs-on: windows-2022
 

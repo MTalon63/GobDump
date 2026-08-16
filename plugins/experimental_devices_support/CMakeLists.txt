@@ -9,7 +9,7 @@ if(NOT ANDROID)
 
   install(TARGETS experimental_devices_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins)
 
-  if(MSVC)
+  if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE setupapi)
   endif()
 
