@@ -152,6 +152,20 @@ namespace dvbs2
             {
                 // logger->info("Resynchronizing...");
 
+                // Validate SYNCD: the first sync byte must be inside the data
+                // field. Without this check, (syncd / 8 + 1) can exceed
+                // df_remaining, and the unsigned subtraction below underflows to
+                // ~4 billion. The `while (df_remaining && ...)` loop would then
+                // run unchecked, reading bbf[in_p] far past the end of the BB
+                // frame until it hits an unmapped page (SIGBUS). This mirrors
+                // the "syncd > dfl" header validation in gr-dvbs2rx's
+                // bbdeheader_bb_impl.cc.
+                if ((unsigned int)(header.syncd / 8 + 1) > df_remaining)
+                {
+                    synched = false;
+                    continue;
+                }
+
                 bbf += header.syncd / 8 + 1;
                 df_remaining -= header.syncd / 8 + 1;
 
@@ -169,9 +183,13 @@ namespace dvbs2
                     crc = 0;
                     if (index == TS_SIZE)
                     {
-                        memcpy(&tsframes[out_p], packet, TS_SIZE);
-                        produced += TS_SIZE;
-                        out_p += TS_SIZE;
+                        if (out_p + TS_SIZE <= buffer_outsize)
+                        {
+                            memcpy(&tsframes[out_p], packet, TS_SIZE);
+                            produced += TS_SIZE;
+                            out_p += TS_SIZE;
+                        }
+                        // Else: output buffer full; drop the packet rather than overflowing tsframes.
 
                         index = 0;
                         spanning = false;

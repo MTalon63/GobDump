@@ -790,10 +790,16 @@ namespace satdump
                         float y_pos = ImGui::GetCursorPosY(); //+ 35 * ui_scale;
                         float live_width = recorder_size_x + 16 * ui_scale;
                         float live_height = _live_height * ui_scale;
-                        float winwidth = live_pipeline->modules.size() > 0 ? live_width / live_pipeline->modules.size() : live_width;
+                        std::vector<std::shared_ptr<pipeline::ProcessingModule>> live_modules;
+                        {
+                            std::lock_guard<std::mutex> lck(live_pipeline_mtx);
+                            if (live_pipeline)
+                                live_modules = live_pipeline->modules;
+                        }
+                        float winwidth = live_modules.size() > 0 ? live_width / live_modules.size() : live_width;
                         float currentPos = ImGui::GetCursorPosX();
                         ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImGui::GetStyleColorVec4(ImGuiCol_TitleBg));
-                        for (std::shared_ptr<pipeline::ProcessingModule> &module : live_pipeline->modules)
+                        for (std::shared_ptr<pipeline::ProcessingModule> &module : live_modules)
                         {
                             ImGui::SetNextWindowPos({currentPos, y_pos});
                             ImGui::SetNextWindowSize({(float)winwidth, (float)live_height});
@@ -846,9 +852,16 @@ namespace satdump
         }
         else if (is_processing)
         {
+            std::vector<std::shared_ptr<pipeline::ProcessingModule>> live_modules;
+            {
+                std::lock_guard<std::mutex> lck(live_pipeline_mtx);
+                if (live_pipeline)
+                    live_modules = live_pipeline->modules;
+            }
+
             if (processing_modules_floating_windows)
             {
-                for (std::shared_ptr<pipeline::ProcessingModule> &module : live_pipeline->modules)
+                for (std::shared_ptr<pipeline::ProcessingModule> &module : live_modules)
                     module->drawUI(true);
             }
             else
@@ -856,10 +869,10 @@ namespace satdump
                 float y_pos = ImGui::GetCursorPosY(); //+ 35 * ui_scale;
                 float live_width = recorder_size_x + 16 * ui_scale;
                 float live_height = _live_height * ui_scale;
-                float winwidth = live_pipeline->modules.size() > 0 ? live_width / live_pipeline->modules.size() : live_width;
+                float winwidth = live_modules.size() > 0 ? live_width / live_modules.size() : live_width;
                 float currentPos = ImGui::GetCursorPosX();
                 ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImGui::GetStyleColorVec4(ImGuiCol_TitleBg));
-                for (std::shared_ptr<pipeline::ProcessingModule> &module : live_pipeline->modules)
+                for (std::shared_ptr<pipeline::ProcessingModule> &module : live_modules)
                 {
                     ImGui::SetNextWindowPos({currentPos, y_pos});
                     ImGui::SetNextWindowSize({(float)winwidth, (float)live_height});

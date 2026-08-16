@@ -195,6 +195,8 @@ namespace satdump
                     if (snr > peak_snr)
                         peak_snr = snr;
 
+                    pushSNRAudioFeedback(frame_slot_count * 90, d_symbolrate);
+
                     // Adaptive LLR scaling: update constellation LUTs based on measured SNR
                     frame_counter++;
                     if (frame_counter >= LLR_UPDATE_INTERVAL)
