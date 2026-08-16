@@ -5,6 +5,8 @@ set -euo pipefail
 PKG_PREFIX="mingw-w64-ucrt-x86_64"
 SRC_DIR="${TMPDIR:-/tmp}/gobdump-deps"
 
+DEPS_STAGE="${GOBDUMP_DEPS_STAGE:-${TMPDIR:-/tmp}/gobdump-dep-stage}"
+
 main() {
 
 if [ "${MSYSTEM:-}" != "UCRT64" ]; then
@@ -59,30 +61,35 @@ build_cmake_dep() {
     local name="$1" url="$2" branch="$3" subdir="$4" marker="$5"
     shift 5
 
-    if [ -e "${MINGW_PREFIX}/${marker}" ]; then
-        echo "==> ${name} already installed, skipping."
-        return
+    if [ -e "${DEPS_STAGE}/${marker}" ]; then
+        echo "==> ${name} found in dependency cache."
+    else
+        echo "==> Building ${name}..."
+        rm -rf "${SRC_DIR:?}/${name}"
+        git clone --depth 1 -b "$branch" "$url" "${SRC_DIR}/${name}"
+
+        if declare -F "patch_${name}" >/dev/null; then
+            "patch_${name}" "${SRC_DIR}/${name}"
+        fi
+
+        # Configured against $MINGW_PREFIX so generated .pc/-config.cmake files
+        # bake in the final location, then redirected into the staging dir.
+        cmake -S "${SRC_DIR}/${name}/${subdir}" -B "${SRC_DIR}/${name}/build" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$MINGW_PREFIX" \
+            "$@"
+        cmake --build "${SRC_DIR}/${name}/build"
+        cmake --install "${SRC_DIR}/${name}/build" --prefix "$DEPS_STAGE"
+        rm -rf "${SRC_DIR:?}/${name}"
     fi
 
-    echo "==> Building ${name}..."
-    rm -rf "${SRC_DIR:?}/${name}"
-    git clone --depth 1 -b "$branch" "$url" "${SRC_DIR}/${name}"
-
-    if declare -F "patch_${name}" >/dev/null; then
-        "patch_${name}" "${SRC_DIR}/${name}"
-    fi
-
-    cmake -S "${SRC_DIR}/${name}/${subdir}" -B "${SRC_DIR}/${name}/build" \
-        -G Ninja \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$MINGW_PREFIX" \
-        "$@"
-    cmake --build "${SRC_DIR}/${name}/build"
-    cmake --install "${SRC_DIR}/${name}/build"
-    rm -rf "${SRC_DIR:?}/${name}"
+    # Done per dep rather than once at the end so each is usable by the next.
+    cp -a "${DEPS_STAGE}/." "$MINGW_PREFIX/"
 }
 
-mkdir -p "$SRC_DIR"
+mkdir -p "$SRC_DIR" "$DEPS_STAGE"
+DEPS_STAGE="$(cd "$DEPS_STAGE" && pwd)"
 
 build_cmake_dep cpu_features https://github.com/google/cpu_features v0.10.1 . \
     include/cpu_features/cpuinfo_x86.h \

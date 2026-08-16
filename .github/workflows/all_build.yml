@@ -25,6 +25,11 @@ jobs:
             run:
                 shell: msys2 {0}
 
+        env:
+            GOBDUMP_DEPS_STAGE: msys2-deps
+            CCACHE_DIR: ${{ github.workspace }}/.ccache
+            CCACHE_MAXSIZE: 1G
+
         steps:
             - uses: actions/checkout@v4
 
@@ -33,20 +38,43 @@ jobs:
               with:
                   msystem: UCRT64
                   update: true
-                  install: base-devel git
+                  install: base-devel git ccache
+                  # setup-msys2 caches the pacman packages itself.
+                  cache: true
+
+            # cpu_features/airspy/airspyhf/bladeRF are built from source, which
+            # dominates setup time. Everything else comes from pacman.
+            - name: Cache source-built dependencies
+              uses: actions/cache@v4
+              id: msys2-deps
+              with:
+                  path: msys2-deps
+                  key: msys2-deps-ucrt64-${{ hashFiles('windows/Setup-MSYS2.sh') }}
 
             - name: Install dependencies
               run: ./windows/Setup-MSYS2.sh
+
+            - name: Cache compiler objects
+              uses: actions/cache@v4
+              with:
+                  path: .ccache
+                  key: msys2-ccache-ucrt64-${{ github.sha }}
+                  restore-keys: msys2-ccache-ucrt64-
 
             - name: Configure CMake
               run: |
                   cmake -S . -B build -G Ninja \
                       -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
                       -DPLUGINS_ALL=ON \
-                      -DBUILD_TESTING=OFF
+                      -DBUILD_TESTING=OFF \
+                      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
             - name: Build
               run: cmake --build build --parallel
+
+            - name: ccache statistics
+              run: ccache --show-stats
 
             - name: Package portable
               run: |

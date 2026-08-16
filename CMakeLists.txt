@@ -5,8 +5,12 @@ include(CheckCXXSourceCompiles)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# The bundled C libraries predate C23, which GCC 15+ defaults to.
-set(CMAKE_C_STANDARD 11)
+# The bundled C libraries predate C23, which GCC 15+ defaults to. Not applied to
+# MSVC: raising its reported __STDC_VERSION__ makes supernovas skip its
+# "#define restrict" fallback, and MSVC still can't parse "[restrict 2]".
+if(NOT MSVC)
+    set(CMAKE_C_STANDARD 11)
+endif()
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -323,7 +327,7 @@ if(MINGW)
             -DDEST_DIR=${CMAKE_BINARY_DIR}
             -DMINGW_BIN=${MINGW_RUNTIME_BIN}
             -DOBJDUMP=${OBJDUMP_EXECUTABLE}
-            -P ${CMAKE_SOURCE_DIR}/cmake/MinGWCopyRuntime.cmake
+            -P ${CMAKE_CURRENT_LIST_DIR}/cmake/MinGWCopyRuntime.cmake
         COMMENT "Copying MSYS2 runtime DLLs"
         VERBATIM
     )
@@ -334,13 +338,17 @@ if(MINGW)
     endif()
 endif()
 
-configure_file(${CMAKE_SOURCE_DIR}/cmake/cmake_distclean.cmake ${CMAKE_CURRENT_BINARY_DIR}/cmake_distclean.cmake @ONLY)
-add_custom_target(distclean
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_distclean.cmake
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Emptying ${CMAKE_BINARY_DIR}"
-    VERBATIM
-)
+# Skipped on Android, where this file is pulled in as a subdirectory of
+# android/ and there is no top-level build tree to clean.
+if(NOT ANDROID)
+    configure_file(${CMAKE_CURRENT_LIST_DIR}/cmake/cmake_distclean.cmake ${CMAKE_CURRENT_BINARY_DIR}/cmake_distclean.cmake @ONLY)
+    add_custom_target(distclean
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_distclean.cmake
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+        COMMENT "Emptying ${CMAKE_BINARY_DIR}"
+        VERBATIM
+    )
+endif()
 
 # Install configuration
 if((NOT ANDROID) AND ENABLE_INSTALL)

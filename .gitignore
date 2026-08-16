@@ -15,6 +15,8 @@ vcpkg/
 srv/
 .env
 .cache
+.ccache
+msys2-deps/
 compile_commands.json
 as.predefined
 deps/
