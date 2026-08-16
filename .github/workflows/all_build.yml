@@ -28,7 +28,7 @@ jobs:
         env:
             GOBDUMP_DEPS_STAGE: msys2-deps
             CCACHE_DIR: ${{ github.workspace }}/.ccache
-            CCACHE_MAXSIZE: 1G
+            CCACHE_MAXSIZE: 4G
 
         steps:
             - uses: actions/checkout@v4
@@ -38,7 +38,8 @@ jobs:
               with:
                   msystem: UCRT64
                   update: true
-                  install: base-devel git ccache
+                  install: base-devel git
+                  pacboy: ccache:p
                   # setup-msys2 caches the pacman packages itself.
                   cache: true
 

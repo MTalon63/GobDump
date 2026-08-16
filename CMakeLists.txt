@@ -5,13 +5,6 @@ include(CheckCXXSourceCompiles)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# The bundled C libraries predate C23, which GCC 15+ defaults to. Not applied to
-# MSVC: raising its reported __STDC_VERSION__ makes supernovas skip its
-# "#define restrict" fallback, and MSVC still can't parse "[restrict 2]".
-if(NOT MSVC)
-    set(CMAKE_C_STANDARD 11)
-endif()
-
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -35,6 +28,10 @@ if(MSVC OR BUILD_MSVC)
 endif()
 
 project(GobDump)
+
+if(NOT MSVC)
+    set(CMAKE_C_STANDARD 11)
+endif()
 
 option(BUILD_GUI "Build the GUI" ON)
 option(BUILD_TESTING "Build the testing program" OFF)
