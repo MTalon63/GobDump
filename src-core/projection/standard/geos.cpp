@@ -20,10 +20,9 @@ namespace proj
 
     bool projection_geos_setup(projection_t *proj, double altitude, bool sweep_x)
     {
-        projection_geos_t *ptr = (projection_geos_t *)malloc(sizeof(projection_geos_t));
+        projection_geos_t *ptr = projection_alloc_dat<projection_geos_t>(proj->proj_dat);
         if (ptr == nullptr)
             return true;
-        proj->proj_dat = ptr;
 
         if (altitude <= 0)
             return true;
@@ -55,7 +54,7 @@ namespace proj
 
     bool projection_geos_fwd(const projection_t *proj, double lam, double phi, double *x, double *y)
     {
-        projection_geos_t *ptr = (projection_geos_t *)proj->proj_dat;
+        projection_geos_t *ptr = (projection_geos_t *)proj->proj_dat.get();
 
         double r, Vx, Vy, Vz, tmp;
 
@@ -94,7 +93,7 @@ namespace proj
 
     bool projection_geos_inv(const projection_t *proj, double x, double y, double *lam, double *phi)
     {
-        projection_geos_t *ptr = (projection_geos_t *)proj->proj_dat;
+        projection_geos_t *ptr = (projection_geos_t *)proj->proj_dat.get();
 
         double Vx, Vy, Vz, a, b, k;
 

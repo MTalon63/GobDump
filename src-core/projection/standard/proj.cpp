@@ -16,6 +16,10 @@ namespace proj
 {
     bool projection_setup(projection_t *proj)
     {
+        // Drop any data from a previous setup, otherwise re-initializing the same projection_t
+        // (which callers do routinely) would strand the earlier block.
+        proj->proj_dat.reset();
+
         // Set ellipsoid
         proj->a = geodetic::WGS84::a * 1e3; // To Meters!
         proj->e = geodetic::WGS84::e;
@@ -41,16 +45,17 @@ namespace proj
             return true;
 
         if (proj_ret) // Exit on error!
+        {
+            // The setup may have allocated before failing. Callers treat a failure as "nothing to
+            // free", so release it here rather than leaving it attached to a half-built projection.
+            proj->proj_dat.reset();
             return true;
+        }
 
         return false;
     }
 
-    void projection_free(projection_t *proj)
-    {
-        if (proj->proj_dat != nullptr)
-            free(proj->proj_dat);
-    }
+    void projection_free(projection_t *proj) { proj->proj_dat.reset(); }
 
     bool projection_perform_fwd(const projection_t *proj, double lon, double lat, double *x, double *y)
     {

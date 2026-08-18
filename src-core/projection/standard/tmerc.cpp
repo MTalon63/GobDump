@@ -242,10 +242,27 @@ namespace proj
 /* Constant for "exact" transverse mercator */
 #define PROJ_ETMERC_ORDER 6
 
+    namespace
+    {
+        // projection_tmerc_t owns a further allocation of its own (the approx.en Fourier coefficients),
+        // so it cannot simply be free()d like the other projections' data blocks.
+        void projection_tmerc_free(void *dat)
+        {
+            projection_tmerc_t *ptr = (projection_tmerc_t *)dat;
+            if (ptr == nullptr)
+                return;
+            free(ptr->approx.en); // calloc'd to null, and free(nullptr) is a no-op, so this is safe either way
+            free(ptr);
+        }
+    }
+
     bool projection_tmerc_setup(projection_t *proj, int zone, bool south)
     {
-        projection_tmerc_t *ptr = (projection_tmerc_t *)malloc(sizeof(projection_tmerc_t));
-        proj->proj_dat = ptr;
+        // Zeroed so that approx.en is null on every path that bails out before setting it
+        projection_tmerc_t *ptr = (projection_tmerc_t *)calloc(1, sizeof(projection_tmerc_t));
+        if (ptr == nullptr)
+            return true;
+        proj->proj_dat = projection_data_t(ptr, projection_tmerc_free);
 
         if (proj->type == ProjType_UniversalTransverseMercator)
         {
@@ -412,7 +429,7 @@ namespace proj
 
     bool projection_tmerc_fwd(const projection_t *proj, double lam, double phi, double *x, double *y)
     {
-        projection_tmerc_t *ptr = (projection_tmerc_t *)proj->proj_dat;
+        projection_tmerc_t *ptr = (projection_tmerc_t *)proj->proj_dat.get();
 
         if (ptr->algo == EVENDEN_SNYDER)
         {
@@ -546,7 +563,7 @@ namespace proj
 
     bool projection_tmerc_inv(const projection_t *proj, double x, double y, double *lam, double *phi)
     {
-        projection_tmerc_t *ptr = (projection_tmerc_t *)proj->proj_dat;
+        projection_tmerc_t *ptr = (projection_tmerc_t *)proj->proj_dat.get();
 
         if (ptr->algo == EVENDEN_SNYDER)
         {

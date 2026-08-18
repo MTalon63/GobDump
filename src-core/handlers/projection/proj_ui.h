@@ -8,6 +8,15 @@ namespace satdump
 {
     namespace proj
     {
+        /*
+        Mean meters per degree of latitude on WGS84. Equirectangular works directly in degrees
+        (see projection_equirect_fwd, and note proj.cpp skips the *= a step for that projection),
+        so a resolution expressed in meters has to be converted before being handed over.
+        This is exact enough for latitude ; for longitude it only holds near the equator, which is
+        an approximation inherent to equirectangular anyway.
+        */
+        constexpr double METERS_PER_DEGREE = 111320.0;
+
         // TODOREWORK allow setting proj as well, and redo this better...
         class ProjectionConfigUI
         {
@@ -18,7 +27,10 @@ namespace satdump
             int projections_mode_radio = 0;
 
             bool projection_auto_mode = false, projection_auto_scale_mode = false;
-            double projection_autoscale_x = 0.016, projection_autoscale_y = 0.016;
+            // In meters per pixel. Renamed from projection_autoscale_x/y, which held degrees per
+            // pixel, so that configs saved by an older version fall back to the default below
+            // instead of being silently re-interpreted as meters.
+            double projection_autoscale_x_m = 1780.0, projection_autoscale_y_m = 1780.0;
 
             int projections_current_selected_proj = 0;
             /////////////
@@ -47,12 +59,15 @@ namespace satdump
             float projections_azeq_lon = 0;
             float projections_azeq_lat = 90;
 
-            NLOHMANN_DEFINE_TYPE_INTRUSIVE(ProjectionConfigUI, projections_image_width, projections_image_height, projections_mode_radio, projection_auto_mode, projection_auto_scale_mode,
-                                           projection_autoscale_x, projection_autoscale_y, projections_current_selected_proj, projections_equirectangular_tl_lon, projections_equirectangular_tl_lat,
-                                           projections_equirectangular_br_lon, projections_equirectangular_br_lat, projections_utm_center_lon, projections_utm_offset_y, projections_utm_scale,
-                                           projections_utm_zone, projections_utm_south, projections_stereo_center_lon, projections_stereo_center_lat, projections_stereo_scale, projections_tpers_lon,
-                                           projections_tpers_lat, projections_tpers_alt, projections_tpers_ang, projections_tpers_azi, projections_tpers_scale, projections_azeq_lon,
-                                           projections_azeq_lat);
+            // _WITH_DEFAULT so a missing key falls back to the member initializer rather than throwing,
+            // which would otherwise break loading any config saved before a field was added or renamed.
+            NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(ProjectionConfigUI, projections_image_width, projections_image_height, projections_mode_radio, projection_auto_mode,
+                                                        projection_auto_scale_mode, projection_autoscale_x_m, projection_autoscale_y_m, projections_current_selected_proj,
+                                                        projections_equirectangular_tl_lon, projections_equirectangular_tl_lat, projections_equirectangular_br_lon,
+                                                        projections_equirectangular_br_lat, projections_utm_center_lon, projections_utm_offset_y, projections_utm_scale, projections_utm_zone,
+                                                        projections_utm_south, projections_stereo_center_lon, projections_stereo_center_lat, projections_stereo_scale, projections_tpers_lon,
+                                                        projections_tpers_lat, projections_tpers_alt, projections_tpers_ang, projections_tpers_azi, projections_tpers_scale, projections_azeq_lon,
+                                                        projections_azeq_lat);
 
         public:
             nlohmann::json get_proj()
@@ -106,8 +121,18 @@ namespace satdump
                 // Automatic projection settings!
                 if (projection_auto_scale_mode)
                 {
-                    cfg["scale_x"] = projection_autoscale_x;
-                    cfg["scale_y"] = projection_autoscale_y;
+                    // The UI is in meters per pixel. Equirectangular is the odd one out and works in
+                    // degrees, so it needs converting ; the others are already in meters.
+                    if (projections_current_selected_proj == 0)
+                    {
+                        cfg["scale_x"] = projection_autoscale_x_m / METERS_PER_DEGREE;
+                        cfg["scale_y"] = projection_autoscale_y_m / METERS_PER_DEGREE;
+                    }
+                    else
+                    {
+                        cfg["scale_x"] = projection_autoscale_x_m;
+                        cfg["scale_y"] = projection_autoscale_y_m;
+                    }
                 }
                 else
                 {
@@ -194,8 +219,15 @@ namespace satdump
                     ImGui::Checkbox("Auto Scale Mode##projautoscalemode", &projection_auto_scale_mode);
                     if (projection_auto_scale_mode)
                     {
-                        ImGui::InputDouble("Scale X (m/px)##projscalexauto", &projection_autoscale_x);
-                        ImGui::InputDouble("Scale Y (m/px)##projscalexauto", &projection_autoscale_y);
+                        ImGui::InputDouble("Scale X (m/px)##projscalexauto", &projection_autoscale_x_m);
+                        ImGui::InputDouble("Scale Y (m/px)##projscaleyauto", &projection_autoscale_y_m);
+
+                        // A non-positive resolution would divide the span into a zero or negative
+                        // sized image further down, so keep it out of that state entirely.
+                        if (projection_autoscale_x_m <= 0)
+                            projection_autoscale_x_m = 1.0;
+                        if (projection_autoscale_y_m <= 0)
+                            projection_autoscale_y_m = 1.0;
                     }
                 }
             }

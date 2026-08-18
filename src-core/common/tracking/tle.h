@@ -28,10 +28,17 @@ namespace satdump
 
     inline void from_json(const nlohmann::json &j, TLE &v)
     {
-        v.norad = j["norad"].get<int>();
-        v.name = j["name"].get<std::string>();
-        v.line1 = j["line1"].get<std::string>();
-        v.line2 = j["line2"].get<std::string>();
+        if (!j.is_object())
+            return;
+
+        if (j.contains("norad") && j["norad"].is_number())
+            v.norad = j["norad"].get<int>();
+        if (j.contains("name") && j["name"].is_string())
+            v.name = j["name"].get<std::string>();
+        if (j.contains("line1") && j["line1"].is_string())
+            v.line1 = j["line1"].get<std::string>();
+        if (j.contains("line2") && j["line2"].is_string())
+            v.line2 = j["line2"].get<std::string>();
     }
 
     struct TLEsUpdatedEvent

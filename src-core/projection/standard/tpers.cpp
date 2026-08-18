@@ -36,8 +36,9 @@ namespace proj
 
     bool projection_tpers_setup(projection_t *proj, double height, double tilt, double azi)
     {
-        projection_tpers_t *ptr = (projection_tpers_t *)malloc(sizeof(projection_tpers_t));
-        proj->proj_dat = ptr;
+        projection_tpers_t *ptr = projection_alloc_dat<projection_tpers_t>(proj->proj_dat);
+        if (ptr == nullptr)
+            return true;
 
         double omega = tilt;
         double gamma = azi;
@@ -75,7 +76,7 @@ namespace proj
 
     bool projection_tpers_fwd(const projection_t *proj, double lam, double phi, double *x, double *y)
     {
-        projection_tpers_t *ptr = (projection_tpers_t *)proj->proj_dat;
+        projection_tpers_t *ptr = (projection_tpers_t *)proj->proj_dat.get();
 
         double coslam, cosphi, sinphi;
 
@@ -133,7 +134,7 @@ namespace proj
 
     bool projection_tpers_inv(const projection_t *proj, double x, double y, double *lam, double *phi)
     {
-        projection_tpers_t *ptr = (projection_tpers_t *)proj->proj_dat;
+        projection_tpers_t *ptr = (projection_tpers_t *)proj->proj_dat.get();
 
         double rh;
 

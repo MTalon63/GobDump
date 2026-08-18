@@ -19,6 +19,7 @@
 #include "projection/reprojector.h"
 
 #include "projection/standard/proj_json.h"
+#include <cmath>
 #include <exception>
 
 namespace satdump
@@ -142,7 +143,6 @@ namespace satdump
                             ::proj::projection_perform_inv(&proj, img.width(), img.height(), &bounds.max_lon, &bounds.min_lat);
                         }
                         bounds.valid = true;
-                        ::proj::projection_free(&proj);
                     }
                     else
                     {
@@ -219,6 +219,18 @@ namespace satdump
                 lat = atan2(z_total, hyp) * RAD_TO_DEG;
             }
 
+            // A scale coarser than the covered area rounds the output size down to 0 (or negative),
+            // which silently yields an empty image. Clamp so there is always something to draw.
+            int clampProjectionSize(double size, const char *axis)
+            {
+                if (!std::isfinite(size) || size < 1)
+                {
+                    logger->warn("Computed %s of %f pixel(s) from the requested scale, clamping to 1. The scale is likely too coarse for the covered area.", axis, size);
+                    return 1;
+                }
+                return (int)size;
+            }
+
             void tryAutoTuneProjection(ProjBounds bounds, nlohmann::json &params)
             {
                 ::proj::projection_t p_main = params;
@@ -228,12 +240,13 @@ namespace satdump
                     params["offset_y"] = bounds.max_lat;
                     if (!params.contains("width") || !params.contains("height"))
                     {
+                        // Defaults are in degrees per pixel here, matching what equirectangular works in
                         double scale_x = params.contains("scale_x") ? params["scale_x"].get<double>() : 0.016;
                         double scale_y = params.contains("scale_y") ? params["scale_y"].get<double>() : 0.016;
                         params["scalar_x"] = scale_x;
                         params["scalar_y"] = -scale_y;
-                        params["width"] = (bounds.max_lon - bounds.min_lon) / scale_x;
-                        params["height"] = (bounds.max_lat - bounds.min_lat) / scale_y;
+                        params["width"] = clampProjectionSize((bounds.max_lon - bounds.min_lon) / scale_x, "width");
+                        params["height"] = clampProjectionSize((bounds.max_lat - bounds.min_lat) / scale_y, "height");
                     }
                     else
                     {
@@ -273,12 +286,13 @@ namespace satdump
 
                         if (!params.contains("width") || !params.contains("height"))
                         {
-                            double scale_x = params.contains("scale_x") ? params["scale_x"].get<double>() : 0.016;
-                            double scale_y = params.contains("scale_y") ? params["scale_y"].get<double>() : 0.016;
+                            // Stereographic works in meters, so these are meters per pixel
+                            double scale_x = params.contains("scale_x") ? params["scale_x"].get<double>() : 2400.0;
+                            double scale_y = params.contains("scale_y") ? params["scale_y"].get<double>() : 2400.0;
                             params["scalar_x"] = scale_x;
                             params["scalar_y"] = -scale_y;
-                            params["width"] = (max_dist * 2) / scale_x;
-                            params["height"] = (max_dist * 2) / scale_y;
+                            params["width"] = clampProjectionSize((max_dist * 2) / scale_x, "width");
+                            params["height"] = clampProjectionSize((max_dist * 2) / scale_y, "height");
                         }
                         else
                         {

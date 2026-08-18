@@ -13,66 +13,6 @@ namespace satdump
     {
         Projection::Projection() {}
 
-        Projection::~Projection()
-        {
-            if (fwd_type == PROJ_STANDARD || inv_type == PROJ_STANDARD)
-                ::proj::projection_free(&std_proj);
-        }
-
-        // The projection_t params are plain values, so re-running projection_setup on the copy rebuilds an
-        // identical proj_dat that this instance alone owns. Set the types last so a failed setup can't be freed.
-        Projection::Projection(const Projection &o)
-            : d_cfg(o.d_cfg), fwd_valid(o.fwd_valid), rev_valid(o.rev_valid), width(o.width), height(o.height), raytracer(o.raytracer), transform(o.transform), std_proj(o.std_proj),
-              tps_fwd(o.tps_fwd), proj_timestamp(o.proj_timestamp), has_2nd_transform(o.has_2nd_transform), transform2(o.transform2)
-        {
-            std_proj.proj_dat = nullptr;
-            if (o.fwd_type == PROJ_STANDARD || o.inv_type == PROJ_STANDARD)
-                if (::proj::projection_setup(&std_proj))
-                    return;
-            fwd_type = o.fwd_type;
-            inv_type = o.inv_type;
-        }
-
-        Projection::Projection(Projection &&o)
-            : d_cfg(std::move(o.d_cfg)), fwd_valid(o.fwd_valid), rev_valid(o.rev_valid), fwd_type(o.fwd_type), inv_type(o.inv_type), width(o.width), height(o.height),
-              raytracer(std::move(o.raytracer)), transform(std::move(o.transform)), std_proj(o.std_proj), tps_fwd(std::move(o.tps_fwd)), proj_timestamp(o.proj_timestamp),
-              has_2nd_transform(o.has_2nd_transform), transform2(std::move(o.transform2))
-        {
-            o.std_proj.proj_dat = nullptr; // Ownership stolen, so the source dtor must not free it
-            o.fwd_type = o.inv_type = PROJ_INVALID;
-        }
-
-        // Copy-and-swap: the copy ctor does the only work that can throw, and it does it before this object is
-        // touched. Whichever object ends up owning the old proj_dat frees it exactly once.
-        Projection &Projection::operator=(const Projection &o)
-        {
-            if (this != &o)
-                *this = Projection(o);
-            return *this;
-        }
-
-        Projection &Projection::operator=(Projection &&o)
-        {
-            if (this != &o)
-            {
-                std::swap(d_cfg, o.d_cfg);
-                std::swap(fwd_valid, o.fwd_valid);
-                std::swap(rev_valid, o.rev_valid);
-                std::swap(fwd_type, o.fwd_type);
-                std::swap(inv_type, o.inv_type);
-                std::swap(width, o.width);
-                std::swap(height, o.height);
-                std::swap(raytracer, o.raytracer);
-                std::swap(transform, o.transform);
-                std::swap(std_proj, o.std_proj);
-                std::swap(tps_fwd, o.tps_fwd);
-                std::swap(proj_timestamp, o.proj_timestamp);
-                std::swap(has_2nd_transform, o.has_2nd_transform);
-                std::swap(transform2, o.transform2);
-            }
-            return *this;
-        }
-
         bool Projection::init(bool fwd, bool inv)
         {
             ///////////////////////////////////////////////////////////

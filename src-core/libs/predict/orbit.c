@@ -154,13 +154,26 @@ predict_orbital_elements_t *predict_parse_omm(const char *omm_str)
 
     char **tokens = str_split((char *)omm_str, ',');
 
-    if (tokens)
+    if (tokens == NULL)
+    {
+        free(m);
+        return NULL;
+    }
+
     {
         int ntokens;
         for (ntokens = 0; *(tokens + ntokens); ntokens++)
             ;
 
-        if (ntokens >= 17)
+        if (ntokens < 17)
+        {
+            for (int i = 0; i < ntokens; i++)
+                free(tokens[i]);
+            free(tokens);
+            free(m);
+            return NULL;
+        }
+
         {
             struct tm timeS;
             double seconds;
@@ -202,7 +215,7 @@ predict_orbital_elements_t *predict_parse_omm(const char *omm_str)
         for (int i = 0; i < ntokens; i++)
             free(tokens[i]);
         free(tokens);
-        free(m);
+        // NOTE : m must NOT be freed here, it is the return value and is still used below.
     }
 
     /* Period > 225 minutes is deep space */

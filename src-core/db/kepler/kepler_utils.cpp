@@ -143,9 +143,18 @@ namespace satdump
     {
         try
         {
+            // Strip a potential trailing CR, as those feeds are often served with CRLF line endings
+            while (omm.size() > 0 && (omm.back() == '\r' || omm.back() == '\n'))
+                omm.pop_back();
+
             auto elems = splitString(omm, ',');
 
-            if (elems.size() != 17)
+            // >= and not ==, as providers may append extra columns. Only the first 17 are used.
+            if (elems.size() < 17)
+                return false;
+
+            // Skip the CSV header row, if present
+            if (elems[0] == "OBJECT_NAME")
                 return false;
 
             std::tm timeS;
@@ -223,13 +232,22 @@ namespace satdump
 
         std::vector<KeplerData> keps;
 
+        int total_lines = 0;
+
         std::string this_line;
         while (std::getline(omm_stream, this_line))
         {
+            if (this_line.find_first_not_of(" \t\r\n") == std::string::npos)
+                continue;
+
             KeplerData kep;
+            total_lines++;
             if (ccsdsOmmToKepler(this_line, kep))
                 keps.push_back(kep);
         }
+
+        if (keps.size() == 0 && total_lines > 0)
+            logger->warn("Parsed no valid Kepler out of %d OMM lines! The feed format may have changed.", total_lines);
 
         return keps;
     }

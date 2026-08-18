@@ -8,6 +8,8 @@
 #define RAD2DEG (360.0 / (2.0 * M_PI))
 
 #include <cstdio>
+#include <cstdlib>
+#include <memory>
 
 namespace proj
 {
@@ -32,12 +34,36 @@ namespace proj
         double azimuth = 0;   // For TPERS
     };
 
+    /*
+    Owning handle over the projection-specific data block. Each projection_setup_* attaches a deleter
+    that knows how to tear its own type down (some of them own further allocations of their own), so
+    the block is released exactly once when the last projection_t referring to it goes away.
+
+    Ownership is shared rather than exclusive because projection_t is routinely passed and stored by
+    value. The block is only written during setup and read-only afterwards, so sharing it between
+    copies is safe, including from several threads at once.
+    */
+    typedef std::shared_ptr<void> projection_data_t;
+
+    /*
+    Helper for the common case of a data block that owns nothing else, and can therefore just be freed.
+    Zero-initialized so that setup routines bailing out midway still leave every field in a known state.
+    */
+    template <typename T>
+    inline T *projection_alloc_dat(projection_data_t &dat)
+    {
+        T *ptr = (T *)calloc(1, sizeof(T));
+        if (ptr != nullptr)
+            dat = projection_data_t(ptr, free);
+        return ptr;
+    }
+
     struct projection_t
     {
         // Core
         projection_type_t type = ProjType_Invalid; // Projection type
         projection_setup_t params;                 // Other setup parameters
-        void *proj_dat = nullptr;                  // Opaque pointer holding projection-specific info
+        projection_data_t proj_dat;                // Owning handle on projection-specific info
 
         // Offsets & Scalars.
         double proj_offset_x = 0; // False Easting
@@ -69,7 +95,8 @@ namespace proj
     bool projection_setup(projection_t *proj);
 
     /*
-    Free allocated memory, by projection_setup.
+    Release the memory allocated by projection_setup. Only needed to drop it early, as the projection_t
+    releases it on its own once destroyed. Safe to call more than once.
     */
     void projection_free(projection_t *proj);
 

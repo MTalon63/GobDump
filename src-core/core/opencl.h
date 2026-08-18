@@ -12,6 +12,7 @@
 #endif
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace satdump
 {
@@ -36,6 +37,21 @@ namespace satdump
         std::vector<OCLDevice> resetOCLContext();
         // If the cache is enabled, you should NOT free the kernel
         cl_program buildCLKernel(std::string path, bool use_cache = true);
+
+        // RAII wrappers for OpenCL objects. Each releases its handle on destruction,
+        // so throwing out of a GPU warp function can no longer leak buffers, the
+        // queue, the kernel, or the program.
+        struct CLObjectDeleter
+        {
+            void operator()(cl_mem obj) const { if (obj) clReleaseMemObject(obj); }
+            void operator()(cl_kernel obj) const { if (obj) clReleaseKernel(obj); }
+            void operator()(cl_command_queue obj) const { if (obj) clReleaseCommandQueue(obj); }
+            void operator()(cl_program obj) const { if (obj) clReleaseProgram(obj); }
+        };
+        using cl_mem_raii = std::unique_ptr<std::remove_pointer<cl_mem>::type, CLObjectDeleter>;
+        using cl_kernel_raii = std::unique_ptr<std::remove_pointer<cl_kernel>::type, CLObjectDeleter>;
+        using cl_queue_raii = std::unique_ptr<std::remove_pointer<cl_command_queue>::type, CLObjectDeleter>;
+        using cl_program_raii = std::unique_ptr<std::remove_pointer<cl_program>::type, CLObjectDeleter>;
     }
 }
 #endif

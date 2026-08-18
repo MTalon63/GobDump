@@ -342,7 +342,7 @@
 	// TLE settings
 	"kepler_settings": {
 		"urls_to_fetch": [
-			"https://retlector.eu/csv/active" // Most sats, use ReTLEctor because why not.
+			"https://retlector.eu/active/csv" // Most sats, use ReTLEctor because why not.
 		],
 		"url_template": "http://celestrak.org/NORAD/elements/gp.php?CATNR=%NORAD%&FORMAT=omm",
 		"norads_to_fetch": [

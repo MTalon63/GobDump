@@ -12,8 +12,8 @@ namespace proj
 
     bool projection_equirect_setup(projection_t *proj)
     {
-        projection_equirect_t *ptr = (projection_equirect_t *)malloc(sizeof(projection_equirect_t));
-        proj->proj_dat = ptr;
+        if (projection_alloc_dat<projection_equirect_t>(proj->proj_dat) == nullptr)
+            return true;
 
         return false;
     }

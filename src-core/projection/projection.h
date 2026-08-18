@@ -78,14 +78,10 @@ namespace satdump
 
         public:
             Projection();
-            ~Projection();
 
-            // std_proj.proj_dat is a raw malloc'd block freed by the dtor, so the implicit copy shared it and the
-            // second dtor double-freed it. Copies re-run projection_setup to get their own block.
-            Projection(const Projection &o);
-            Projection &operator=(const Projection &o);
-            Projection(Projection &&o);
-            Projection &operator=(Projection &&o);
+            // std_proj now owns its data block through a smart pointer, and every other member is
+            // already self-managing, so the compiler-generated copy/move/destructor are correct.
+            // Declaring them by hand is what previously made double-frees possible.
 
             /**
              * @brief Initialize projection, to allow using it to

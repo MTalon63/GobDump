@@ -93,8 +93,11 @@ namespace satdump
              */
             void set_proj_cfg(nlohmann::json cfg)
             {
+                if (cfg.contains("tle") && cfg["tle"].is_null())
+                    cfg.erase("tle");
+
                 contents["projection_cfg"] = cfg;
-                if (cfg.contains("tle") && cfg["tle"].contains("name"))
+                if (cfg.contains("tle") && cfg["tle"].is_object() && cfg["tle"].contains("name"))
                     if (!has_product_source())
                         set_product_source(cfg["tle"]["name"]);
                 if (cfg.contains("timestamps") && !has_product_timestamp())

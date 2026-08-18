@@ -12,8 +12,8 @@ namespace proj
 
     bool projection_webmerc_setup(projection_t *proj)
     {
-        projection_webmerc_t *ptr = (projection_webmerc_t *)malloc(sizeof(projection_webmerc_t));
-        proj->proj_dat = ptr;
+        if (projection_alloc_dat<projection_webmerc_t>(proj->proj_dat) == nullptr)
+            return true;
 
         return false;
     }

@@ -41,8 +41,9 @@ namespace proj
 
     bool projection_stereo_setup(projection_t *proj)
     {
-        projection_stereo_t *ptr = (projection_stereo_t *)malloc(sizeof(projection_stereo_t));
-        proj->proj_dat = ptr;
+        projection_stereo_t *ptr = projection_alloc_dat<projection_stereo_t>(proj->proj_dat);
+        if (ptr == nullptr)
+            return true;
 
         ptr->phits = M_HALFPI;
 
@@ -98,7 +99,7 @@ namespace proj
 
     bool projection_stereo_fwd(const projection_t *proj, double lam, double phi, double *x, double *y)
     {
-        projection_stereo_t *ptr = (projection_stereo_t *)proj->proj_dat;
+        projection_stereo_t *ptr = (projection_stereo_t *)proj->proj_dat.get();
 
         double coslam, sinlam, sinX = 0.0, cosX = 0.0, A = 0.0, sinphi;
 
@@ -163,7 +164,7 @@ namespace proj
 
     bool projection_stereo_inv(const projection_t *proj, double x, double y, double *lam, double *phi)
     {
-        projection_stereo_t *ptr = (projection_stereo_t *)proj->proj_dat;
+        projection_stereo_t *ptr = (projection_stereo_t *)proj->proj_dat.get();
 
         double cosphi, sinphi, tp = 0.0, phi_l = 0.0, rho, halfe = 0.0, halfpi = 0.0;
         rho = hypot(x, y);
