@@ -430,7 +430,7 @@ int mirisdr_read_async (mirisdr_dev_t *p, mirisdr_read_async_cb_t cb, void *ctx,
         r = libusb_submit_transfer(p->xfer[i]);
 
 		if (r < 0) {
-			fprintf(stderr, "Failed to submit transfer %lu reason: %d\n", i, r);
+			fprintf(stderr, "Failed to submit transfer %lu reason: %d\n", (unsigned long)i, r);
 			goto failed_free;
 		}
     }

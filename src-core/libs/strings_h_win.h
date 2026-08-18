@@ -35,22 +35,22 @@ extern "C" {
 #include <string.h>
 #include <ctype.h>
 
-    static int bcmp(const void * s1, const void * s2, size_t n)
+    static inline int bcmp(const void * s1, const void * s2, size_t n)
     {
         return memcmp(s1, s2, n);
     }
 
-    static void bcopy(const void * src, void * dest, size_t n)
+    static inline void bcopy(const void * src, void * dest, size_t n)
     {
         memcpy(dest, src, n);
     }
 
-    static void bzero(void * s, size_t n)
+    static inline void bzero(void * s, size_t n)
     {
         memset(s, 0, n);
     }
 
-    static void explicit_bzero(void * s, size_t n)
+    static inline void explicit_bzero(void * s, size_t n)
     {
         volatile char * vs = (volatile char *) s;
         while (n)
@@ -60,17 +60,17 @@ extern "C" {
         }
     }
 
-    static char * index(const char * s, int c)
+    static inline char * index(const char * s, int c)
     {
         return strchr(s, c);
     }
 
-    static char * rindex(const char * s, int c)
+    static inline char * rindex(const char * s, int c)
     {
         return strrchr(s, c);
     }
 
-    static int ffs(int i)
+    static inline int ffs(int i)
     {
         int bit;
 
@@ -82,7 +82,7 @@ extern "C" {
         return bit;
     }
 
-    static int ffsl(long i)
+    static inline int ffsl(long i)
     {
         int bit;
 
@@ -94,7 +94,7 @@ extern "C" {
         return bit;
     }
 
-    static int ffsll(long long i)
+    static inline int ffsll(long long i)
     {
         int bit;
 
@@ -108,7 +108,7 @@ extern "C" {
 
 #ifndef __MINGW32__
 
-    static int strcasecmp(const char * s1, const char * s2)
+    static inline int strcasecmp(const char * s1, const char * s2)
     {
         const unsigned char * u1 = (const unsigned char*) s1;
         const unsigned char * u2 = (const unsigned char*) s2;
@@ -123,7 +123,7 @@ extern "C" {
         return result;
     }
 
-    static int strncasecmp(const char * s1, const char * s2, size_t	 n)
+    static inline int strncasecmp(const char * s1, const char * s2, size_t	 n)
     {
         const unsigned char * u1 = (const unsigned char*) s1;
         const unsigned char * u2 = (const unsigned char*) s2;
@@ -140,7 +140,7 @@ extern "C" {
         return 0;
     }
 
-    static int strcasecmp_l(const char * s1, const char * s2, _locale_t loc)
+    static inline int strcasecmp_l(const char * s1, const char * s2, _locale_t loc)
     {
         const unsigned char * u1 = (const unsigned char*) s1;
         const unsigned char * u2 = (const unsigned char*) s2;
@@ -155,7 +155,7 @@ extern "C" {
         return result;
     }
 
-    static int strncasecmp_l(const char * s1, const char * s2, size_t n, _locale_t loc)
+    static inline int strncasecmp_l(const char * s1, const char * s2, size_t n, _locale_t loc)
     {
         const unsigned char * u1 = (const unsigned char*) s1;
         const unsigned char * u2 = (const unsigned char*) s2;

@@ -121,6 +121,26 @@ unset(ANGELSCRIPT_SOURCE)
 
 find_package(PkgConfig)
 
+# Third-party trees: not ours to fix, and they drown out our own warnings
+file(GLOB_RECURSE GobDump_core_VENDORED
+    libs/*.c libs/*.cpp
+    angelscript/lib/*.cpp
+    angelscript/scriptarray/*.cpp
+    angelscript/scriptbuilder/*.cpp
+    angelscript/scriptdictionary/*.cpp
+    angelscript/scriptstdstring/*.cpp
+    imgui/*.cpp
+    handlers/dataset/TextEditor.cpp
+)
+gobdump_mark_vendored_sources(${GobDump_core_VENDORED})
+
+if(UNIX OR MINGW)
+    file(GLOB_RECURSE GobDump_core_AS_BINDINGS angelscript/scriptsatdump/*.cpp)
+    foreach(_f IN LISTS GobDump_core_AS_BINDINGS)
+        set_property(SOURCE "${_f}" APPEND_STRING PROPERTY COMPILE_FLAGS " -Wno-cast-function-type")
+    endforeach()
+endif()
+
 add_library(gobdump_core SHARED ${GobDump_core_CPPS})
 target_include_directories(gobdump_core PUBLIC .)
 #target_precompile_headers(gobdump_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/nlohmann/json.hpp>")

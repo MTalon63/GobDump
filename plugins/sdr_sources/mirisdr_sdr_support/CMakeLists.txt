@@ -8,6 +8,10 @@ find_library(USB_LIBRARY usb-1.0)
 if(USB_LIBRARY OR MSVC OR ANDROID)
     message("Building with MiriSDR support")
     file(GLOB_RECURSE mirisdr_sdr_support_CPPS *.cpp mirisdr/libmirisdr.c)
+
+    # Upstream libmirisdr
+    gobdump_mark_vendored_sources(${CMAKE_CURRENT_SOURCE_DIR}/mirisdr/libmirisdr.c)
+
     add_library(mirisdr_sdr_support SHARED ${mirisdr_sdr_support_CPPS})
     target_include_directories(mirisdr_sdr_support PUBLIC src)
 

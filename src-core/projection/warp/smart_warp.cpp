@@ -5,6 +5,10 @@
 #include "logger.h"
 #include "projection/utils/equirectangular.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #define MAX_IMAGE_RAM_USAGE 4e9 // 4GB of RAM max
 #define SEGMENT_SIZE_KM 3000    // Average segment size to try and keep as max
 #define MIN_POLE_DISTANCE 1000  // Maximum distance at which to consider we're working over a pole
@@ -299,17 +303,39 @@ namespace satdump
             // Generate all segments
             std::vector<SegmentConfig> segmentConfigs = prepareSegmentsAndSplitCuts(nsegs, operation_t, median_dist);
 
-            // #pragma omp parallel for
-            // Solve all TPS transforms, multithreaded
-            // TODOREWORK there is a bug when this gets multithreaded!? Only on Windows if OpenMP is used,
-            // also on Linux (SIGSEV) if running via threads manually?
+            // Solve all TPS transforms, multithreaded.
+#ifdef _OPENMP
+            const int prev_nested = omp_get_max_active_levels();
+            omp_set_max_active_levels(1);
+#endif
+
+            // An exception leaving an OpenMP structured block is UB, and allocation inside can throw,
+            // so each iteration catches its own and the segment is skipped below.
+#pragma omp parallel for schedule(dynamic)
             for (int64_t ns = 0; ns < (int64_t)segmentConfigs.size(); ns++)
-                segmentConfigs[ns].tps = initTPSTransform(segmentConfigs[ns].gcps, segmentConfigs[ns].shift_lon, segmentConfigs[ns].shift_lat);
+            {
+                try
+                {
+                    segmentConfigs[ns].tps = initTPSTransform(segmentConfigs[ns].gcps, segmentConfigs[ns].shift_lon, segmentConfigs[ns].shift_lat);
+                }
+                catch (std::exception &e)
+                {
+                    logger->error("Error solving TPS for segment %d : %s", (int)ns, e.what());
+                    segmentConfigs[ns].tps = nullptr;
+                }
+            }
+
+#ifdef _OPENMP
+            omp_set_max_active_levels(prev_nested);
+#endif
 
             int scnt = 0;
             // Process all the segments
             for (auto &segmentCfg : segmentConfigs)
             {
+                if (segmentCfg.tps == nullptr) // Solve threw above; warping would deref it
+                    continue;
+
                 // Copy operation for the segment Warp
                 image::Image segment_image = operation_t.input_image->crop_to(0, segmentCfg.y_start, operation_t.input_image->width(), segmentCfg.y_end);
                 auto operation = operation_t;

@@ -26,6 +26,9 @@
 #if !defined (_WIN32) || defined(__MINGW32__)
 #include <unistd.h>
 #define min(a, b) (((a) < (b)) ? (a) : (b))
+#else
+#include <winsock2.h>
+#include <windows.h>
 #endif
 
 #ifndef __ANDROID__

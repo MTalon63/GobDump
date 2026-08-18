@@ -44,7 +44,7 @@ static mmap_section_entry_t mmap_sections[MMAP_MAX_TRACKED_SECTIONS];
 # define DWORD_LO(x) (x)
 #endif
 
-static void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset)
+static inline void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
 		return MAP_FAILED;
@@ -111,7 +111,7 @@ static void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t
 	return ret;
 }
 
-static void munmap(void* addr, size_t length)
+static inline void munmap(void* addr, size_t length)
 {
 	int i;
 	(void)length;
