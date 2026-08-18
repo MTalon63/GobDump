@@ -29,6 +29,11 @@ namespace goes
 
         void VisibleReader::pushFrame(uint8_t *data, int block, int counter)
         {
+            // Both come from the frame; re-validated here since the reader is separately callable
+            int line = counter * 8 + (block - 3);
+            if (counter < 0 || block < 3 || line < 0 || line >= HEIGHT)
+                return;
+
             // Offset to start reading from
             int pos = 116;
             int posb = 6;
@@ -55,9 +60,9 @@ namespace goes
             for (int i = 0; i < WIDTH; i++)
             {
                 uint16_t pixel = imageLineBuffer[i + 1];
-                imageBuffer[((counter * 8 + (block - 3)) * WIDTH) + i] = pixel << 6;
-                goodLines[counter * 8 + (block - 3)] = true;
+                imageBuffer[((size_t)line * WIDTH) + i] = pixel << 6;
             }
+            goodLines[line] = true;
         }
 
         image::Image VisibleReader::getImage()

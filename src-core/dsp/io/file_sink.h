@@ -2,6 +2,7 @@
 
 #include "common/utils.h"
 #include "dsp/block.h"
+#include "logger.h"
 #include <fstream>
 
 namespace satdump
@@ -16,6 +17,7 @@ namespace satdump
 
         private:
             std::ofstream file_writer;
+            bool d_write_error_logged = false; // Report a write failure once, not once per block
 
             bool work();
 
@@ -23,7 +25,13 @@ namespace satdump
             FileSinkBlock();
             ~FileSinkBlock();
 
-            void init() { file_writer = std::ofstream(p_file, std::ios::binary); }
+            void init()
+            {
+                file_writer = std::ofstream(p_file, std::ios::binary);
+                d_write_error_logged = false;
+                if (!file_writer.good())
+                    logger->error("Could not open file sink for writing : " + p_file);
+            }
 
             nlohmann::ordered_json get_cfg_list()
             {

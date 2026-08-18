@@ -1,5 +1,6 @@
 #include "product_expression.h"
 #include "common/calibration.h"
+#include <cmath>
 #include "common/physics_constants.h"
 #include "core/exception.h"
 #include "image/image.h"
@@ -44,13 +45,19 @@ namespace satdump
                 image::Image &img = p->img;
                 if (img.size() == 0)
                     return -1;
-                if (ch > img.channels())
+                if (!(ch >= 0) || ch >= img.channels()) // Was `> channels()`: ch == channels() read one plane past the end
                     return -1;
 
                 if (p->p.inverse(*p->x, *p->y, p->pos))
                     return 0;
 
                 p->ep.forward(p->pos.lon, p->pos.lat, p->ox, p->oy);
+
+                // ox/oy come straight out of the projection with no validation; an inverse that lands
+                // off-image (or non-finite) would otherwise index the buffer with it.
+                if (!std::isfinite(p->ox) || !std::isfinite(p->oy) ||
+                    p->ox < 0 || p->oy < 0 || p->ox >= (double)img.width() || p->oy >= (double)img.height())
+                    return 0;
 
                 return img.getf(ch, p->ox, p->oy);
             }

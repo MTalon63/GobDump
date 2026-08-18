@@ -108,12 +108,24 @@ namespace dsp
                 Block<T, T>::output_stream->writeBuf[ouc++] = p_0T;
             }
 
+            // omega/mu are feedback accumulators, and branched_clip is comparison-based so NaN passes
+            // straight through and sticks forever. mu is then cast to int to index the buffer, and
+            // (int)NaN is UB - measured as INT_MIN. Re-seed the loop instead of indexing with garbage.
+            if (!std::isfinite(phase_error))
+                phase_error = 0;
+
             // Adjust omega
             omega = omega + omega_gain * phase_error;
             omega = omega_mid + branched_clip((omega - omega_mid), omega_limit);
 
             // Adjust phase
             mu = mu + omega + mu_gain * phase_error;
+
+            if (!std::isfinite(omega))
+                omega = omega_mid;
+            if (!std::isfinite(mu))
+                mu = 0;
+
             inc += int(floor(mu));
             mu -= floor(mu);
             if (inc < 0)

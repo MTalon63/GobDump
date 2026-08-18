@@ -9,6 +9,7 @@
 #include "core/exception.h"
 #include "dsp/base/stream.h"
 #include "nlohmann/json.hpp"
+#include <atomic>
 #include <exception>
 #include <mutex>
 #include <thread>
@@ -171,7 +172,9 @@ namespace satdump
             void link(Block *ptr, int output_index, int input_index, int nbuf) { set_input(ptr->get_output(output_index, nbuf), input_index); }
 
         private:
-            bool blk_should_run;
+            // Written by the control thread, polled by the worker below. As plain bools at -O3 these
+            // loads could be hoisted out of the loop, so a stop request was free to never be observed.
+            std::atomic<bool> blk_should_run{false};
             std::mutex blk_th_mtx;
             std::thread blk_th;
             void run()
@@ -186,7 +189,7 @@ namespace satdump
              * @brief Used to signal to a block it should exit in order
              * to stop(). Usually only needed in sources.
              */
-            bool work_should_exit;
+            std::atomic<bool> work_should_exit{false};
 
             /**
              * @brief The actual looping work function meant to handle

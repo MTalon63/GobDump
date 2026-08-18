@@ -4,6 +4,7 @@
 #include "complex.h"
 #include "core/exception.h"
 #include "logger.h"
+#include <atomic>
 #include <memory>
 #include <thread>
 
@@ -19,7 +20,9 @@ namespace dsp
     {
     protected:
         std::thread d_thread;
-        bool should_run = false;
+        // Written by the control thread, polled by the worker: as a plain bool at -O3 the load could be
+        // hoisted out of the loop below, so stop() was free to never be observed.
+        std::atomic<bool> should_run{false};
         virtual void work() = 0;
         bool d_got_input;
         void run()

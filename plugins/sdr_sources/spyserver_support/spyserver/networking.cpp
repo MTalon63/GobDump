@@ -6,7 +6,8 @@ namespace net
 {
 
 #ifdef _WIN32
-    extern bool winsock_init = false;
+    // Was `extern bool x = false;` (a definition, not a declaration); atomic for the check-then-set
+    std::atomic<bool> winsock_init{false};
 #endif
 
     ConnClass::ConnClass(Socket sock, struct sockaddr_in raddr, bool udp)

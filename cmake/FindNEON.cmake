@@ -43,7 +43,8 @@ int main(void)
 # by avoiding any try_compiles for the flags
 if((DEFINED NEON_C_FLAGS) OR (DEFINED HAVE_NEON))
 else()
-  if(WIN32)
+  # MSVC, not WIN32: same defect as FindSSE41; matters on Windows-on-ARM
+  if(MSVC)
     set(NEON_C_FLAG_CANDIDATES
       #Empty, if compiler automatically accepts NEON
       " ")

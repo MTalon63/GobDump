@@ -77,7 +77,13 @@ namespace slog
     std::string LoggerSink::format_log(LogMsg m, bool color, int *cpos)
     {
         time_t ct = time(0);
-        std::tm *tmr = gmtime(&ct);
+        std::tm tmv;
+#ifdef _WIN32
+        gmtime_s(&tmv, &ct); // gmtime returns a shared static buffer; racy across threads
+#else
+        gmtime_r(&ct, &tmv);
+#endif
+        std::tm *tmr = &tmv;
 
         std::string timestamp =
             (tmr->tm_hour < 10 ? "0" : "") + std::to_string(tmr->tm_hour) + ":" +       // Hour
@@ -139,8 +145,16 @@ namespace slog
         {
             int color_pos = 0;
             std::string s = format_log(log, false, &color_pos);
-            std::string s1 = s.substr(0, color_pos);
-            std::string s2 = s.substr(color_pos, s.size() - color_pos - 1);
+
+            // color_pos is computed for a different format string; unclamped it underflowed size_t here
+            if (s.empty())
+                return;
+            size_t cpos = (size_t)color_pos;
+            if (cpos > s.size() - 1)
+                cpos = s.size() - 1;
+
+            std::string s1 = s.substr(0, cpos);
+            std::string s2 = s.substr(cpos, s.size() - cpos - 1);
             std::string s3 = s.substr(s.size() - 1, 1);
             HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
             fwrite(s1.c_str(), sizeof(char), s1.size(), stderr);
@@ -181,7 +195,8 @@ namespace slog
 
     void Logger::log(LogLevel lvl, std::string v)
     {
-        sink_mtx.lock();
+        // RAII: a sink throwing used to skip the unlock and deadlock all logging permanently
+        std::lock_guard<std::mutex> lck(sink_mtx);
         LogMsg m;
         m.str = v;
         m.lvl = lvl;
@@ -201,7 +216,6 @@ namespace slog
         if (m.lvl >= logger_lvl)
             for (auto &l : sinks)
                 l->receive(m);
-        sink_mtx.unlock();
     }
 
     void Logger::logf(LogLevel lvl, std::string fmt, va_list args)

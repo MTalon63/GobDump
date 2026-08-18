@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/backend.h"
+#include <atomic>
 #include <string>
 #include <thread>
 
@@ -10,7 +11,7 @@ namespace fileutils
     {
     private:
         std::thread th;
-        bool ready = false;
+        std::atomic<bool> ready{false}; // written by worker, polled by UI thread
         std::string res;
 
     public:
@@ -38,7 +39,7 @@ namespace fileutils
     {
     private:
         std::thread th;
-        bool ready = false;
+        std::atomic<bool> ready{false}; // written by worker, polled by UI thread
         std::string res;
 
     public:

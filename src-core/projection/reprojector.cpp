@@ -3,6 +3,7 @@
 #include "core/exception.h"
 #include "image/meta.h"
 #include "logger.h"
+#include <cmath>
 
 #include "projection/standard/proj_json.h"
 
@@ -18,7 +19,10 @@ namespace satdump
     {
         inline void transposePixel(image::Image &in, image::Image &out, double ix, double iy, int ox, int oy)
         {
-            if (ix >= (int)in.width() || iy >= (int)in.height() || ix < 0 || iy < 0)
+            // isfinite first: NaN passes every comparison below
+            if (!std::isfinite(ix) || !std::isfinite(iy))
+                return;
+            if (ix >= (double)in.width() || iy >= (double)in.height() || ix < 0 || iy < 0)
                 return;
             if (ox >= (int)out.width() || oy >= (int)out.height() || ox < 0 || oy < 0)
                 return;

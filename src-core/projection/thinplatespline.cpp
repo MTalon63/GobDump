@@ -157,6 +157,15 @@ namespace satdump
                     }
                 }
 
+                // The elimination loop stops at m-1, so the last pivot was never tested - yet the
+                // back-substitution below divides by it. An untested singular A(m-1,m-1) produced
+                // NaN coefficients while solve() still reported success.
+                if (std::abs(A(m - 1, m - 1)) <= eps)
+                {
+                    logger->error("TPS : Matrix not invertible (final pivot)!");
+                    return false;
+                }
+
                 // LUP solve;
                 for (int iCol = 0; iCol < n; ++iCol)
                 {
@@ -205,8 +214,17 @@ namespace satdump
                     return arma::solve(matOut, matA, matRHS);
 #endif
 #else
-
-                    return solve(A, RHS, X, 0);
+                    // eps was 0, so only an exactly-zero pivot was rejected; a 1e-300 pivot passed and the
+                    // divisions below then produced Inf/NaN coef that solve() still reported as success.
+                    double norm = 0;
+                    for (int c = 0; c < A.getNumCols(); c++)
+                        for (int r = 0; r < A.getNumRows(); r++)
+                        {
+                            const double a = std::abs(A(r, c));
+                            if (a > norm)
+                                norm = a;
+                        }
+                    return solve(A, RHS, X, norm * A.getNumRows() * std::numeric_limits<double>::epsilon());
 #endif
                 }
                 catch (std::exception const &e)
@@ -652,7 +670,10 @@ namespace satdump
                 return 3;
             }
 
-            type = VIZ_GEOREF_SPLINE_FULL;
+            // NOTE: `type` is deliberately NOT set here. It used to be, which meant a failed solve
+            // below left type == FULL with coef[][] never written, so get_point() read uninitialised
+            // heap and still reported success - non-deterministic on identical input.
+
             // Make the necessary memory allocations.
 
             _nof_eqs = _nof_points + 3;
@@ -714,12 +735,24 @@ namespace satdump
 
             if (!GDALLinearSystemSolve(A, RHS, Coef))
             {
+                logger->error("TPS : Solve failed (singular/degenerate GCPs) - transform unusable");
                 return 0;
             }
 
             for (int iRHS = 0; iRHS < _nof_vars; iRHS++)
                 for (int iRow = 0; iRow < _nof_eqs; iRow++)
-                    coef[iRHS][iRow] = Coef(iRow, iRHS);
+                {
+                    const double v = Coef(iRow, iRHS);
+                    if (!std::isfinite(v))
+                    {
+                        logger->error("TPS : Solve produced non-finite coefficients - transform unusable");
+                        return 0;
+                    }
+                    coef[iRHS][iRow] = v;
+                }
+
+            // Only now is the transform actually usable
+            type = VIZ_GEOREF_SPLINE_FULL;
 
             return 4;
         }

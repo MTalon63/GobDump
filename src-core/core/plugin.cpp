@@ -22,10 +22,25 @@ std::shared_ptr<satdump::Plugin> loadPlugin(std::string plugin)
 
     void *create = dlsym(dynlib, "loader");
     const char *dlsym_error = dlerror();
+
+    // On Windows that directory also holds ordinary DLLs; calling through the null pointer jumps to 0
+    if (create == NULL)
+    {
+        std::string err = dlsym_error != NULL ? std::string(dlsym_error) : std::string("symbol \"loader\" not found");
+        dlclose(dynlib);
+        throw satdump_exception("Not a valid plugin: " + plugin + " (" + err + ")");
+    }
+
     if (dlsym_error != NULL)
         logger->warn("Possible error loading symbols from plugin!");
 
     satdump::Plugin *pluginObject = reinterpret_cast<satdump::Plugin *(*)()>(create)();
+    if (pluginObject == NULL)
+    {
+        dlclose(dynlib);
+        throw satdump_exception("Plugin " + plugin + " loader() returned null!");
+    }
+
     pluginObject->init();
     logger->trace("Plugin " + pluginObject->getID() + " loaded!");
 

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <atomic>
 #include <mutex>
 #include <inttypes.h>
 #include <memory>
@@ -122,6 +123,6 @@ namespace net {
     Conn openUDP(std::string host, uint16_t port, std::string remoteHost, uint16_t remotePort, bool bindSocket = true);
 
 #ifdef _WIN32
-    extern bool winsock_init;
+    extern std::atomic<bool> winsock_init;
 #endif
 }

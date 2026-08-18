@@ -3,11 +3,18 @@
 #include "satdump_vars.h"
 #include <cstring>
 #include <curl/curl.h>
+#include <mutex>
 
 #define CURL_TIMEOUT 5000
 
 namespace satdump
 {
+    // Not per-request: not thread-safe, and CURL_GLOBAL_ALL means cleanup runs WSACleanup() process-wide
+    void ensure_curl_global_init()
+    {
+        static std::once_flag curl_init_flag;
+        std::call_once(curl_init_flag, []() { curl_global_init(CURL_GLOBAL_ALL); });
+    }
     size_t curl_write_std_string(void *contents, size_t size, size_t nmemb, std::string *s)
     {
         size_t newLength = size * nmemb;
@@ -39,7 +46,7 @@ namespace satdump
         bool ret = 1;
         char error_buffer[CURL_ERROR_SIZE] = {0};
 
-        curl_global_init(CURL_GLOBAL_ALL);
+        ensure_curl_global_init();
 
         curl = curl_easy_init();
         if (curl)
@@ -88,7 +95,6 @@ namespace satdump
             if (chunk != NULL)
                 curl_slist_free_all(chunk);
         }
-        curl_global_cleanup();
         return ret;
     }
 
@@ -99,7 +105,7 @@ namespace satdump
         bool ret = 1;
         char error_buffer[CURL_ERROR_SIZE] = {0};
 
-        curl_global_init(CURL_GLOBAL_ALL);
+        ensure_curl_global_init();
 
         curl = curl_easy_init();
         if (curl)
@@ -141,7 +147,6 @@ namespace satdump
             if (chunk != NULL)
                 curl_slist_free_all(chunk);
         }
-        curl_global_cleanup();
         return ret;
     }
 } // namespace satdump

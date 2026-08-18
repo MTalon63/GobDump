@@ -10,7 +10,8 @@
 namespace satdump
 {
     SATDUMP_DLL2 extern bool update_ui;
-    SATDUMP_DLL2 extern ctpl::thread_pool ui_thread_pool;
+    // Reference to a deliberately leaked pool - see main_ui.cpp for why it must not be destroyed
+    SATDUMP_DLL2 extern ctpl::thread_pool &ui_thread_pool;
 
     SATDUMP_DLL2 extern std::shared_ptr<explorer::ExplorerApplication> explorer_app;
 

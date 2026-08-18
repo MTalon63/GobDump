@@ -15,6 +15,11 @@
 #include <windows.h>
 #include <sys/types.h>
 
+/* Section handle per mapped address, so munmap can close it. Plain C: also included from C TUs. */
+#define MMAP_MAX_TRACKED_SECTIONS 256
+typedef struct { void* addr; HANDLE handle; } mmap_section_entry_t;
+static mmap_section_entry_t mmap_sections[MMAP_MAX_TRACKED_SECTIONS];
+
 #define PROT_READ     0x1
 #define PROT_WRITE    0x2
   /* This flag is only available in WinXP+ */
@@ -90,13 +95,36 @@ static void* mmap(void* start, size_t length, int prot, int flags, int fd, off_t
 		CloseHandle(h);
 		ret = MAP_FAILED;
 	}
+	else {
+		/* Leaking this kept the file object alive, so Windows refused to delete the mapped file */
+		int i;
+		for (i = 0; i < MMAP_MAX_TRACKED_SECTIONS; i++) {
+			if (mmap_sections[i].addr == NULL) {
+				mmap_sections[i].addr = ret;
+				mmap_sections[i].handle = h;
+				break;
+			}
+		}
+		if (i == MMAP_MAX_TRACKED_SECTIONS)
+			CloseHandle(h); /* table full */
+	}
 	return ret;
 }
 
 static void munmap(void* addr, size_t length)
 {
+	int i;
+	(void)length;
 	UnmapViewOfFile(addr);
-	/* ruh-ro, we leaked handle from CreateFileMapping() ... */
+
+	for (i = 0; i < MMAP_MAX_TRACKED_SECTIONS; i++) {
+		if (mmap_sections[i].addr == addr) {
+			CloseHandle(mmap_sections[i].handle);
+			mmap_sections[i].addr = NULL;
+			mmap_sections[i].handle = NULL;
+			break;
+		}
+	}
 }
 
 #undef DWORD_HI

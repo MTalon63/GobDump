@@ -96,12 +96,15 @@ if(APPLE)
 endif()
 
 if(UNIX OR MINGW)
+    # Warnings must cover C too; the vendored C corpus was compiled entirely unwarned
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-psabi")
     endif()
 
     if(BUILD_OPENMP)
@@ -131,6 +134,12 @@ if(MSVC OR BUILD_MSVC)
         _CRT_SECURE_NO_WARNINGS
         _WINSOCK_DEPRECATED_NO_WARNINGS
         _CRT_NONSTDC_NO_WARNINGS
+        # NOMINMAX: windows.h min/max break std::min/max and numeric_limits::max() (hand-patched in 5 files before)
+        # _WIN32_WINNT: same baseline as MinGW; MSVC took the SDK default, so the two differed
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+        _WIN32_WINNT=0x0601
+        WINVER=0x0601
     )
 
     if(BUILD_OPENMP)
@@ -145,11 +154,9 @@ if(MSVC OR BUILD_MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MDd")
 
-    # Speed up this to object-level, Suppress type conversion warnings, suppress
-    # POSIX function warnings, suppress warnings about DLL-exported functions, and
-    # Suppress warnings about template methods defined in another C++ file
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP8 /EHsc /wd4305 /wd4267 /wd4244 /wd4273 /wd4661")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP8 /EHsc /wd4305 /wd4267 /wd4244 /wd4273 /wd4661")
+    # C4244/C4267 NOT suppressed: the only automatic detector for 64->32-bit bugs that hit Win64 but not Linux
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3 /MP8 /EHsc /wd4305 /wd4273 /wd4661")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3 /MP8 /EHsc /wd4305 /wd4273 /wd4661")
 
     #Suppress pointless (to us) warnings about DLL-exported functions
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /ignore:4286,4217")
@@ -165,7 +172,11 @@ if(MINGW)
     add_compile_definitions(
         _USE_MATH_DEFINES
         WIN32_LEAN_AND_MEAN
+        # Required separately: WIN32_LEAN_AND_MEAN does not cover windef.h's min/max
+        NOMINMAX
+        # One baseline for the build; never #define this in a source file (enforced in dll_export.h)
         _WIN32_WINNT=0x0601
+        WINVER=0x0601
     )
 
     # Plugins resolve satdump symbols against gobdump_core at load time.
@@ -179,17 +190,17 @@ if(MINGW)
         get_filename_component(MINGW_RUNTIME_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
     endif()
 
-    # Large object files: several translation units here exceed the COFF section limit.
+    # COFF section limit; needed for C too (libs/openjp2, libs/calceph are large TUs)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wa,-mbig-obj")
-
-
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wa,-mbig-obj")
 endif()
 
 if((NOT DEFINED ENV{CI}) AND NOT DEFINED ANDROID)
     if(APPLE OR UNIX)
         message("-- Not running on CI. Building for native architecture! Will likely not be portable to other systems.")
-        set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -march=native")    
+        # Was `set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ...")`, clobbering CXX flags with C flags and silently dropping -Wall -Wextra -fopenmp.
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
     endif()
 endif()
 
@@ -389,7 +400,8 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
     set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 
-    if(MSVC OR BUILD_MSVC)
+    # WIN32, not MSVC: MinGW previously fell through to the Debian branch and got a /usr prefix
+    if(WIN32)
         set(CPACK_PACKAGING_INSTALL_PREFIX "/")
     else()
         set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
@@ -400,7 +412,8 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
     #set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
     set(CPACK_PACKAGE_VERSION ${GOBDUMP_VERSION})
 
-    if(MSVC OR BUILD_MSVC)
+    # WIN32, not MSVC: MinGW used to select CPACK_GENERATOR DEB, i.e. a Debian package on Windows
+    if(WIN32)
         # Customize NSIS template
         file(READ "${CMAKE_ROOT}/Modules/Internal/CPack/NSIS.template.in" NSIS_template)
         set(CREATE_ICONS_REPLACE "  SetOutPath \"$INSTDIR\\bin\"\n@CPACK_NSIS_CREATE_ICONS@\n@CPACK_NSIS_CREATE_ICONS_EXTRA@\n  SetOutPath \"$INSTDIR\"")
@@ -430,22 +443,25 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
             set(CPACK_PACKAGE_EXECUTABLES ${CPACK_PACKAGE_EXECUTABLES} "satdump_sdr_server" "GobDump SDR Server")
         endif()
 
-        install(RUNTIME_DEPENDENCY_SET gobdump_deps
-            PRE_EXCLUDE_REGEXES
-            "api-ms-.*"
-            "ext-ms-.*"
-            "^hvsifiletrust\\.dll$"
-            "^pdmutilities\\.dll$"
-            "^vc.*"
-            "^msvcp.*"
-            "^concrt.*"
-            "gobdump_core.dll"
-            "gobdump_interface.dll"
-            POST_EXCLUDE_REGEXES
-            ".*system32/.*\\.dll"
-            DIRECTORIES
-            "${PROJECT_SOURCE_DIR}/vcpkg/installed/${VCPKG_TARGET_TRIPLET}/bin"
-        )
+        # vcpkg-specific: MinGW deploys its DLLs via cmake/MinGWCopyRuntime.cmake instead
+        if(MSVC OR BUILD_MSVC)
+            install(RUNTIME_DEPENDENCY_SET gobdump_deps
+                PRE_EXCLUDE_REGEXES
+                "api-ms-.*"
+                "ext-ms-.*"
+                "^hvsifiletrust\\.dll$"
+                "^pdmutilities\\.dll$"
+                "^vc.*"
+                "^msvcp.*"
+                "^concrt.*"
+                "gobdump_core.dll"
+                "gobdump_interface.dll"
+                POST_EXCLUDE_REGEXES
+                ".*system32/.*\\.dll"
+                DIRECTORIES
+                "${PROJECT_SOURCE_DIR}/vcpkg/installed/${VCPKG_TARGET_TRIPLET}/bin"
+            )
+        endif()
     else()
         set(CPACK_GENERATOR DEB)
         #set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)

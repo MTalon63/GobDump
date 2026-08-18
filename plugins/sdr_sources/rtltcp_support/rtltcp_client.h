@@ -1,4 +1,5 @@
 #pragma once
+#include "common/net/winsock_init.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -15,17 +16,22 @@
 #include <netdb.h>
 #endif
 
-#ifdef _WIN32
-#define __attribute__(x)
+// Was `#define __attribute__(x)`, never #undef'd: it stripped the attribute from every later
+// declaration in the TU, including ImGui's IM_FMTARGS and Eigen's alignment.
+#ifdef _MSC_VER
 #pragma pack(push, 1)
-#endif
+struct command_t {
+    unsigned char cmd;
+    unsigned int param;
+};
+#pragma pack(pop)
+#else
 struct command_t {
     unsigned char cmd;
     unsigned int param;
 } __attribute__((packed));
-#ifdef _WIN32
-#pragma pack(pop)
 #endif
+static_assert(sizeof(command_t) == 5, "rtl_tcp command_t must be 5 bytes on the wire");
 
 class RTLTCPClient {
 public:
@@ -42,8 +48,9 @@ public:
         struct addrinfo* ptr = NULL;
         struct addrinfo hints;
 
-        WSADATA wsaData;
-        WSAStartup(MAKEWORD(2, 2), &wsaData);
+        // Was WSAStartup per connect + WSACleanup on every error path; that refcount is shared
+        // process-wide with curl/MQTT. Init once, never clean up.
+        net::ensure_winsock_init();
 
         ZeroMemory(&hints, sizeof(hints));
         hints.ai_family = AF_UNSPEC;
@@ -57,7 +64,6 @@ public:
         if (iResult != 0) {
             // TODO: log error
             printf("\n%s\n", gai_strerror(iResult));
-            WSACleanup();
             return false;
         }
         ptr = result;
@@ -68,7 +74,6 @@ public:
             // TODO: log error
             printf("B");
             freeaddrinfo(result);
-            WSACleanup();
             return false;
         }
 
@@ -76,8 +81,8 @@ public:
         if (iResult == SOCKET_ERROR) {
             printf("C");
             closesocket(sock);
+            sock = INVALID_SOCKET;
             freeaddrinfo(result);
-            WSACleanup();
             return false;
         }
         freeaddrinfo(result);
@@ -111,10 +116,11 @@ public:
             return;
         }
 #ifdef _WIN32
-        closesocket(sock);
-        WSACleanup();
+        closesocket(sock); // no WSACleanup: refcount is process-wide, see winsock_init.h
+        sock = INVALID_SOCKET;
 #else
         close(sockfd);
+        sockfd = -1;
 #endif
         connected = false;
     }

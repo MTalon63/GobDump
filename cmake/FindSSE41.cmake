@@ -43,7 +43,9 @@ int main(void) { return foo(); }
 # by avoiding any try_compiles for the flags
 if((DEFINED SSE41_C_FLAGS) OR (DEFINED HAVE_SSE41))
 else()
-  if(WIN32)
+  # MSVC, not WIN32: WIN32 is true for MinGW too, so GCC was only ever offered the MSVC flag and
+  # always failed the probe - silently dropping the simd_sse41 plugin from every MinGW build.
+  if(MSVC)
     set(SSE41_C_FLAG_CANDIDATES
       #Empty, if compiler automatically accepts SSE41
       " "

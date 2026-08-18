@@ -44,10 +44,14 @@ namespace satdump
                 }
             }
 
-            // Sleep until next task, or we are woken up
+            // Clamped: sleep_for is time_t::max() when nothing is scheduled
             needs_update = false;
             if (sleep_for > 0)
-                cv.wait_for(lock, std::chrono::seconds(sleep_for), [this] { return !running || needs_update; });
+            {
+                constexpr time_t max_sleep = 3600;
+                cv.wait_for(lock, std::chrono::seconds(sleep_for > max_sleep ? max_sleep : sleep_for),
+                            [this] { return !running || needs_update; });
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10)); // TODOREWORK. Hogs CPU otherwise...
 
             // Stop/Restart loop if needed
@@ -73,8 +77,12 @@ namespace satdump
 
     TaskScheduler::~TaskScheduler()
     {
-        running = false;
-        cv.notify_one();
+        // Must be set under the mutex, or the notify is lost and join() hangs forever
+        {
+            std::lock_guard<std::mutex> lock(task_mtx);
+            running = false;
+        }
+        cv.notify_all();
         if (task_thread.joinable())
             task_thread.join();
     }

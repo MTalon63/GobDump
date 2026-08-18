@@ -27,7 +27,10 @@ int main(int argc, char *argv[])
     satdump::cli::CommandHandler h;
     int v = h.parse(argc, argv);
     if (v != 0)
+    {
+        satdump::exitSatDump(); // --help/parse errors returned here without stopping the scheduler thread
         return v;
+    }
     h.run();
 
     satdump::exitSatDump();

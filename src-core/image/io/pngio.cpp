@@ -23,20 +23,39 @@ namespace satdump
                 return;
             }
 
+            // These were abort(): a full disk or a read-only path killed the whole process mid-capture,
+            // with no message and no flush of any other in-flight output.
             FILE *fp = fopen(file.c_str(), "wb");
             if (!fp)
-                abort();
+            {
+                logger->error("Could not open PNG for writing : " + file);
+                return;
+            }
 
             png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
             if (!png)
-                abort();
+            {
+                logger->error("Could not create PNG write struct!");
+                fclose(fp);
+                return;
+            }
 
             png_infop info = png_create_info_struct(png);
             if (!info)
-                abort();
+            {
+                logger->error("Could not create PNG info struct!");
+                png_destroy_write_struct(&png, NULL);
+                fclose(fp);
+                return;
+            }
 
             if (setjmp(png_jmpbuf(png)))
-                abort();
+            {
+                logger->error("Error writing PNG : " + file);
+                png_destroy_write_struct(&png, &info);
+                fclose(fp);
+                return;
+            }
 
             png_init_io(png, fp);
 
@@ -143,6 +162,15 @@ namespace satdump
                 }
                 else
                     d_channels = 1;
+            }
+
+            // libpng delivers 1/2/4-bit rows PACKED (several pixels per byte), but the unpacking loop
+            // below reads one byte per pixel. Expand to 8 so depth, d_maxv and the row layout agree.
+            if (bit_depth < 8)
+            {
+                png_set_expand_gray_1_2_4_to_8(png);
+                png_read_update_info(png, info);
+                bit_depth = 8;
             }
 
             img.init(bit_depth, d_width, d_height, d_channels);

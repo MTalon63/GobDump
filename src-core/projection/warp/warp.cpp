@@ -199,10 +199,15 @@ namespace satdump
                     xx = xy[0];
                     yy = xy[1];
 
+                    // isfinite first: NaN passes every comparison, and casting a non-finite or
+                    // out-of-range double to int is UB (measured: (int)NaN == (int)1e300 == INT_MIN).
+                    if (!std::isfinite(xx) || !std::isfinite(yy))
+                        continue;
+
                     if (xx < 0 || yy < 0)
                         continue;
 
-                    if ((int)xx > (int)op.input_image->width() - 1 || (int)yy > (int)op.input_image->height() - 1)
+                    if (xx >= (double)op.input_image->width() || yy >= (double)op.input_image->height())
                         continue;
 
                     if (result.output_image.channels() == 4)

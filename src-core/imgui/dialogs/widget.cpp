@@ -56,7 +56,8 @@ bool FileSelectWidget::draw(std::string hint)
         ImGui::PopStyleColor();
 
     ImGui::SameLine();
-    if (ImGui::Button(btnid.c_str()))
+    // beginDisabled() only greys the button out; a second click overwrote a still-running thread object
+    if (ImGui::Button(btnid.c_str()) && !waiting_for_res)
     {
         if (!directory)
         {
@@ -73,7 +74,7 @@ bool FileSelectWidget::draw(std::string hint)
     if (disabled)
         style::endDisabled();
 
-    if (waiting_for_res)
+    if (waiting_for_res && (directory ? dir_select != nullptr : file_select != nullptr))
     {
         std::string get = "";
 

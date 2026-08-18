@@ -1,6 +1,7 @@
 #include "file_sink.h"
 #include "dsp/block.h"
 #include "dsp/block_helpers.h"
+#include "logger.h"
 #include <cstdint>
 
 namespace satdump
@@ -32,6 +33,14 @@ namespace satdump
 
             file_writer.write((char *)iblk.getSamples<T>(), iblk.size * sizeof(T));
             file_writer.flush();
+
+            // ofstream swallows write errors unless asked. A full disk silently produced a truncated
+            // recording that still looked like it was being written.
+            if (!file_writer.good() && !d_write_error_logged)
+            {
+                logger->error("Error writing to file sink! Recording may be truncated (disk full?)");
+                d_write_error_logged = true;
+            }
 
             inputs[0].fifo->free(iblk);
 

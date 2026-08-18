@@ -10,11 +10,8 @@
 #define UNICODE
 #endif
 
-#ifdef __MINGW32__
-// Explicitly setting NTDDI version, this is necessary for the MinGW compiler
-#define NTDDI_VERSION NTDDI_VISTA
-#define _WIN32_WINNT _WIN32_WINNT_VISTA
-#endif
+// LOCAL PATCH: upstream forces NTDDI_VERSION/_WIN32_WINNT to Vista here, disagreeing with the
+// project-wide 0x0601 baseline. Vista is a subset of Win7, so NFD builds fine against the higher one.
 
 #if _MSC_VER
 // see

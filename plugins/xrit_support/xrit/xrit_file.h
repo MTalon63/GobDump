@@ -96,7 +96,8 @@ namespace satdump
             {
                 type = data[0];
                 record_length = data[1] << 8 | data[2];
-                datas = std::string((char *)&data[3], (char *)&data[3 + record_length - 3]);
+                if (record_length > 3) // Otherwise [3, record_length) is empty or reversed, which is UB
+                    datas = std::string((char *)&data[3], (char *)&data[record_length]);
             }
         };
 
@@ -112,7 +113,8 @@ namespace satdump
             {
                 type = data[0];
                 record_length = data[1] << 8 | data[2];
-                annotation_text.insert(annotation_text.end(), &data[3], &data[record_length]);
+                if (record_length > 3) // Otherwise [3, record_length) is empty or reversed, which is UB
+                    annotation_text.insert(annotation_text.end(), &data[3], &data[record_length]);
             }
         };
 

@@ -73,7 +73,8 @@ namespace satdump
                                 num_layers += this_img.getf(3, i);
                             }
 
-                            img_b.setf(c, i, final_val / num_layers);
+                            // Zero wherever every layer is transparent
+                            img_b.setf(c, i, num_layers > 0 ? final_val / num_layers : 0.0);
                         }
                     }
                 }
@@ -92,7 +93,9 @@ namespace satdump
                                 final_val += layer_val;
                         }
 
-                        img_b.setf(c, i, final_val / num_layers);
+                        // num_layers reaches 0 when every layer is black; 0.0/0 is NaN, which setf then
+                        // casts to an integer type - UB, and setf is called here without even clampf.
+                        img_b.setf(c, i, num_layers > 0 ? final_val / num_layers : 0.0);
                     }
                 }
             }
@@ -118,8 +121,11 @@ namespace satdump
                 float alpha_1 = channels_1 == 4 ? (float)img1.get(3, i) / 65535.0f : 1.0f;
                 float alpha_2 = (channels_2 == 4 ? (float)img2.get(3, i) / 65535.0f : 1.0f) * op;
                 float ret_alpha = alpha_2 + alpha_1 * (1.0f - alpha_2);
+                // Both inputs fully transparent gives ret_alpha == 0, and the NaN was cast to uint16_t
                 for (int j = 0; j < color_channels; j++)
-                    ret.set(j, i, ((alpha_2 * ((float)img2.get(j, i) / 65535.0f) + alpha_1 * ((float)img1.get(j, i) / 65535.0f) * (1.0f - alpha_2)) / ret_alpha) * 65535.0f);
+                    ret.set(j, i, ret_alpha > 0.0f
+                                      ? ((alpha_2 * ((float)img2.get(j, i) / 65535.0f) + alpha_1 * ((float)img1.get(j, i) / 65535.0f) * (1.0f - alpha_2)) / ret_alpha) * 65535.0f
+                                      : 0.0f);
 
                 if (channels_1 == 4)
                     ret.set(3, i, ret_alpha * 65535.0f);

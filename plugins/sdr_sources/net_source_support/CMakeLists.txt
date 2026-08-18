@@ -7,8 +7,9 @@ add_library(net_source_support SHARED ${net_source_support_CPPS})
 target_link_libraries(net_source_support PUBLIC gobdump_core)
 target_include_directories(net_source_support PUBLIC src)
 
-if(MSVC)
-    target_link_libraries(net_source_support PUBLIC ws2_32)
+# WIN32, not MSVC: MinGW linked this only by inheritance from gobdump_core
+if(WIN32)
+    target_link_libraries(net_source_support PRIVATE ws2_32)
 endif()
 
 install(TARGETS net_source_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins)

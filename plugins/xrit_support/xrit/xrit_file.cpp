@@ -6,25 +6,31 @@ namespace satdump
 {
     namespace xrit
     {
-        void XRITFile::parseHeaders(bool safe)
+        // `safe` used to gate the only bounds check, and defaulted to false on 3 of 6 call paths - while
+        // total_header_length is an attacker-chosen uint32 that can far exceed what actually arrived.
+        // Checking is now unconditional; the parameter is kept so callers need not change.
+        void XRITFile::parseHeaders(bool /*safe*/)
         {
+            all_headers.clear();
+
+            if (lrit_data.size() < 16) // PrimaryHeader itself reads 16 bytes
+                return;
+
             PrimaryHeader primary_header = getHeader<PrimaryHeader>();
 
             // Get all other headers
-            all_headers.clear();
-            for (uint32_t i = 0; i < primary_header.total_header_length;)
+            uint64_t hdr_len = std::min<uint64_t>(primary_header.total_header_length, lrit_data.size());
+            for (uint64_t i = 0; i + 3 <= hdr_len;)
             {
                 uint8_t type = lrit_data[i];
                 uint16_t record_length = lrit_data[i + 1] << 8 | lrit_data[i + 2];
 
-                if (record_length == 0)
+                // < 3 also covers the old == 0 case, and stops the record constructors from
+                // building a reversed &data[3]..&data[record_length] iterator range.
+                if (record_length < 3 || i + record_length > hdr_len)
                     break;
 
-                if (safe)
-                    if (i + record_length >= lrit_data.size())
-                        break; //  TODOREWORK ? ? ?
-
-                all_headers.emplace(std::pair<int, int>(type, i));
+                all_headers.emplace(std::pair<int, int>(type, (int)i));
 
                 i += record_length;
             }

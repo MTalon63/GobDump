@@ -17,9 +17,8 @@ endif()
 # Link against the core
 target_link_libraries(gobdump_interface PUBLIC gobdump_core)
 
-# Install
-if(MSVC OR BUILD_MSVC)
-    install(TARGETS gobdump_interface DESTINATION ${CMAKE_INSTALL_BINDIR})
-else()
-    install(TARGETS gobdump_interface DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endif()
+# Per-artifact destinations: the plain form sent the .dll to lib/, where Windows does not look
+install(TARGETS gobdump_interface
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})

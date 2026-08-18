@@ -245,7 +245,8 @@ namespace stereo
 
         image::Image SECCHIReader::decompress_icer_tool(uint8_t *data, int dsize, int size)
         {
-            std::ofstream("./stereo_secchi_raw.tmp").write((char *)data, dsize);
+            // std::ios::binary is mandatory: this is a compressed bitstream, and text mode corrupts it on Windows
+            std::ofstream("./stereo_secchi_raw.tmp", std::ios::binary).write((char *)data, dsize);
 
             if (std::filesystem::exists("./stereo_secchi_out.tmp"))
                 std::filesystem::remove("./stereo_secchi_out.tmp");
@@ -296,7 +297,7 @@ namespace stereo
         image::Image SECCHIReader::decompress_rice_tool(uint8_t *data, int dsize, int size)
         {
 #if !RICE_MEMORY_VERSION
-            std::ofstream("./stereo_secchi_raw.tmp").write((char *)data, dsize);
+            std::ofstream("./stereo_secchi_raw.tmp", std::ios::binary).write((char *)data, dsize);
 
             if (std::filesystem::exists("./stereo_secchi_out.tmp"))
                 std::filesystem::remove("./stereo_secchi_out.tmp");

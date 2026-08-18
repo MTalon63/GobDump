@@ -1,4 +1,5 @@
 #include "3mi_reader.h"
+#include "common/buf_bounds.h"
 #include "common/ccsds/ccsds_time.h"
 #include "common/repack.h"
 #include "common/tracking/interpolator.h"
@@ -26,7 +27,12 @@ namespace metopsg
                 if (mkr > 9 || mkr < 1)
                     return;
 
-                memcpy(&img_vec[(mkr - 1) * (60636 - 6 - 534 - 4)], &pkt.payload[534 + 2], pkt.payload.size() - 540 - 4);
+                // 9 segments x 60092 = 540828 > 520*520*2 = 540800, so the last segment overflowed by 28
+                // bytes on every complete image, on clean data. Clip instead of writing past the end.
+                size_t off = (size_t)(mkr - 1) * (60636 - 6 - 534 - 4);
+                size_t len = satdump::buf_clip_len(img_vec.size(), off, satdump::buf_remaining(pkt.payload.size(), 544));
+                if (len > 0)
+                    memcpy(&img_vec[off], &pkt.payload[534 + 2], len);
 
                 if (mkr == 9)
                 {

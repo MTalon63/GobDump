@@ -1,4 +1,5 @@
 #include "admin_msg_reader.h"
+#include "common/buf_bounds.h"
 #include "libs/bzlib/bzlib.h"
 #include "logger.h"
 #include <fstream>
@@ -20,14 +21,23 @@ namespace metop
 
         void AdminMsgReader::work(ccsds::CCSDSPacket &packet)
         {
-            unsigned int outsize = MAX_MSG_SIZE;
+            // size() is unsigned, so size()-41 on a short packet became ~2^64, truncated to a huge
+            // unsigned int for bzip2, which then read gigabytes past the payload looking for a stream.
+            size_t insize = satdump::buf_remaining(packet.payload.size(), 41);
+            if (insize == 0)
+                return;
 
-            int ret = BZ2_bzBuffToBuffDecompress((char *)message_out, &outsize, (char *)&packet.payload[41], packet.payload.size() - 41, 1, 1);
+            unsigned int outsize = MAX_MSG_SIZE - 1; // Leave room for the NUL rapidxml needs below
+
+            int ret = BZ2_bzBuffToBuffDecompress((char *)message_out, &outsize, (char *)&packet.payload[41], insize, 1, 1);
             if (ret != BZ_OK && ret != BZ_STREAM_END)
             {
                 logger->error("Failed decomressing Bzip2 data! Error : " + std::to_string(ret));
                 return;
             }
+
+            // bzip2 writes exactly outsize bytes and does not terminate; doc.parse<0> below wants a C string
+            message_out[outsize] = '\0';
 
             std::string outputFileName = directory + "/" + std::to_string(packet.header.packet_sequence_count) + ".xml";
             logger->info("Writing message to " + outputFileName);
@@ -43,6 +53,8 @@ namespace metop
                 // Parse
                 doc.parse<0>((char *)message_out); // const char * to char * is needed...
                 root_node = doc.first_node("multi-mission-administrative-message");
+                if (root_node == nullptr)
+                    return;
 
                 // Convert to our usual TLE Registry stuff
                 for (rapidxml::xml_node<> *sat_node = root_node->first_node("message"); sat_node; sat_node = sat_node->next_sibling())

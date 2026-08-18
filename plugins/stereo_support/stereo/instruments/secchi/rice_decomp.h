@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <cstring>
 
 /*
@@ -14,12 +15,11 @@ namespace
 {
 ////////////////////////////////////////////
 /* this is the 64 x 64 pixel block version */
-#ifndef size_t
-#define size_t unsigned int /*Target compiler fails to define.    */
-#endif
-#define uchar unsigned char
-#define uword unsigned short
-#define ulong unsigned long
+// `#ifndef size_t` ALWAYS fired (size_t is a typedef, not a macro), truncating it to 32-bit for the
+// rest of the TU - including image::Image, included after this. Typedefs so nothing leaks.
+    typedef unsigned char uchar;
+    typedef unsigned short uword;
+    typedef uint32_t ulong; /*was `unsigned long`: 32-bit on Windows, 64-bit on Linux*/
 #define MaxBlk 34 * 34 /*Maximum # of sub-image blocks in the  \
                          Image.  Note that this includes       \
                          blocks that will not be transmitted   \

@@ -147,12 +147,21 @@ namespace satdump
         {
             if (satdump_cfg.main_cfg["advanced_settings"].contains("default_buffer_size"))
             {
-                int new_sz = satdump_cfg.main_cfg["advanced_settings"]["default_buffer_size"].get<int>();
-                dsp::STREAM_BUFFER_SIZE = new_sz;
-                dsp::RING_BUF_SZ = new_sz;
-                logger->warn("DSP Buffer size was changed to %d", new_sz);
+                // Was assigned straight from config with no validation, so a negative or absurd value
+                // propagated into every DSP allocation.
+                try
+                {
+                    int new_sz = satdump_cfg.main_cfg["advanced_settings"]["default_buffer_size"].get<int>();
+                    if (dsp::setDefaultBufferSize(new_sz) == new_sz)
+                        logger->warn("DSP Buffer size was changed to %d", new_sz);
+                }
+                catch (std::exception &e)
+                {
+                    logger->error("Invalid default_buffer_size in config : %s", e.what());
+                }
             }
         }
+        dsp::lockDefaultBufferSize(); // Buffers get allocated past this point
 
         // Init SuperNOVAS/CalCEPH. TODOREWORK, as we need to be able to dynamically load them!
         std::string de440_f = resources::getResourcePath("spice/de440s.bsp");

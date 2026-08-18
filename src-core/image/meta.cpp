@@ -16,7 +16,10 @@ namespace satdump
 
         void set_metadata(Image &img, nlohmann::json metadata)
         {
-            img.metadata_obj = (nlohmann::json *)new nlohmann::json();
+            // Used to allocate unconditionally and overwrite the pointer, leaking the old object on
+            // every call. The proj_cfg/calib_cfg setters below already reuse; this now matches them.
+            if (img.metadata_obj == nullptr)
+                img.metadata_obj = (nlohmann::json *)new nlohmann::json();
             *((nlohmann::json *)img.metadata_obj) = metadata;
         }
 
@@ -28,10 +31,13 @@ namespace satdump
                 return nlohmann::json();
         }
 
-        void free_metadata(const Image &img)
+        void free_metadata(Image &img)
         {
             if (img.metadata_obj != nullptr)
+            {
                 delete ((nlohmann::json *)img.metadata_obj);
+                img.metadata_obj = nullptr; // Otherwise a later free_metadata/set_metadata sees a dangling pointer
+            }
         }
 
         bool has_metadata_proj_cfg(Image &img) { return img.metadata_obj != nullptr && get_metadata(img).contains("proj_cfg"); }

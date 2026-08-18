@@ -1,5 +1,7 @@
 #pragma once
 
+#include "winsock_init.h"
+#include <cerrno>
 #include <cstdint>
 #include <stdexcept>
 #include <string.h>
@@ -21,7 +23,6 @@ namespace net
     private:
         sockaddr_in sock_addr;
 #if defined(_WIN32)
-        WSADATA wsa;
         SOCKET sock = INVALID_SOCKET;
 #else
         int sock = -1;
@@ -33,10 +34,7 @@ namespace net
 
         UDPClient(char *address, int port)
         {
-#if defined(_WIN32)
-            if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-                throw std::runtime_error("Couldn't startup WSA socket!");
-#endif
+            ensure_winsock_init();
 
 #if defined(_WIN32)
             if ((sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET)
@@ -52,20 +50,28 @@ namespace net
 #if defined(_WIN32)
             sock_addr.sin_addr.S_un.S_addr = inet_addr(address);
             if (sock_addr.sin_addr.S_un.S_addr == INADDR_NONE)
+            {
+                closesocket(sock); // was leaked on this error path
                 throw std::runtime_error("Couldn't connect to UDP socket!");
+            }
 #else
             if (inet_aton(address, &sock_addr.sin_addr) == 0)
+            {
+                close(sock);
                 throw std::runtime_error("Couldn't connect to UDP socket!");
+            }
 #endif
         }
 
         ~UDPClient()
         {
+            // No WSACleanup: the refcount is shared process-wide, see winsock_init.h
 #if defined(_WIN32)
-            closesocket(sock);
-            WSACleanup();
+            if (sock != INVALID_SOCKET)
+                closesocket(sock);
 #else
-            close(sock);
+            if (sock >= 0)
+                close(sock);
 #endif
         }
 
@@ -112,7 +118,6 @@ namespace net
     private:
         sockaddr_in sock_addr;
 #if defined(_WIN32)
-        WSADATA wsa;
         SOCKET sock = INVALID_SOCKET;
 #else
         int sock = -1;
@@ -124,10 +129,7 @@ namespace net
 
         UDPServer(int port)
         {
-#if defined(_WIN32)
-            if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-                throw std::runtime_error("Couldn't startup WSA socket!");
-#endif
+            ensure_winsock_init();
 
 #if defined(_WIN32)
             if ((sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET)
@@ -144,20 +146,37 @@ namespace net
 #if defined(_WIN32)
             sock_addr.sin_addr.S_un.S_addr = INADDR_ANY;
 #endif
-            if (bind(sock, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) < 0)
-                throw std::runtime_error("Couldn't connect to UDP socket!");
+            // SO_REUSEADDR must be set BEFORE bind() to have any effect; it was dead code after it.
+            // Not set on Windows: there SO_REUSEADDR allows hijacking a bound port rather than
+            // permitting TIME_WAIT reuse as on POSIX.
+#ifndef _WIN32
             int ttrue = 1;
             setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&ttrue, sizeof(int));
+#endif
+
+            if (bind(sock, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) < 0)
+            {
+#if defined(_WIN32)
+                closesocket(sock); // was leaked on this error path
+#else
+                close(sock);
+#endif
+                throw std::runtime_error("Couldn't connect to UDP socket!");
+            }
         }
 
         ~UDPServer()
         {
+            // No WSACleanup: the refcount is shared process-wide, see winsock_init.h
 #if defined(_WIN32)
-            closesocket(sock);
-            WSACleanup();
+            if (sock != INVALID_SOCKET)
+                closesocket(sock);
 #else
-            shutdown(sock, SHUT_RDWR);
-            close(sock);
+            if (sock >= 0)
+            {
+                shutdown(sock, SHUT_RDWR);
+                close(sock);
+            }
 #endif
         }
 
@@ -197,15 +216,24 @@ namespace net
             int r = recvfrom(sock, (char *)data, len, 0, (struct sockaddr *)&sock_addr, &slen);
 #if defined(_WIN32)
             if (r == SOCKET_ERROR)
+            {
+                // A timeout is routine once enableTimeout() is used (10ms), not an error. Only
+                // WSAEINTR was forgiven before, so every idle period threw ~100 exceptions/second.
+                int err = WSAGetLastError();
+                if (err == WSAETIMEDOUT || err == WSAEWOULDBLOCK)
+                    return 0;
+                if (err != WSAEINTR)
+                    throw std::runtime_error("Error receiving from UDP socket! WSA Error: " + std::to_string(err));
+            }
 #else
             if (r < 0)
-#endif
             {
-#if defined(_WIN32)
-                if (WSAGetLastError() != WSAEINTR)
-#endif
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    return 0;
+                if (errno != EINTR)
                     throw std::runtime_error("Error receiving from UDP socket!");
             }
+#endif
             return r;
         }
     };

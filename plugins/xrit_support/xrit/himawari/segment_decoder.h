@@ -65,9 +65,21 @@ namespace satdump
             {
                 auto img = getImageFromXRITFile(XRIT_HIMAWARI_AHI, file);
 
-                std::vector<std::string> header_parts = splitString(file.filename, '_');
-
-                int segment = std::stoi(file.filename.substr(file.filename.size() - 3, file.filename.size())) - 1;
+                // filename comes straight off the downlink: std::stoi throws on a non-numeric field, and
+                // size()-3 wraps on a filename shorter than 3 chars, making substr throw too. Neither was
+                // caught anywhere up the call chain, so one corrupted record killed the whole capture.
+                int segment = 0;
+                try
+                {
+                    if (file.filename.size() < 3)
+                        throw std::invalid_argument("filename too short");
+                    segment = std::stoi(file.filename.substr(file.filename.size() - 3)) - 1;
+                }
+                catch (std::exception &e)
+                {
+                    logger->error("Could not parse Himawari segment number from '%s' : %s", file.filename.c_str(), e.what());
+                    return;
+                }
 
                 pushSegment(img, segment);
             }

@@ -10,6 +10,16 @@
 namespace satdump
 {
     /**
+     * @brief Initialise libcurl globally, exactly once, in a thread-safe way.
+     *
+     * Call this before any direct curl_easy_* use. Never call curl_global_init or
+     * curl_global_cleanup directly: they are not thread-safe, and on Windows
+     * CURL_GLOBAL_ALL implies CURL_GLOBAL_WIN32, so cleanup runs WSACleanup()
+     * process-wide and can tear Winsock down under unrelated live sockets.
+     */
+    void ensure_curl_global_init();
+
+    /**
      * @brief cURL helper function, writing
      * the payload into a std::string
      *

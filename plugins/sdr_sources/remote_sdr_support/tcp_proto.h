@@ -56,19 +56,20 @@ public:
         if (serversockfd == -1)
             throw std::runtime_error("Socket creation failed");
 
+        // The Windows timeout was computed but never applied (the setsockopt sat inside #ifndef _WIN32).
+        // Type differs: DWORD milliseconds here, struct timeval on POSIX.
 #ifdef _WIN32
-        int timeout = 60000;
-        const char *timeout_ptr = (const char *)&timeout;
+        DWORD timeout = 60000;
+        if (setsockopt(serversockfd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof timeout) < 0)
+            logger->trace("Problem setting send timeout on TCP socket; ignoring");
+        // No SO_REUSEADDR here: on Windows it permits port hijacking, not TIME_WAIT reuse. No SO_REUSEPORT in Winsock.
 #else
         struct timeval timeout;
         timeout.tv_sec = 60;
         timeout.tv_usec = 0;
-        struct timeval *timeout_ptr = &timeout;
-#endif
 
-#ifndef _WIN32
         int enable = 1;
-        if (setsockopt(serversockfd, SOL_SOCKET, SO_SNDTIMEO, timeout_ptr, sizeof timeout) < 0)
+        if (setsockopt(serversockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout) < 0)
             logger->trace("Problem setting send timeout on TCP socket; ignoring");
 
         if (setsockopt(serversockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof enable) < 0)

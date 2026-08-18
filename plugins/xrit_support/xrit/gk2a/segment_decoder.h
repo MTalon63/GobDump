@@ -73,7 +73,21 @@ namespace satdump
                 int seg_number = 0;
                 if (header_parts.size() >= 7)
                 {
-                    seg_number = std::stoi(header_parts[6].substr(0, header_parts.size() - 4)) - 1;
+                    // filename comes straight off the downlink, and parseHeaders replaces control chars
+                    // with '_' - std::stoi("_") throws, and nothing up the call chain catches it, so one
+                    // corrupted annotation record killed a multi-hour capture.
+                    // The substr also used the size of the *vector* where it means element 6's size.
+                    try
+                    {
+                        if (header_parts[6].size() <= 4)
+                            throw std::invalid_argument("segment field too short");
+                        seg_number = std::stoi(header_parts[6].substr(0, header_parts[6].size() - 4)) - 1;
+                    }
+                    catch (std::exception &e)
+                    {
+                        logger->error("Could not parse GK-2A segment number from '%s' : %s", file.filename.c_str(), e.what());
+                        return;
+                    }
                 }
                 else
                 {

@@ -8,8 +8,9 @@ add_library(inmarsat_support SHARED ${inmarsat_support_CPPS})
 target_link_libraries(inmarsat_support PUBLIC gobdump_core ZLIB::ZLIB)
 target_include_directories(inmarsat_support PUBLIC src .)
 
-if(MSVC)
-    target_link_libraries(inmarsat_support PUBLIC ws2_32)
+# WIN32, not MSVC: MinGW linked this only by inheritance from gobdump_core
+if(WIN32)
+    target_link_libraries(inmarsat_support PRIVATE ws2_32)
 endif()
 
 install(TARGETS inmarsat_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins)

@@ -595,7 +595,7 @@ jobs:
 
     # Yes, since I was asked to do like SDR++ for this I did look at how Ryzerth has done it :-)
     update_nightly_release:
-        needs: ["build_windows_x64", "build_windows_arm64", "build_ubuntu_2204", "build_ubuntu_2404", "build_macos_intel", "build_macos_silicon", "build_linux_arm64", "build_android"]
+        needs: ["build_windows_msys2", "build_windows_x64", "build_windows_arm64", "build_ubuntu_2204", "build_ubuntu_2404", "build_macos_intel", "build_macos_silicon", "build_linux_arm64", "build_android"]
         runs-on: ubuntu-latest
         if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
 

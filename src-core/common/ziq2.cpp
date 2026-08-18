@@ -6,30 +6,32 @@
 
 namespace ziq2
 {
-#ifdef _WIN32
-#define __attribute__(x)
+// Same `#define __attribute__(x)` leak as ziq2.h. ziq2_iq_pkt_hdr_t is 5 bytes packed, 8 unpacked.
+#ifdef _MSC_VER
 #pragma pack(push, 1)
-#endif
+    struct ziq2_info_pkt_hdr_t
+    {
+        uint64_t samplerate;
+    };
+    struct ziq2_iq_pkt_hdr_t
+    {
+        uint8_t bit_depth;
+        float scale;
+    };
+#pragma pack(pop)
+#else
     struct ziq2_info_pkt_hdr_t
     {
         uint64_t samplerate;
     } __attribute__((packed));
-#ifdef _WIN32
-#pragma pack(pop)
-#endif
-
-#ifdef _WIN32
-#define __attribute__(x)
-#pragma pack(push, 1)
-#endif
     struct ziq2_iq_pkt_hdr_t
     {
         uint8_t bit_depth;
         float scale;
     } __attribute__((packed));
-#ifdef _WIN32
-#pragma pack(pop)
 #endif
+    static_assert(sizeof(ziq2_info_pkt_hdr_t) == 8, "ziq2_info_pkt_hdr_t must be 8 bytes on disk");
+    static_assert(sizeof(ziq2_iq_pkt_hdr_t) == 5, "ziq2_iq_pkt_hdr_t must be 5 bytes on disk");
 
     int ziq2_write_info_pkt(uint8_t *output, uint64_t samplerate, bool sync)
     {

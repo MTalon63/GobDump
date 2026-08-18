@@ -66,6 +66,11 @@ namespace satdump
 
             Image &operator=(const Image &img);
 
+            // Declaring the copy ctor and dtor suppresses the implicit moves, so without these every
+            // `return img` and every vector reallocation deep-copied the entire pixel buffer.
+            Image(Image &&img);
+            Image &operator=(Image &&img);
+
         public:
             /**
              * @brief Convert this image from B&W to RGB (if it is B&W / RGBA)

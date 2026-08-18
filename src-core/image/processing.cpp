@@ -12,10 +12,14 @@ namespace satdump
     {
         int percentile(int *array, int size, float percentile)
         {
+            if (size <= 0)
+                return 0;
             float number_percent = (size + 1) * percentile / 100.0f;
             if (number_percent <= 1) // ==
                 return array[0];
-            else if (number_percent >= size) // ==
+            // >= size-1, not >= size: the interpolation below reads array[(int)number_percent], so the
+            // old bound let the final branch touch array[size].
+            else if (number_percent >= size - 1)
                 return array[size - 1];
             else
                 return array[(int)number_percent - 1] + (number_percent - (int)number_percent) * (array[(int)number_percent] - array[(int)number_percent - 1]);
@@ -39,7 +43,10 @@ namespace satdump
 
             int *sorted_array = new int[d_height * d_width];
 
-            for (int c = 0; c < img.channels(); c++)
+            // Skip the alpha plane, which is not picture data
+            const int n_channels = img.channels() == 4 ? 3 : (img.channels() == 2 ? 1 : img.channels());
+
+            for (int c = 0; c < n_channels; c++)
             {
                 // Load the whole image band into our array
                 for (size_t i = 0; i < d_height * d_width; i++)
@@ -51,6 +58,11 @@ namespace satdump
                 // Get percentiles
                 int percentile1 = percentile(sorted_array, d_width * d_height, percentileValue);
                 int percentile2 = percentile(sorted_array, d_width * d_height, 100.0f - percentileValue);
+
+                // On a uniform channel both percentiles land on the same value; this is integer
+                // division by zero, which on x86 is a #DE hardware fault, not a NaN.
+                if (percentile2 == percentile1)
+                    continue;
 
                 for (size_t i = 0; i < d_width * d_height; i++)
                 {
@@ -188,9 +200,10 @@ namespace satdump
                 for (int i = 0; i < nlevels; i++)
                     histogram[i] = 0;
 
-                // Compute histogram
+                // Compute histogram. get() returns the raw stored value, bounded by the storage type
+                // (up to 65535), not by d_maxv - so a sub-16-bit image wrote past these three arrays.
                 for (size_t px = 0; px < size; px++)
-                    histogram[img.get(c, px)]++;
+                    histogram[img.clamp(img.get(c, px))]++;
 
                 // Cummulative histogram
                 int *cummulative_histogram = new int[nlevels];
@@ -205,7 +218,7 @@ namespace satdump
 
                 // Apply
                 for (size_t px = 0; px < size; px++)
-                    img.set(c, px, img.clamp(scaling[img.get(c, px)]));
+                    img.set(c, px, img.clamp(scaling[img.clamp(img.get(c, px))]));
 
                 // Cleanup
                 delete[] cummulative_histogram;
@@ -214,13 +227,24 @@ namespace satdump
             }
         }
 
+        // size() spans the whole buffer including the alpha plane. Iterating it treated alpha as picture
+        // content: for RGBA it is uniformly maxval, so it became the observed max and skewed the colour
+        // channels, and was itself rewritten. This is the count of colour-only samples.
+        static size_t colour_size(Image &img)
+        {
+            const int colour_channels = img.channels() == 4 ? 3 : (img.channels() == 2 ? 1 : img.channels());
+            return img.width() * img.height() * (size_t)colour_channels;
+        }
+
         void normalize(Image &img)
         {
+            const size_t n = colour_size(img);
+
             int max = 0;
             int min = img.maxval();
 
             // Get min and max
-            for (size_t i = 0; i < img.size(); i++)
+            for (size_t i = 0; i < n; i++)
             {
                 int val = img.get(i);
 
@@ -237,13 +261,15 @@ namespace satdump
             float factor = img.maxval() / float(max - min);
 
             // Scale entire image
-            for (size_t i = 0; i < img.size(); i++)
+            for (size_t i = 0; i < n; i++)
                 img.set(i, img.clamp((img.get(i) - min) * factor));
         }
 
         void linear_invert(Image &img)
         {
-            for (size_t i = 0; i < img.size(); i++)
+            // Alpha 65535 (opaque) used to invert to 0, making every RGBA image fully transparent
+            const size_t n = colour_size(img);
+            for (size_t i = 0; i < n; i++)
                 img.set(i, img.maxval() - img.get(i));
         }
 

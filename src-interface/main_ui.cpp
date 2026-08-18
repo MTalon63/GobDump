@@ -320,5 +320,5 @@ namespace satdump
         backend::endFrame();
     }
 
-    SATDUMP_DLL2 ctpl::thread_pool ui_thread_pool(8);
+    SATDUMP_DLL2 ctpl::thread_pool &ui_thread_pool = *new ctpl::thread_pool(8);
 } // namespace satdump

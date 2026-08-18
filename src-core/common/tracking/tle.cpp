@@ -167,13 +167,12 @@ namespace satdump
         logger->trace("Pulling historical TLE from Space Track...");
         CURL *curl;
         CURLcode res;
-        curl_global_init(CURL_GLOBAL_ALL);
+        satdump::ensure_curl_global_init(); // never curl_global_cleanup(): it runs WSACleanup() process-wide
         curl = curl_easy_init();
 
         if (!curl)
         {
             logger->warn("Failed to pull historical TLE due to internal curl failure! Using current TLE");
-            curl_global_cleanup();
             return std::optional<TLE>();
         }
 
@@ -193,7 +192,6 @@ namespace satdump
         {
             logger->warn("Failed to authenticate to Space Track! Using current TLE");
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             return std::optional<TLE>();
         }
 
@@ -228,7 +226,6 @@ namespace satdump
         {
             logger->warn("Failed to download TLE from Space Track! Using built-in TLE");
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             return std::optional<TLE>();
         }
 
@@ -238,7 +235,6 @@ namespace satdump
         curl_easy_setopt(curl, CURLOPT_URL, "https://www.space-track.org/ajaxauth/logout");
         curl_easy_perform(curl); // We do not care about the result
         curl_easy_cleanup(curl);
-        curl_global_cleanup();
 
         // Parse the downloaded TLE
         try
@@ -286,13 +282,12 @@ namespace satdump
         logger->warn("Pulling current TLEs from Space Track... (ONLY COVERS OBJECTS CURRENTLY IN DATABASE!)");
         CURL *curl;
         CURLcode res;
-        curl_global_init(CURL_GLOBAL_ALL);
+        satdump::ensure_curl_global_init(); // never curl_global_cleanup(): it runs WSACleanup() process-wide
         curl = curl_easy_init();
 
         if (!curl)
         {
             logger->warn("Failed to pull current TLEs due to internal curl failure! Using current TLE");
-            curl_global_cleanup();
             return std::vector<TLE>();
         }
 
@@ -312,7 +307,6 @@ namespace satdump
         {
             logger->warn("Failed to authenticate to Space Track! Using current TLE");
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             return std::vector<TLE>();
         }
 
@@ -336,7 +330,6 @@ namespace satdump
         {
             logger->warn("Failed to download TLE from Space Track! Using built-in TLE");
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
             return std::vector<TLE>();
         }
 

@@ -26,6 +26,9 @@ namespace dsp
     template <typename T>
     void RationalResamplerBlock<T>::set_ratio(unsigned interpolation, unsigned decimation, std::vector<float> custom_taps)
     {
+        if (interpolation == 0 || decimation == 0) // gcd(0,0) is 0, so the divisions below faulted
+            throw satdump_exception("Rational resampler ratio must be non-zero!");
+
         d_interpolation = interpolation;
         d_decimation = decimation;
 

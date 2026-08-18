@@ -160,22 +160,31 @@ namespace satdump
             logger->info("Stop processing");
             for (int i = 0; i < (int)modules.size(); i++)
             {
-                std::shared_ptr<ProcessingModule> mod = modules[i];
-
-                mod->input_active = false;
-
-                if (mod->getInputType() == DATA_DSP_STREAM)
+                // One module throwing used to abandon the whole teardown, leaving every later module's
+                // thread running against a half-destroyed pipeline. Keep going, report, stop the rest.
+                try
                 {
-                    mod->input_stream->stopReader();
-                    mod->input_stream->stopWriter();
+                    std::shared_ptr<ProcessingModule> mod = modules[i];
+
+                    mod->input_active = false;
+
+                    if (mod->getInputType() == DATA_DSP_STREAM)
+                    {
+                        mod->input_stream->stopReader();
+                        mod->input_stream->stopWriter();
+                    }
+                    else if (mod->getInputType() == DATA_STREAM)
+                    {
+                        mod->input_fifo->stopReader();
+                        mod->input_fifo->stopWriter();
+                    }
+                    mod->stop();
+                    module_futs[i].get();
                 }
-                else if (mod->getInputType() == DATA_STREAM)
+                catch (std::exception &e)
                 {
-                    mod->input_fifo->stopReader();
-                    mod->input_fifo->stopWriter();
+                    logger->error("Error stopping module %d : %s", i, e.what());
                 }
-                mod->stop();
-                module_futs[i].get();
             }
         }
 

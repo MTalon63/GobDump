@@ -234,6 +234,7 @@ namespace satdump
         }
 
         stop_processing();
+        stop_recording(); // must precede file_sink->stop(); it is what writes the final WAV header
         if (is_started)
             stop();
         source_ptr->close();

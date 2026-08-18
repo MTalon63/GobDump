@@ -10,38 +10,38 @@ namespace satdump
             task_thread.join();
     }
 
+    // The exit decision and the flag must be published under one lock. Previously the queue was tested,
+    // the lock dropped, and the flag set after - so a push() in that window saw thread_exited still
+    // false, queued a task nobody would run, and a later push() assigned over a joinable thread.
     void TaskQueue::threadFunc()
     {
-    recheck:
-        queue_mtx.lock();
-        bool queue_has_data = task_queue.size() > 0;
-        queue_mtx.unlock();
-
-        if (queue_has_data)
+        while (true)
         {
-            queue_mtx.lock();
+            std::unique_lock<std::mutex> lck(queue_mtx);
+            if (task_queue.size() == 0)
+            {
+                thread_exited = true; // Set before releasing, so push() can never miss it
+                return;
+            }
+
             auto task = task_queue.front();
             task_queue.pop();
-            queue_mtx.unlock();
+            lck.unlock();
 
             try
             {
                 task();
             }
-            catch (std::exception &e)
+            catch (std::exception &)
             {
                 // TODOREWORK?
             }
-
-            goto recheck;
         }
-
-        thread_exited = true;
     }
 
     void TaskQueue::push(std::function<void()> task)
     {
-        queue_mtx.lock();
+        std::lock_guard<std::mutex> lck(queue_mtx);
 
         task_queue.push(task);
 
@@ -52,7 +52,5 @@ namespace satdump
             thread_exited = false;
             task_thread = std::thread(&TaskQueue::threadFunc, this);
         }
-
-        queue_mtx.unlock();
     }
 } // namespace satdump

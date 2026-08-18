@@ -18,18 +18,23 @@ namespace ziq2
         ZIQ2_PKT_IQ = 1,
     };
 
-#ifdef _WIN32
-#define __attribute__(x)
+// Was `#define __attribute__(x)`, never #undef'd: it unpacked every struct later in the TU
+#ifdef _MSC_VER
 #pragma pack(push, 1)
-#endif
+    struct ziq2_pkt_hdr_t
+    {
+        uint32_t pkt_size;
+        uint8_t pkt_type;
+    };
+#pragma pack(pop)
+#else
     struct ziq2_pkt_hdr_t
     {
         uint32_t pkt_size;
         uint8_t pkt_type;
     } __attribute__((packed));
-#ifdef _WIN32
-#pragma pack(pop)
 #endif
+    static_assert(sizeof(ziq2_pkt_hdr_t) == 5, "ziq2_pkt_hdr_t must be 5 bytes on disk");
 
     int ziq2_write_info_pkt(uint8_t *output, uint64_t samplerate, bool sync = true);
     int ziq2_write_iq_pkt(uint8_t *output, complex_t *input, float *mag_buf, int nsamples, int bit_depth, bool sync = true);

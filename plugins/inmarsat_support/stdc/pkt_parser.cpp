@@ -1,12 +1,20 @@
 #include "pkt_parser.h"
+#include "common/buf_bounds.h"
 #include "logger.h"
 
 namespace inmarsat
 {
     namespace stdc
     {
+        // The destination size (mpkt_len, from pkt[2..3]) and the copy length (from descriptor.length via
+        // pkt_len) are unrelated frame fields, so nothing made the copy fit. Both are now tied together.
         void STDPacketParser::parse_pkt_bd(uint8_t *pkt, int pkt_len, nlohmann::json &)
         {
+            wip_multi_frame_has_start = false;
+
+            if (pkt_len < 4) // Otherwise pkt[3] over-reads and pkt_len-4 goes negative
+                return;
+
             uint8_t mid = pkt[2] & 0xFF;
 
             int mpkt_len = 0;
@@ -14,23 +22,35 @@ namespace inmarsat
                 mpkt_len = (mid & 0x0F) + 1;
             else if (mid >> 6 == 0x02)
                 mpkt_len = pkt[3] + 2;
+            else // mid >= 0xC0 assigned neither branch, leaving mpkt_len 0 and copying into an empty vector
+                return;
 
-            wip_multi_frame_pkt.clear();
-            wip_multi_frame_pkt.resize(mpkt_len, 0);
+            size_t copy_len = satdump::buf_len_nonneg(pkt_len - 4);
+            if (mpkt_len <= 0 || !satdump::buf_fits((size_t)mpkt_len, 0, copy_len))
+                return;
 
-            wip_multi_frame_gotten_size = pkt_len - 2 - 2;
-            memcpy(&wip_multi_frame_pkt[0], &pkt[2], wip_multi_frame_gotten_size);
+            wip_multi_frame_pkt.assign(mpkt_len, 0);
+            wip_multi_frame_gotten_size = (int)copy_len;
+            memcpy(wip_multi_frame_pkt.data(), &pkt[2], copy_len);
 
             wip_multi_frame_has_start = true;
         }
 
         void STDPacketParser::parse_pkt_be(uint8_t *pkt, int pkt_len, nlohmann::json &)
         {
-            if (!wip_multi_frame_has_start)
+            if (!wip_multi_frame_has_start || pkt_len < 4)
                 return;
-            int actual_length = pkt_len - 2 - 2;
+
+            size_t actual_length = satdump::buf_len_nonneg(pkt_len - 4);
+            // Continuation frames appended with no bound at all, so they walked the heap indefinitely.
+            if (wip_multi_frame_gotten_size < 0 || !satdump::buf_fits(wip_multi_frame_pkt.size(), (size_t)wip_multi_frame_gotten_size, actual_length))
+            {
+                wip_multi_frame_has_start = false; // Desynced from the start frame - drop, don't write
+                return;
+            }
+
             memcpy(&wip_multi_frame_pkt[wip_multi_frame_gotten_size], &pkt[2], actual_length);
-            wip_multi_frame_gotten_size += actual_length;
+            wip_multi_frame_gotten_size += (int)actual_length;
         }
 
         void STDPacketParser::parse_main_pkt(uint8_t *main_pkt, int main_pkt_len)

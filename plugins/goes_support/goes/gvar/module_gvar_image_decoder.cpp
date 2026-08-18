@@ -43,8 +43,8 @@ namespace goes
          */
         PrimaryBlockHeader get_header(uint8_t *frame)
         {
-
-            uint8_t *result = (uint8_t *)malloc(30 * sizeof(uint8_t));
+            // Was malloc'd, never freed, and read back through a cast - aliasing UB at -O3
+            uint8_t result[30];
 
             // Every header is 30 bytes long
             uint8_t a[30];
@@ -88,7 +88,10 @@ namespace goes
                 result[byteIndex] = majority;
             }
 
-            return *((PrimaryBlockHeader *)result);
+            static_assert(sizeof(PrimaryBlockHeader) == 30, "PrimaryBlockHeader must match the 30-byte GVAR wire header");
+            PrimaryBlockHeader hdr;
+            memcpy(&hdr, result, sizeof(hdr));
+            return hdr;
         }
 
         /**
@@ -346,8 +349,9 @@ namespace goes
                     }
 
                     // Internal line counter should NEVER be over 1974. Discard frame if it is
-                    // Though we know the max in normal operations is 1354 for a full disk, so we use that instead
-                    if (final_counter > 1354)
+                    // Though we know the max in normal operations is 1354 for a full disk, so we use that instead.
+                    // >= not >: the buffers are 1354*8 and 1354*2, so 1354 itself is already one line past the end.
+                    if (final_counter >= 1354 || final_counter < 0)
                         continue;
 
                     // Is this VIS Channel 1?

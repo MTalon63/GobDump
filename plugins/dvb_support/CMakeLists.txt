@@ -26,7 +26,8 @@ endif()
 if(SSE41_FOUND)
     message("Found SSE features, enabling building SSE code for DVB")
 
-    if(UNIX OR ANDROID)
+    # MINGW matched neither branch, so the SSE4.1 path compiled without SSE4.1 enabled
+    if(UNIX OR ANDROID OR MINGW)
         set(FINAL_FLAGS_SSE41 "-msse4.1")
     elseif(MSVC OR BUILD_MSVC)
         set(FINAL_FLAGS_SSE41 "${SSE41_C_FLAGS}")

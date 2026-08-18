@@ -1,4 +1,5 @@
 #include "agc.h"
+#include <cmath>
 
 namespace dsp
 {
@@ -34,6 +35,11 @@ namespace dsp
 
             if (max_gain > 0.0 && gain > max_gain)
                 gain = max_gain;
+
+            // gain is a feedback accumulator: one NaN input makes it NaN permanently, and the clamp
+            // above cannot undo that because every comparison against NaN is false.
+            if (!std::isfinite(gain))
+                gain = 1.0f;
 
             Block<T, T>::output_stream->writeBuf[i] = output;
         }

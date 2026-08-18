@@ -180,7 +180,13 @@ namespace server
     {
         ClientClass *_this = (ClientClass *)ctx;
 
-        // Read the rest of the data (TODO: CHECK SIZE OR SHIT WILL BE FUCKED)
+        if (_this->r_pkt_hdr->size < sizeof(PacketHeader) || _this->r_pkt_hdr->size > SERVER_MAX_PACKET_SIZE)
+        {
+            logger->error("SDR++ Server sent invalid packet size %d, dropping connection", (int)_this->r_pkt_hdr->size);
+            _this->client->close();
+            return;
+        }
+
         int len = 0;
         int read = 0;
         int goal = _this->r_pkt_hdr->size - sizeof(PacketHeader);

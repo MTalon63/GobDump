@@ -9,8 +9,9 @@ add_library(remote_sdr_support SHARED ${remote_sdr_support_CPPS})
 target_link_libraries(remote_sdr_support PUBLIC gobdump_core)
 target_include_directories(remote_sdr_support PUBLIC plugin .)
 
-if(MSVC)
-    target_link_libraries(remote_sdr_support PUBLIC ws2_32)
+# WIN32, not MSVC: MinGW linked this only by inheritance from gobdump_core
+if(WIN32)
+    target_link_libraries(remote_sdr_support PRIVATE ws2_32)
 endif()
 
 install(TARGETS remote_sdr_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins)

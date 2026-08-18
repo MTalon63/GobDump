@@ -140,6 +140,14 @@ namespace spyserver
             _this->readSize(sizeof(SpyServerMessageHeader) - count, &buf[count]);
         }
 
+        // BodySize is attacker-controlled; readBuf is a fixed SPYSERVER_MAX_MESSAGE_BODY_SIZE allocation
+        if (_this->receivedHeader.BodySize > SPYSERVER_MAX_MESSAGE_BODY_SIZE)
+        {
+            printf("ERROR: Server sent oversized message body (%u > %u), dropping connection\n",
+                   (unsigned)_this->receivedHeader.BodySize, (unsigned)SPYSERVER_MAX_MESSAGE_BODY_SIZE);
+            return;
+        }
+
         int size = _this->readSize(_this->receivedHeader.BodySize, _this->readBuf);
         if (size <= 0)
         {

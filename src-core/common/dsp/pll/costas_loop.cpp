@@ -1,4 +1,5 @@
 #include "costas_loop.h"
+#include <cmath>
 
 namespace dsp
 {
@@ -50,6 +51,15 @@ namespace dsp
             // Compute new freq and phase.
             freq += beta * error;
             phase += freq + alpha * error;
+
+            // freq/phase are feedback accumulators: one NaN sample makes them NaN forever, and neither
+            // the wrap nor the clamp can recover since every comparison against NaN is false. Worse,
+            // the wrap loops below would spin forever on an infinity. Reset the loop instead.
+            if (!std::isfinite(freq) || !std::isfinite(phase))
+            {
+                freq = 0;
+                phase = 0;
+            }
 
             // Wrap phase
             while (phase > (2 * M_PI))

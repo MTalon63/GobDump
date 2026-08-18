@@ -109,12 +109,18 @@ class be_uint64_t
 {
 public:
     be_uint64_t() : be_val_(0) {}
-    // Transparently cast from uint32_t
-    be_uint64_t(const uint64_t &val) : be_val_(htonl(val)) {}
-    // Transparently cast to uint32_t
-    operator uint64_t() const { return ntohl(be_val_); }
+    // Was htonl/ntohl (32-bit), which destroyed the upper 4 bytes of every value
+    be_uint64_t(const uint64_t &val) : be_val_(swap64(val)) {}
+    operator uint64_t() const { return swap64(be_val_); }
 
 private:
+    static uint64_t swap64(uint64_t v)
+    {
+        if (htonl(1) == 1) // already big endian
+            return v;
+        return ((uint64_t)ntohl((uint32_t)(v & 0xFFFFFFFF)) << 32) | ntohl((uint32_t)(v >> 32));
+    }
+
     uint64_t be_val_;
 }
 #ifdef _WIN32
@@ -125,3 +131,8 @@ __attribute__((packed));
 #ifdef _WIN32
 #pragma pack(pop)
 #endif
+
+static_assert(sizeof(be_uint16_t) == 2, "be_uint16_t must be exactly 2 bytes");
+static_assert(sizeof(be_uint32_t) == 4, "be_uint32_t must be exactly 4 bytes");
+static_assert(sizeof(be_uint48_t) == 6, "be_uint48_t must be exactly 6 bytes");
+static_assert(sizeof(be_uint64_t) == 8, "be_uint64_t must be exactly 8 bytes");

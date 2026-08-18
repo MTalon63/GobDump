@@ -9,10 +9,17 @@ shifting would have to be done beforehand.
 
 #include <iostream>
 
-int repackBytesTo10bits(uint8_t *bytes, int byte_length, uint16_t *words)
+int repackBytesTo10bits(uint8_t *bytes, int byte_length, uint16_t *words, int max_words)
 {
     int bpos = 0;
     int wpos = 0;
+
+    if (byte_length < 0)
+        return 0;
+
+    // 5 input bytes produce 4 words, so clamp the input to what the output can actually hold.
+    if (max_words >= 0 && byte_length > (max_words / 4) * 5)
+        byte_length = (max_words / 4) * 5;
 
     // Compute how many we can repack using the "fast" way
     int repack_fast = byte_length - (byte_length % 5);

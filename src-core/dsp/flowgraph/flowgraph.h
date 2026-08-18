@@ -8,6 +8,7 @@
 #include "dsp/block.h"
 #include "nlohmann/json.hpp"
 #include "node_int.h"
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -329,7 +330,9 @@ namespace satdump
                 void setJSON(nlohmann::json j);
 
             private:
-                bool is_running = false;
+                // Set on the flowgraph thread, read by the UI to decide what to render - non-atomic
+                // meant the UI could observe a stale value indefinitely.
+                std::atomic<bool> is_running{false};
 
             public:
                 /**

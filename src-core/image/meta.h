@@ -37,7 +37,7 @@ namespace satdump
          * @brief Delete the image's metadata
          * @param img the image
          */
-        void free_metadata(const Image &img);
+        void free_metadata(Image &img);
 
         /**
          * @brief Check if an image has a projection
@@ -118,7 +118,9 @@ namespace satdump
              * @param cal_val the calibrated value
              * @return raw pixel value
              */
-            inline double setVal(double cal_val) { return (cal_val - offset) / scale; }
+            // scale defaults to 0 and is derived as max-min, so a zero-width calibration range made
+            // every call return +/-Inf or NaN.
+            inline double setVal(double cal_val) { return scale != 0 ? (cal_val - offset) / scale : 0; }
         };
 
         /**

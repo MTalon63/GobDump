@@ -25,15 +25,71 @@ namespace satdump
             copy_meta(img);
         }
 
+        // Self-assignment used to destroy the image: init() freed d_data and allocated a fresh zeroed
+        // buffer, and since img IS *this, the memcpy then copied that zeroed buffer onto itself.
         Image &Image::operator=(const Image &img)
         {
+            if (this == &img)
+                return *this;
+
             if (img.d_data != nullptr)
             {
                 // Copy contents of the image over
                 init(img.d_depth, img.d_width, img.d_height, img.d_channels);
                 memcpy(d_data, img.d_data, img.data_size * img.type_size);
             }
+            else
+            {
+                // Assigning an empty image used to skip this entirely, leaving the destination holding
+                // its old buffer while reporting the source's (empty) identity.
+                clear();
+            }
             copy_meta(img);
+            return *this;
+        }
+
+        // Without these, the declared copy ctor/dtor suppress the implicit moves, so every `return img`
+        // and every vector reallocation deep-copied the whole pixel buffer.
+        Image::Image(Image &&img)
+        {
+            d_data = img.d_data;
+            data_size = img.data_size;
+            type_size = img.type_size;
+            d_depth = img.d_depth;
+            d_maxv = img.d_maxv;
+            d_width = img.d_width;
+            d_height = img.d_height;
+            d_channels = img.d_channels;
+            metadata_obj = img.metadata_obj;
+
+            // Ownership of both allocations taken; the source dtor must not free either
+            img.d_data = nullptr;
+            img.metadata_obj = nullptr;
+            img.clear();
+        }
+
+        Image &Image::operator=(Image &&img)
+        {
+            if (this != &img)
+            {
+                if (d_data != nullptr)
+                    free(d_data);
+                free_metadata(*this);
+
+                d_data = img.d_data;
+                data_size = img.data_size;
+                type_size = img.type_size;
+                d_depth = img.d_depth;
+                d_maxv = img.d_maxv;
+                d_width = img.d_width;
+                d_height = img.d_height;
+                d_channels = img.d_channels;
+                metadata_obj = img.metadata_obj;
+
+                img.d_data = nullptr;
+                img.metadata_obj = nullptr;
+                img.clear();
+            }
             return *this;
         }
 
@@ -116,7 +172,11 @@ namespace satdump
 
         double Image::clampf(double input)
         {
-            if (input > 1.0)
+            // NaN fails both comparisons, so it used to fall through unchanged into setf's cast to an
+            // integer type - which is UB. Every call site exists purely to make the value safe for that.
+            if (!std::isfinite(input))
+                return 0;
+            else if (input > 1.0)
                 return 1.0;
             else if (input < 0)
                 return 0;
@@ -231,11 +291,26 @@ namespace satdump
 
         void Image::crop(int x0, int y0, int x1, int y1)
         {
+            // Inverted or out-of-range coordinates gave a negative width, which was both passed to
+            // malloc and assigned to the size_t d_width - an astronomically large declared size.
+            if (x0 < 0)
+                x0 = 0;
+            if (y0 < 0)
+                y0 = 0;
+            if (x1 > (int)d_width)
+                x1 = (int)d_width;
+            if (y1 > (int)d_height)
+                y1 = (int)d_height;
+            if (x1 <= x0 || y1 <= y0)
+                return;
+
             int new_width = x1 - x0;
             int new_height = y1 - y0;
 
             // Create new buffer
-            void *new_data = malloc(new_width * new_height * d_channels * type_size);
+            void *new_data = malloc((size_t)new_width * new_height * d_channels * type_size);
+            if (new_data == NULL)
+                throw satdump_exception("Could not allocate memory for image!");
 
             // Copy cropped area to new region
             for (int c = 0; c < d_channels; c++)
@@ -258,6 +333,18 @@ namespace satdump
 
         Image Image::crop_to(int x0, int y0, int x1, int y1)
         {
+            // Same clamping as crop(); Image() would otherwise be constructed with a wrapped size
+            if (x0 < 0)
+                x0 = 0;
+            if (y0 < 0)
+                y0 = 0;
+            if (x1 > (int)d_width)
+                x1 = (int)d_width;
+            if (y1 > (int)d_height)
+                y1 = (int)d_height;
+            if (x1 <= x0 || y1 <= y0)
+                return Image();
+
             int new_width = x1 - x0;
             int new_height = y1 - y0;
 
@@ -280,6 +367,8 @@ namespace satdump
             if (y) // Mirror on the Y axis
             {
                 int *tmp_col = (int *)malloc(d_height * sizeof(int));
+                if (tmp_col == NULL) // Unchecked, unlike init(); the loop below wrote through NULL
+                    throw satdump_exception("Could not allocate memory for mirror!");
 
                 for (int c = 0; c < d_channels; c++)
                 {
@@ -299,6 +388,8 @@ namespace satdump
             if (x) // Mirror on the X axis
             {
                 int *tmp_row = (int *)malloc(d_width * sizeof(int));
+                if (tmp_row == NULL)
+                    throw satdump_exception("Could not allocate memory for mirror!");
 
                 for (int c = 0; c < d_channels; c++)
                 {
@@ -410,6 +501,13 @@ namespace satdump
 
         int Image::get_pixel_bilinear(int cc, double rx, double ry)
         {
+            // Validate BEFORE any access. Casting a non-finite or out-of-range double to size_t is
+            // UB, and callers guard with plain comparisons, which NaN passes.
+            if (!std::isfinite(rx) || !std::isfinite(ry) ||
+                rx < 0 || ry < 0 || rx >= (double)d_width || ry >= (double)d_height ||
+                cc < 0 || cc >= (int)d_channels)
+                return 0;
+
             size_t x = (size_t)rx;
             size_t y = (size_t)ry;
 
@@ -417,7 +515,7 @@ namespace satdump
             double y_diff = ry - y;
 
             size_t index = (y * d_width + x);
-            size_t max_index = d_width * d_height;
+            size_t max_index = (size_t)d_width * (size_t)d_height; // per-channel, matches get(c, i)
 
             int a = 0, b = 0, c = 0, d = 0;
             float a_a = 1.0f, b_a = 1.0f, c_a = 1.0f, d_a = 1.0f;

@@ -26,6 +26,7 @@ namespace satdump
         }
 #ifdef _WIN32
         ;
+#pragma pack(pop)
 #else
         __attribute__((packed));
 #endif
@@ -77,6 +78,7 @@ namespace satdump
         }
 #ifdef _WIN32
         ;
+#pragma pack(pop)
 #else
         __attribute__((packed));
 #endif
@@ -109,8 +111,22 @@ namespace satdump
         }
 #ifdef _WIN32
         ;
+#pragma pack(pop)
 #else
         __attribute__((packed));
 #endif
+
+        // Overlaid on received frames: a layout change misparses telemetry silently
+        static_assert(sizeof(M10Frame) == 104, "M10Frame layout changed");
+        static_assert(sizeof(M10Frame_9f) == 102, "M10Frame_9f layout changed");
+        static_assert(sizeof(M10Frame_20) == 84, "M10Frame_20 layout changed");
+
+        // Canary: the three pack(push,1) above had no pop, leaking pack(1) into later includes
+        struct M10PackBalanceCanary
+        {
+            char c;
+            double d;
+        };
+        static_assert(sizeof(M10PackBalanceCanary) == sizeof(double) * 2, "#pragma pack unbalanced in m10.h - pack(1) leaking into later declarations");
     } // namespace radiosonde
 } // namespace satdump

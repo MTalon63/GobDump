@@ -141,8 +141,10 @@ namespace satdump
                     return x;
                 }
 
-                // Stopping, etc
-                bool demod_should_stop = false;
+                // Stopping, etc. Written by the UI thread (Abort), polled by the work thread as the
+                // while-condition of every demod - as a plain bool the load could be hoisted at -O3,
+                // so Abort could be silently ignored.
+                std::atomic<bool> demod_should_stop{false};
                 bool demod_should_run() { return (input_data_type == DATA_FILE ? !file_source->eof() : input_active.load()) && !demod_should_stop; }
                 void drawStopButton();
                 void pushSNRAudioFeedback(int input_samples, float input_samplerate);

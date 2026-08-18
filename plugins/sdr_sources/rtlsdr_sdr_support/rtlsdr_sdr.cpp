@@ -169,8 +169,11 @@ void RtlSdrSource::start()
 {
     DSPSampleSource::start();
 
+    // The && short-circuited: a not-found serial threw nothing and left rtlsdr_dev_obj uninitialised
     int index = rtlsdr_get_index_by_serial(d_sdr_id.c_str());
-    if (index != -1 && rtlsdr_open(&rtlsdr_dev_obj, index) != 0)
+    if (index == -1)
+        throw satdump_exception("Could not find RTL-SDR device with serial " + d_sdr_id + "!");
+    if (rtlsdr_open(&rtlsdr_dev_obj, index) != 0)
         throw satdump_exception("Could not open RTL-SDR device!");
 
     // Set available gains

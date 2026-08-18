@@ -22,3 +22,7 @@ as.predefined
 deps/
 !android/deps/
 !android/deps/**/
+
+build_p2/
+
+docs/audit/

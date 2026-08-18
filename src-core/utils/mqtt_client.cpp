@@ -4,6 +4,9 @@
 #include "libs/mqttc/posix_sockets.h"
 #include <chrono>
 #include <thread>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 namespace satdump
 {
@@ -26,9 +29,9 @@ namespace satdump
     MQTTClient::MQTTClient(std::string addr, std::string port, int bufsize, std::function<void(std::string topic, uint8_t *data, int len)> callback) : callback(callback)
     {
         // Open the non-blocking TCP socket (connecting to the broker)
-        sockfd = open_nb_socket(addr.c_str(), port.c_str());
+        sockfd = (mqtt_pal_socket_handle)open_nb_socket(addr.c_str(), port.c_str());
 
-        if (sockfd == -1)
+        if (sockfd == MQTT_INVALID_SOCKET)
             throw satdump_exception("Failed to open socket: ");
 
         // Setup client
@@ -42,10 +45,28 @@ namespace satdump
 
         // Check that we don't have any errors
         if (client.error != MQTT_OK)
-            throw satdump_exception("error: " + std::string(mqtt_error_str(client.error)));
+        {
+            std::string err = mqtt_error_str(client.error);
+            close_socket(); // otherwise the socket leaks on every failed connect
+            free(sendbuf);
+            free(recvbuf);
+            throw satdump_exception("error: " + err);
+        }
 
         // Start refresh thread
         run_refresh_th = std::thread(client_refresher, &client);
+    }
+
+    void MQTTClient::close_socket()
+    {
+        if (sockfd == MQTT_INVALID_SOCKET)
+            return;
+#ifdef _WIN32
+        closesocket(sockfd); // NOT close(): on Windows that operates on CRT fds, not sockets
+#else
+        ::close(sockfd);
+#endif
+        sockfd = MQTT_INVALID_SOCKET;
     }
 
     MQTTClient::~MQTTClient()
@@ -56,6 +77,7 @@ namespace satdump
         if (run_refresh_th.joinable())
             run_refresh_th.join();
 
+        close_socket(); // was never closed at all - one handle leaked per session
         free(sendbuf);
         free(recvbuf);
     }

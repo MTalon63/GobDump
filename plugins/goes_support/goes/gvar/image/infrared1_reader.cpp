@@ -32,6 +32,13 @@ namespace goes
 
         void InfraredReader1::pushFrame(uint8_t *data, int counter, int word_cnt)
         {
+            // Both come from the frame; re-validated here since the reader is separately callable.
+            // imageLineBuffer is 5252*4, and the highest read below is 16 + word_cnt*3 + WIDTH-1.
+            if (counter < 0 || counter * 2 + 1 >= HEIGHT)
+                return;
+            if (word_cnt < 0 || 16 + word_cnt * 3 + WIDTH > 5252 * 4)
+                return;
+
             // Offset to start reading from
             int pos = 0;
 

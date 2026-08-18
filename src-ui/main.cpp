@@ -20,6 +20,8 @@
 #include "satdump_vars.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
+#include <cstdio>
+#include <iostream>
 #include <exception>
 #include <filesystem>
 #include <signal.h>
@@ -57,9 +59,8 @@ void glfw_drop_callback(GLFWwindow *window, int count, const char **paths)
 }
 
 #ifdef _WIN32
-#define WINVER 0x0501 // Allow use of features specific to Windows XP or later.
-#define _WIN32_WINNT 0x0501
-#define WIN32_LEAN_AND_MEAN
+// Used to force WINVER/_WIN32_WINNT to XP here, giving this TU different struct layouts to the
+// rest of the program. Set globally in CMakeLists.txt now - do not redefine.
 #include "fcntl.h"
 #include "io.h"
 #include "stdio.h"
@@ -329,6 +330,11 @@ int main(int argc, char *argv[])
     killThread_cancel = true;
     if (killThread.joinable())
         killThread.join();
+
+    // quick_exit runs no destructors and flushes no streams
+    std::cout.flush();
+    std::cerr.flush();
+    fflush(nullptr);
 
 #ifdef __APPLE__
     exit(0);

@@ -147,12 +147,18 @@ public:
         r.tm_sec = be_val_.SECONDS10 * 10 + be_val_.SECONDS1;
         r.tm_year = (be_val_.YEAR1000 * 1000 + be_val_.YEAR100 * 100 + be_val_.YEAR10 * 10 + be_val_.YEAR1) - 1900;
         int yday = (be_val_.DOY100 * 100 + be_val_.DOY10 * 10 + be_val_.DOY1);
-        // Now to get day/month
-        time_t tt = timegm(&r) + yday * 3600 * 24;
-        // printf("%s\n", timestamp_to_string(tt).c_str());
-        r = *gmtime(&tt);
 
-        return r;
+        // tm_mday=1: relying on 0 normalising to Dec 31 is unspecified, though UCRT and glibc both do it
+        r.tm_mday = 1;
+        time_t tt = timegm(&r) + (yday - 1) * 3600 * 24;
+
+        std::tm out;
+#ifdef _WIN32
+        gmtime_s(&out, &tt);
+#else
+        gmtime_r(&tt, &out);
+#endif
+        return out;
     }
 
 private:

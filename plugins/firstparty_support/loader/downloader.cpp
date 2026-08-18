@@ -4,6 +4,7 @@
 #include "imgui/imgui.h"
 #include "logger.h"
 #include "satdump_vars.h"
+#include "utils/http.h"
 
 namespace satdump
 {
@@ -45,7 +46,7 @@ namespace satdump
             bool ret = 1;
             char error_buffer[CURL_ERROR_SIZE] = {0};
 
-            curl_global_init(CURL_GLOBAL_ALL);
+            satdump::ensure_curl_global_init(); // never curl_global_cleanup(): it runs WSACleanup() process-wide
 
             std::ofstream output_filestream(output_file, std::ios::binary);
 
@@ -92,7 +93,6 @@ namespace satdump
                 if (chunk != NULL)
                     curl_slist_free_all(chunk);
             }
-            curl_global_cleanup();
 
             output_filestream.close();
             is_downloading = false;

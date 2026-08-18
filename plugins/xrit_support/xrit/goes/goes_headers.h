@@ -77,7 +77,8 @@ namespace satdump
                 {
                     type = data[0];
                     record_length = data[1] << 8 | data[2];
-                    ancillary_text.insert(ancillary_text.end(), &data[3], &data[record_length]);
+                    if (record_length > 3) // Otherwise [3, record_length) is empty or reversed, which is UB
+                        ancillary_text.insert(ancillary_text.end(), &data[3], &data[record_length]);
 
                     // I will admit I needed to peek in goestools to figure that one out
                     // A bit hard without having live data...
@@ -108,7 +109,8 @@ namespace satdump
                 {
                     type = data[0];
                     record_length = data[1] << 8 | data[2];
-                    annotation_text.insert(annotation_text.end(), &data[3], &data[record_length]);
+                    if (record_length > 3) // Otherwise [3, record_length) is empty or reversed, which is UB
+                        annotation_text.insert(annotation_text.end(), &data[3], &data[record_length]);
                 }
             };
 

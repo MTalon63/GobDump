@@ -10,11 +10,16 @@
 #include <random>
 
 #ifdef _WIN32
-#define __USE_FILE_OFFSET64
 #include "libs/mmap_windows.h"
+#include <io.h>
 #else
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
+
+// Windows defaults to text mode: without this, reads stop at the first 0x1A and translate CRLF
+#ifndef O_BINARY
+#define O_BINARY 0
 #endif
 
 namespace satdump
@@ -35,7 +40,9 @@ namespace satdump
         d_file_memory_size = getFilesize(file_path);
         if (d_file_memory_size == 0)
             throw satdump_exception("Empty File!");
-        fd = open(file_path.c_str(), O_RDONLY);
+        fd = open(file_path.c_str(), O_RDONLY | O_BINARY);
+        if (fd < 0)
+            throw satdump_exception("Could not open file! (" + file_path + ")");
         d_file_memory_ptr = (uint8_t *)mmap(0, d_file_memory_size, PROT_READ, MAP_SHARED, fd, 0);
         if (d_file_memory_ptr == MAP_FAILED)
         {

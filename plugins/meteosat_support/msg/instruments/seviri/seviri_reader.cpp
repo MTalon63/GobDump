@@ -223,6 +223,10 @@ namespace meteosat
 
         void SEVIRIReader::work(int scid, ccsds::CCSDSPacket &pkt)
         {
+            // parseCCSDSTimeMeteosat below reads payload[0..7], and every repack starts at [8].
+            if (pkt.payload.size() < 8)
+                return;
+
             int scan_chunk_number = pkt.header.packet_sequence_count % 16;
             double scan_timestamp = 0;
 
@@ -277,7 +281,9 @@ namespace meteosat
                     timestamps_nrm[lines + 2] = scan_timestamp + 0.2 * 2;
                 }
 
-                repackBytesTo10bits(&pkt.payload[8], pkt.payload.size() - 8, tmp_linebuf_nrm);
+                // packet_length is a 16-bit downlink field, so a single bit error yields a payload far
+                // larger than the nominal ~14392 - without the capacity it repacked straight past the member.
+                repackBytesTo10bits(&pkt.payload[8], pkt.payload.size() - 8, tmp_linebuf_nrm, 15000);
                 for (int c = 0; c < 3; c++)
                 {
                     // Some channels are swapped on the focal plane
@@ -305,7 +311,7 @@ namespace meteosat
             else if (scan_chunk_number < 15)
             {
                 uint16_t *tmp_buf = new uint16_t[15000];
-                repackBytesTo10bits(&pkt.payload[8], pkt.payload.size() - 8, tmp_buf);
+                repackBytesTo10bits(&pkt.payload[8], pkt.payload.size() - 8, tmp_buf, 15000);
 
                 size_t lines = d_mode_is_rss ? (fmod(scan_timestamp, 5 * 60) / (100 / 1494.0)) : fmod(scan_timestamp, 15 * 60) / (100 / 1494.0);
                 lines += (scan_chunk_number - 11) * 2;
@@ -329,7 +335,7 @@ namespace meteosat
             else
             {
                 uint16_t *tmp_buf = new uint16_t[15000];
-                repackBytesTo10bits(&pkt.payload[8], pkt.payload.size() - 8, tmp_buf);
+                repackBytesTo10bits(&pkt.payload[8], pkt.payload.size() - 8, tmp_buf, 15000);
 
                 size_t lines = d_mode_is_rss ? (fmod(scan_timestamp, 5 * 60) / (100 / 1494.0)) : fmod(scan_timestamp, 15 * 60) / (100 / 1494.0);
                 lines += (scan_chunk_number - 11) * 2;
