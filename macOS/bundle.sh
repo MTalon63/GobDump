@@ -132,7 +132,23 @@ else
 fi
 
 echo "Creating GobDump.dmg..."
-hdiutil create -srcfolder MacApp/ -volname GobDump GobDump-macOS-$PLATFORM.dmg
+# hdiutil intermittently fails on GitHub Actions macOS runners with "Resource busy", almost always
+# caused by Spotlight/mdworker transiently locking part of the just-written MacApp/ tree or the disk
+# arbitration subsystem right after the codesign/dylibbundler steps above. It's external CI flakiness,
+# not a logic error in this script, so retrying with a short backoff is the correct mitigation.
+dmg_attempt=0
+dmg_max_attempts=5
+until hdiutil create -srcfolder MacApp/ -volname GobDump GobDump-macOS-$PLATFORM.dmg
+do
+    dmg_attempt=$((dmg_attempt + 1))
+    if [[ $dmg_attempt -ge $dmg_max_attempts ]]; then
+        echo "hdiutil create failed after $dmg_max_attempts attempts, giving up." >&2
+        exit 1
+    fi
+    echo "hdiutil create failed (attempt $dmg_attempt/$dmg_max_attempts), likely transient 'Resource busy'. Retrying in 10s..."
+    rm -f GobDump-macOS-$PLATFORM.dmg
+    sleep 10
+done
 
 if [[ -n "$MACOS_SIGNING_SIGNATURE" ]]
 then
