@@ -9,6 +9,12 @@
 #include <omp.h>
 #endif
 
+#ifdef _OPENMP
+#define GOBDUMP_OMP_HAS_MAX_ACTIVE_LEVELS (_OPENMP >= 201107)
+#else
+#define GOBDUMP_OMP_HAS_MAX_ACTIVE_LEVELS 0
+#endif
+
 #define MAX_IMAGE_RAM_USAGE 4e9 // 4GB of RAM max
 #define SEGMENT_SIZE_KM 3000    // Average segment size to try and keep as max
 #define MIN_POLE_DISTANCE 1000  // Maximum distance at which to consider we're working over a pole
@@ -304,7 +310,7 @@ namespace satdump
             std::vector<SegmentConfig> segmentConfigs = prepareSegmentsAndSplitCuts(nsegs, operation_t, median_dist);
 
             // Solve all TPS transforms, multithreaded.
-#ifdef _OPENMP
+#if defined(_OPENMP) && GOBDUMP_OMP_HAS_MAX_ACTIVE_LEVELS
             const int prev_nested = omp_get_max_active_levels();
             omp_set_max_active_levels(1);
 #endif
@@ -325,7 +331,7 @@ namespace satdump
                 }
             }
 
-#ifdef _OPENMP
+#if defined(_OPENMP) && GOBDUMP_OMP_HAS_MAX_ACTIVE_LEVELS
             omp_set_max_active_levels(prev_nested);
 #endif
 

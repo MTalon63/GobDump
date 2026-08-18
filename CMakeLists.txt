@@ -78,12 +78,13 @@ if(APPLE)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
         link_directories(/opt/homebrew/lib)
         set(CMAKE_PREFIX_PATH "/opt/homebrew/;${CMAKE_SOURCE_DIR}/deps")
-        link_directories(/opt/homebrew/opt/libomp/lib/) # omp needs special handling as it is not in /lib
+        link_directories(/opt/homebrew/opt/libomp/lib/)
+        include_directories(/opt/homebrew/opt/libomp/include/)
     else()
         link_directories(/usr/local/lib)
         set(CMAKE_PREFIX_PATH "/usr/local/;${CMAKE_SOURCE_DIR}/deps")
-        link_directories(/usr/local/opt/libomp/lib/) # omp needs special handling as it is not in /lib
-       
+        link_directories(/usr/local/opt/libomp/lib/)
+        include_directories(/usr/local/opt/libomp/include/)
     endif()
 
     # Rpaths are stripped when we are going to bundle, done to prevent duplicate LC_PATH crap
