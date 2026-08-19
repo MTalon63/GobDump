@@ -236,10 +236,6 @@ namespace codings
                 if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
                     min = _mm_srli_epi16(_mm_mullo_epi16(min, _mm_set1_epi16(d_nms_alpha_q8)), 8);
 
-                /* Offset Min-Sum: saturating-subtract beta from magnitude (floor at 0) */
-                if (d_oms_beta > 0)
-                    min = _mm_subs_epu16(min, _mm_set1_epi16(d_oms_beta));
-
                 sign = _mm_xor_si128(parity, cn_in[vn_idx]);
 
                 /* Bit hack in order to multiply by the sign */

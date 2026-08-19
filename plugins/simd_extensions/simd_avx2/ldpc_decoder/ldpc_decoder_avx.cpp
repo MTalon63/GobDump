@@ -7,6 +7,8 @@ namespace codings
     {
         LDPCDecoderAVX::LDPCDecoderAVX(Sparse_matrix pcm) : LDPCDecoder(pcm)
         {
+            d_pcm = pcm; // Retained for the sum-product generic fallback.
+
             int max_deg = 0;
             for (size_t rows = 0; rows < pcm.get_n_rows(); rows++)
             {
@@ -58,6 +60,7 @@ namespace codings
 
         LDPCDecoderAVX::~LDPCDecoderAVX()
         {
+            delete d_generic_fallback;
             delete[] d_vns;
             delete[] d_vns_to_cn_msgs;
             delete[] d_abs_msgs;
@@ -77,11 +80,38 @@ namespace codings
                 d_prev_vn_to_cn_msgs = new __m256i[d_pcm_num_cn * d_pcm_max_cn_degree];
                 d_sc_msgs = new __m256i[d_pcm_max_cn_degree];
             }
+
+            /* Sum-product is not implemented in the AVX kernel; run it on the generic
+             * decoder instead (see header for the rationale). */
+            if (a == LDPC_SUM_PRODUCT && d_generic_fallback == nullptr)
+            {
+                d_generic_fallback = new LDPCDecoderGeneric(d_pcm);
+                d_generic_fallback->set_algorithm(LDPC_SUM_PRODUCT);
+            }
         }
 
         int LDPCDecoderAVX::decode(uint8_t *out, const int8_t *in, int it)
         {
             int corrections = 0;
+
+            /* Sum-product fallback: decode the 16 interleaved frames one at a time on
+             * the generic (scalar) BP decoder. The input is laid out as 16 frames
+             * concatenated (frame z at in[z*d_pcm_num_vn]), matching the generic
+             * decoder's single-frame interface. */
+            if (d_algorithm == LDPC_SUM_PRODUCT)
+            {
+                /* Defensive: set_algorithm normally creates the fallback, but guard
+                 * against a decode() call without a prior set_algorithm(). */
+                if (d_generic_fallback == nullptr)
+                {
+                    d_generic_fallback = new LDPCDecoderGeneric(d_pcm);
+                    d_generic_fallback->set_algorithm(LDPC_SUM_PRODUCT);
+                }
+                for (int z = 0; z < 16; z++)
+                    corrections += d_generic_fallback->decode(&out[z * d_pcm_num_vn], &in[z * d_pcm_num_vn], it);
+                d_last_iterations = d_generic_fallback->last_iterations();
+                return corrections;
+            }
 
             /* The length of the input block should correspond to the length of a codeword. */
             // if (len != d_pcm->code.n)
@@ -111,13 +141,43 @@ namespace codings
                     d_prev_vn_to_cn_msgs[i] = _mm256_set1_epi16(0);
 
             /* Decode step */
+            int it_used = 0;
             while (it--)
             {
                 for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
                 {
                     generic_cn_kernel(cn_idx);
                 }
+                it_used++;
+
+                /* Early termination: per-lane syndrome check. The 16 lanes are
+                 * interleaved inside each __m256i (lane z of VN i lives at
+                 * ptrVar[16*i + z]). For every check node we XOR the hard decisions
+                 * (sign >= 0 => 1, else 0) of its connected VNs, per lane. We stop
+                 * early only when ALL 16 lanes satisfy every parity check. */
+                __m256i all_parity = _mm256_setzero_si256();
+                for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
+                {
+                    int row_base = d_row_pos_deg[cn_idx * 2];
+                    int deg = d_row_pos_deg[cn_idx * 2 + 1];
+                    __m256i parity = _mm256_setzero_si256();
+                    for (int vn_idx = 0; vn_idx < deg; vn_idx++)
+                    {
+                        __m256i v = *d_vn_addr[row_base + vn_idx];
+                        // Hard decision: 1 if v >= 0, else 0 (matches the final hard
+                        // decision in decode()). cmpgt(v, -1) is true iff v >= 0.
+                        __m256i ge0 = _mm256_cmpgt_epi16(v, _mm256_set1_epi16(-1));
+                        __m256i hard = _mm256_and_si256(ge0, _mm256_set1_epi16(1));
+                        parity = _mm256_xor_si256(parity, hard);
+                    }
+                    all_parity = _mm256_or_si256(all_parity, parity);
+                }
+
+                if (_mm256_testz_si256(all_parity, all_parity))
+                    break;
             }
+
+            d_last_iterations = it_used;
 
             /* Hard decision & Deinterleave */
             for (int i = 0; i < d_pcm_num_vn; i++)
@@ -235,10 +295,6 @@ namespace codings
                  * bounded well under 2^15 so the low half of the product suffices. */
                 if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
                     min = _mm256_srli_epi16(_mm256_mullo_epi16(min, _mm256_set1_epi16(d_nms_alpha_q8)), 8);
-
-                /* Offset Min-Sum: saturating-subtract beta from magnitude (floor at 0) */
-                if (d_oms_beta > 0)
-                    min = _mm256_subs_epu16(min, _mm256_set1_epi16(d_oms_beta));
 
                 sign = _mm256_xor_si256(parity, cn_in[vn_idx]);
 

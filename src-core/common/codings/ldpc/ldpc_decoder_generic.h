@@ -48,6 +48,45 @@ namespace codings
 
             void generic_cn_kernel(int cn_idx);
 
+            /* Sum-product (belief propagation) φ lookup table.
+             *
+             * φ(x) = -ln(tanh(x/2)) = ln((e^x+1)/(e^x-1)), x>0, and φ is its own
+             * inverse. The table is shared by all instances (static) and built once.
+             *
+             * The LUT is indexed by a FINE grid of the φ-domain argument:
+             *   d_phi_lut[i] = round(φ(i / d_phi_step) * d_phi_scale), clamped.
+             * d_phi_step = 16 gives 1/16 resolution in the argument, which is
+             * essential for the INVERSE lookup: the summed φ values (phi_excl) are
+             * often small (< 1), and with a coarse integer-indexed table they all
+             * rounded to index 0 and returned the saturated max, over-correcting and
+             * preventing convergence at low SNR.
+             *
+             * Because φ is its own inverse, the same table serves both lookups:
+             *   - forward:  φ(|m_i|)  -> d_phi_lut[|m_i| * d_phi_step]
+             *   - inverse:  φ(phi_excl) -> d_phi_lut[phi_excl * d_phi_step / d_phi_scale]
+             *
+             * d_phi_scale = 1024 keeps the small-magnitude φ values (which dominate
+             * the check-node sum) in a range that fits int16 while preserving enough
+             * precision. d_phi_lut_max saturates φ(0)=∞ to a value that, after
+             * dividing back by d_phi_scale, gives a check-node output magnitude
+             * comparable to the channel LLRs (roughly tens).
+             */
+            static const int d_phi_lut_size = 2048;
+            static const int d_phi_step = 16;   // argument resolution: 1/16
+            static const int d_phi_scale = 1024;
+            /* Saturates φ(0)=∞ to a value that, after dividing back by d_phi_scale,
+             * gives a check-node output magnitude comparable to the (normalized)
+             * channel LLRs. The BP path normalizes its input to a peak of
+             * d_bp_peak (8), so the check output should saturate around that:
+             * 8 * d_phi_scale = 8192. d_phi_lut is int16, so keep well under 32767. */
+            static const int d_phi_lut_max = 8192;
+            /* Peak magnitude the BP path normalizes its channel LLRs to, so the
+             * φ-LUT operates in its meaningful range regardless of the pipeline's
+             * LLR scaling. */
+            static const int d_bp_peak = 8;
+            static int16_t d_phi_lut[2048];
+            static bool d_phi_lut_ready;
+
             // Used by generic_cn_kernel
             int16_t sign;
             int16_t parity;

@@ -21,6 +21,8 @@ namespace codings
                 return LDPC_NORMALIZED_MIN_SUM;
             else if (str == "self_corrected_min_sum" || str == "scms")
                 return LDPC_SELF_CORRECTED_MIN_SUM;
+            else if (str == "sum_product" || str == "belief_propagation" || str == "bp")
+                return LDPC_SUM_PRODUCT;
             else
                 throw std::runtime_error("Invalid LDPC algorithm " + str);
         }
@@ -31,6 +33,8 @@ namespace codings
                 return "normalized_min_sum";
             else if (a == LDPC_SELF_CORRECTED_MIN_SUM)
                 return "self_corrected_min_sum";
+            else if (a == LDPC_SUM_PRODUCT)
+                return "sum_product";
             else
                 return "min_sum";
         }

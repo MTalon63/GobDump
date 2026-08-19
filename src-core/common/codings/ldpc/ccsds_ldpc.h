@@ -35,6 +35,8 @@ namespace codings
 
             int d_corr_errors;
 
+            int d_last_iterations = 0;
+
             LDPCDecoder *ldpc_decoder;
 
             void init_dec(Sparse_matrix pcm);
@@ -49,11 +51,12 @@ namespace codings
             int data_length() { return d_data_size; }
             int simd() { return d_simd; }
 
+            // Number of iterations used by the last decode() call. For the SIMD path this
+            // is the iteration count of the whole batch (all lanes converged together).
+            int last_iterations() const { return d_last_iterations; }
+
             // Decode a LDPC codeword, takes soft-bits floats in, outputs bytes. Retuns corrected bits
             int decode(int8_t *codeword, uint8_t *frame, int iterations = 10);
-
-            // Offset Min-Sum beta. 0 = plain min-sum (default). Call after construction.
-            void set_oms_beta(int16_t b) { ldpc_decoder->set_oms_beta(b); }
 
             // Normalized Min-Sum alpha, Q8 fixed-point (256 == 1.0).
             void set_nms_alpha(int16_t a_q8) { ldpc_decoder->set_nms_alpha(a_q8); }

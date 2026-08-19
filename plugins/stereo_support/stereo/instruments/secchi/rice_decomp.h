@@ -19,7 +19,7 @@ namespace
 // rest of the TU - including image::Image, included after this. Typedefs so nothing leaks.
     typedef unsigned char uchar;
     typedef unsigned short uword;
-    typedef uint32_t ulong; /*was `unsigned long`: 32-bit on Windows, 64-bit on Linux*/
+    typedef uint32_t u32; /*was `unsigned long`: 32-bit on Windows, 64-bit on Linux*/
 #define MaxBlk 34 * 34 /*Maximum # of sub-image blocks in the  \
                          Image.  Note that this includes       \
                          blocks that will not be transmitted   \
@@ -143,7 +143,7 @@ namespace soho_compression
         void Recon(int *ncol, int *nrow, int *SignFlag, uword Image[]);
         int RdBit(int ibit);
         void Error(char *Mes, int iexit, int Var1, int Var2);
-        int nBitNeed(ulong i);
+        int nBitNeed(u32 i);
         void EndPacket(void);
         void StartPacket(void);
         void ReconPacket(void);

@@ -1,12 +1,41 @@
 #include "ldpc_decoder_generic.h"
 #include <cassert>
+#include <cmath>
 
 namespace codings
 {
     namespace ldpc
     {
+        // Shared sum-product φ LUT (built once, see header for the math).
+        int16_t LDPCDecoderGeneric::d_phi_lut[LDPCDecoderGeneric::d_phi_lut_size];
+        bool LDPCDecoderGeneric::d_phi_lut_ready = false;
+
         LDPCDecoderGeneric::LDPCDecoderGeneric(Sparse_matrix pcm) : LDPCDecoder(pcm)
         {
+            /* Build the φ lookup table once (shared by all instances). φ(x) is
+             * computed in double, scaled by d_phi_scale and clamped to
+             * d_phi_lut_max so the values fit int16 and saturate at a magnitude
+             * comparable to a typical message.
+             *
+             * The table is indexed by a fine grid of the argument: entry i holds
+             * φ(i / d_phi_step). This fine resolution is what makes the INVERSE
+             * lookup accurate (see header). */
+            if (!d_phi_lut_ready)
+            {
+                for (int i = 0; i < d_phi_lut_size; i++)
+                {
+                    double x = (double)i / (double)d_phi_step;
+                    // φ(x) = -ln(tanh(x/2)), x>0. For x=0 this is +inf, which the
+                    // clamp below saturates to d_phi_lut_max.
+                    double phi = -log(tanh(x / 2.0));
+                    double scaled = phi * d_phi_scale;
+                    if (scaled > d_phi_lut_max)
+                        scaled = d_phi_lut_max;
+                    d_phi_lut[i] = (int16_t)lround(scaled);
+                }
+                d_phi_lut_ready = true;
+            }
+
             int max_deg = 0;
             for (size_t rows = 0; rows < pcm.get_n_rows(); rows++)
             {
@@ -107,13 +136,38 @@ namespace codings
                     d_prev_vn_to_cn_msgs[i] = 0;
 
             /* Decode step */
+            int it_used = 0;
             while (it--)
             {
                 for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
                 {
                     generic_cn_kernel(cn_idx);
                 }
+                it_used++;
+
+                /* Early termination: compute the syndrome (parity) of every check node
+                 * from the current hard decisions (sign >= 0 => 1, else 0). If every
+                 * check node has even parity the codeword has converged, so stop. */
+                bool converged = true;
+                for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
+                {
+                    int row_base = d_row_pos_deg[cn_idx * 2];
+                    int deg = d_row_pos_deg[cn_idx * 2 + 1];
+                    int16_t parity = 0;
+                    for (int vn_idx = 0; vn_idx < deg; vn_idx++)
+                        parity ^= (int16_t)(*d_vn_addr[row_base + vn_idx] >= 0 ? 1 : 0);
+                    if (parity != 0)
+                    {
+                        converged = false;
+                        break;
+                    }
+                }
+
+                if (converged)
+                    break;
             }
+
+            d_last_iterations = it_used;
 
             /* Hard decision */
             for (int i = 0; i < d_pcm_num_vn; i++)
@@ -164,6 +218,68 @@ namespace codings
                 }
 
                 cn_in = d_sc_msgs;
+            }
+
+            /* Sum-product (belief propagation) check node, log domain.
+             *
+             *   λ_ji = Π_{i'≠j} sign(m_i') · φ( Σ_{i'≠j} φ(|m_i'|) )
+             *
+             * with φ(x) = -ln(tanh(x/2)), x>0, φ its own inverse. We accumulate the
+             * total φ sum and the total sign (XOR of all sign bits) over the connected
+             * VNs, then for each VN subtract its own contribution to get the extrinsic
+             * value. The sign convention matches the rest of the decoder: a negative
+             * output drives the VN toward a hard '0' and a positive one toward '1'
+             * (the final hard decision is d_vns[i] >= 0 ? 1 : 0). */
+            if (d_algorithm == LDPC_SUM_PRODUCT)
+            {
+                int64_t total_phi = 0;
+                int16_t total_sign = 0;
+
+                for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+                {
+                    msg = cn_in[vn_idx];
+                    total_sign ^= msg;
+                    int mag = abs(msg);
+                    int idx = mag * d_phi_step;
+                    if (idx >= d_phi_lut_size)
+                        idx = d_phi_lut_size - 1;
+                    total_phi += d_phi_lut[idx];
+                }
+
+                for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+                {
+                    msg = cn_in[vn_idx];
+                    int mag = abs(msg);
+                    int idx = mag * d_phi_step;
+                    if (idx >= d_phi_lut_size)
+                        idx = d_phi_lut_size - 1;
+
+                    /* Extrinsic φ sum (exclude this message). */
+                    int64_t phi_excl = total_phi - d_phi_lut[idx];
+
+                    /* Inverse lookup. φ is its own inverse. The LUT stores
+                     * φ(x)*d_phi_scale indexed by x*d_phi_step, so the check-node
+                     * output in the SAME "natural" units as the channel LLRs is
+                     * LUT[phi_excl*d_phi_step/d_phi_scale] / d_phi_scale. */
+                    int64_t idx64 = (phi_excl * d_phi_step + d_phi_scale / 2) / d_phi_scale;
+                    if (idx64 >= d_phi_lut_size)
+                        idx64 = d_phi_lut_size - 1;
+                    int32_t mag_out = (d_phi_lut[(int)idx64] + d_phi_scale / 2) / d_phi_scale;
+
+                    /* Sign = product of the other messages' signs = XOR of their sign
+                     * bits. total_sign ^ msg gives the sign of all messages except this
+                     * one. */
+                    new_msg = (total_sign ^ msg) < 0 ? (int16_t)-mag_out : (int16_t)mag_out;
+
+                    /* Add error correction value */
+                    to_vn = new_msg + d_vns_to_cn_msgs[vn_idx];
+
+                    /* Save new soft bit value and CN to VN message */
+                    d_cn_to_vn_msgs[cn_offset + vn_idx] = new_msg;
+                    *d_vn_addr[cn_row_base + vn_idx] = to_vn;
+                }
+
+                return;
             }
 
             parity = 0;
@@ -222,10 +338,6 @@ namespace codings
                 /* Normalized Min-Sum: scale magnitude by alpha (Q8) */
                 if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
                     min = (uint16_t)(((uint32_t)min * (uint32_t)d_nms_alpha_q8) >> 8);
-
-                /* Offset Min-Sum: subtract beta from magnitude, floor at 0 */
-                if (d_oms_beta > 0)
-                    min = (uint16_t)(min > (uint16_t)d_oms_beta ? min - d_oms_beta : 0);
 
                 sign = (parity ^ cn_in[vn_idx]);
 

@@ -258,12 +258,6 @@ namespace codings
                     min = vreinterpretq_s16_u16(vshrq_n_u16(
                         vreinterpretq_u16_s16(vmulq_s16(min, vdupq_n_s16(d_nms_alpha_q8))), 8));
 
-                /* Offset Min-Sum: saturating-subtract beta from magnitude (floor at 0).
-                 * vqsubq_u16 on the reinterpreted vector gives correct unsigned saturation. */
-                if (d_oms_beta > 0)
-                    min = vreinterpretq_s16_u16(
-                        vqsubq_u16(vreinterpretq_u16_s16(min), vdupq_n_u16((uint16_t)d_oms_beta)));
-
                 sign = veorq_s16(parity, cn_in[vn_idx]);
 
                 /* Bit hack in order to multiply by the sign */

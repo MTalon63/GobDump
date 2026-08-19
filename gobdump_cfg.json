@@ -51,7 +51,7 @@
 		},
 		"play_audio": {
 			"type": "bool",
-			"value": true,
+			"value": false,
 			"name": "Play Audio",
 			"description": "Automatically play audio from pipelines that support it,\nlike NOAA APT and Inmarsat Aero"
 		},

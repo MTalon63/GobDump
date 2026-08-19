@@ -95,9 +95,23 @@ namespace satdump
                 d_ldpc_codeword_size = ldpc_dec->frame_length();
                 d_ldpc_data_size = ldpc_dec->data_length();
 
+                // Correlator lock state machine parameters (optional, with defaults).
+                correlator_lock_after = parameters.count("correlator_lock_after") > 0 ? parameters["correlator_lock_after"].get<int>() : 3;
+                correlator_drop_after = parameters.count("correlator_drop_after") > 0 ? parameters["correlator_drop_after"].get<int>() : 5;
+                correlator_search_window = parameters.count("correlator_search_window") > 0 ? parameters["correlator_search_window"].get<int>() : 0;
+
+                // LLR scaling mode: "calibrated" (2/sigma^2, default) or
+                // "heuristic" (legacy 1/npwr formula, for A/B regression testing).
+                {
+                    const std::string llr_scaling = parameters.count("llr_scaling") > 0 ? parameters["llr_scaling"].get<std::string>() : "calibrated";
+                    d_llr_calibrated = (llr_scaling == "calibrated");
+                }
+
+                float corr_threshold = parameters.count("correlator_threshold") > 0 ? parameters["correlator_threshold"].get<float>() : 0.5f;
+
                 correlator = std::make_unique<CorrelatorGeneric>(
                     d_constellation, d_ldpc_rate == codings::ldpc::RATE_7_8 ? satdump::unsigned_to_bitvec<uint32_t>(0x1acffc1d) : satdump::unsigned_to_bitvec<uint64_t>(0x034776c7272895b0),
-                    d_ldpc_frame_size);
+                    d_ldpc_frame_size, corr_threshold);
 
                 logger->trace("LDPC Frame size %d, SIMD %d", d_ldpc_frame_size, d_ldpc_simd);
 
@@ -124,6 +138,7 @@ namespace satdump
                 deframer_buffer = new uint8_t[d_ldpc_frame_size * 64];
 
                 memset(llr_scale_history, 0, sizeof(llr_scale_history));
+                memset(ldpc_iter_history, 0, sizeof(ldpc_iter_history));
 
                 // Decoding algorithm. Defaults to plain min-sum, i.e. previous behaviour.
                 if (d_parameters.contains("ldpc_algorithm"))
@@ -140,12 +155,8 @@ namespace satdump
                 ldpc_dec->set_nms_alpha(d_ldpc_nms_alpha_q8);
                 ldpc_dec->set_algorithm(d_ldpc_algorithm);
 
-                // Offset Min-Sum beta (0 = plain min-sum, i.e. current behaviour)
-                int16_t oms_beta = d_parameters.contains("ldpc_oms_beta") ? (int16_t)d_parameters["ldpc_oms_beta"].get<int>() : 0;
-                ldpc_dec->set_oms_beta(oms_beta);
-
-                logger->info("LDPC algorithm: %s (alpha %.3f, beta %d), %d iterations", codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm).c_str(),
-                             d_ldpc_nms_alpha_q8 / 256.0f, (int)oms_beta, d_ldpc_iterations);
+                logger->info("LDPC algorithm: %s (alpha %.3f), %d iterations", codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm).c_str(),
+                             d_ldpc_nms_alpha_q8 / 256.0f, d_ldpc_iterations);
 
                 is_started = true;
 
@@ -173,9 +184,33 @@ namespace satdump
                     // if (d_iq_invert)
                     // rotate_soft((int8_t *)soft_buffer, d_ldpc_frame_size, PHASE_0, true);
 
-                    int pos = correlator->correlate((int8_t *)soft_buffer, phase, swap, correlator_cor, d_ldpc_frame_size);
+                    // When locked, optionally restrict the search to a small window
+                    // around the expected ASM position (0) to improve robustness and
+                    // reduce CPU. When unlocked, search the whole frame.
+                    int search_start = 0, search_len = -1;
+                    if (correlator_locked && correlator_search_window > 0)
+                        search_len = correlator_search_window;
 
-                    correlator_locked = pos == 0; // Update locking state
+                    int pos = correlator->correlate((int8_t *)soft_buffer, phase, swap, correlator_cor, d_ldpc_frame_size, search_start, search_len);
+                    correlator_corr_norm = correlator->last_normalized_corr();
+
+                    // Lock state machine (mirrors the CCSDS deframer): require N
+                    // consecutive good (above-threshold) correlations to enter LOCKED,
+                    // and M consecutive failures to drop back to NOSYNC.
+                    if (correlator->locked())
+                    {
+                        correlator_good_count++;
+                        correlator_bad_count = 0;
+                        if (correlator_good_count >= correlator_lock_after)
+                            correlator_locked = true;
+                    }
+                    else
+                    {
+                        correlator_bad_count++;
+                        correlator_good_count = 0;
+                        if (correlator_bad_count >= correlator_drop_after)
+                            correlator_locked = false;
+                    }
 
                     if (pos != 0 && pos < d_ldpc_frame_size) // Safety
                     {
@@ -249,9 +284,51 @@ namespace satdump
 
                             llr_snr = snr_estimator.snr();
 
-                            // npwr = 2 * 10^(-SNR/20), scale = 1/npwr — same as DVB-S2 demod
-                            float npwr = 2.0f * powf(10.0f, -llr_snr / 20.0f);
-                            llr_scale = std::clamp(1.0f / npwr, 0.25f, 8.0f);
+                            if (d_llr_calibrated)
+                            {
+                                // Calibrated LLR: for a BPSK/QPSK symbol, each soft
+                                // sample is v = A*s + n (A = signal amplitude, n ~
+                                // N(0, sigma^2)), and the LLR is
+                                //      LLR = 2 * A * v / sigma^2.
+                                // So the scale applied to the raw int8 sample v is
+                                // 2*A/sigma^2. NOTE: omitting the amplitude A makes
+                                // the scale ~1/100 too small, which quantizes every
+                                // soft sample to 0 in the int8 LUT and breaks decoding.
+                                //
+                                // The estimator is fed samples v/127.0. signal() and
+                                // noise() return 10*log10 of the TOTAL signal/noise
+                                // power summed over the components in these normalized
+                                // units. Convert to per-component amplitude and
+                                // variance, then to int8 units:
+                                //   amp_norm = sqrt(sig_pow/ncomp)          (per comp)
+                                //   var_norm = noi_pow/ncomp             (per comp)
+                                //   scale = 2*A_int8/sigma2_int8
+                                //         = 2*(amp_norm*127) / (var_norm*127^2)
+                                //         = 2*amp_norm / (var_norm*127).
+                                int ncomp = d_constellation == dsp::BPSK ? 1 : 2;
+                                float sig_pow = powf(10.0f, snr_estimator.signal() / 10.0f);
+                                float noi_pow = powf(10.0f, snr_estimator.noise() / 10.0f);
+
+                                float amp_norm = std::sqrt(std::max(sig_pow / ncomp, 1e-6f));
+                                float var_norm = std::max(noi_pow / ncomp, 1e-6f);
+
+                                float scale = (2.0f * amp_norm) / (var_norm * 127.0f);
+
+                                // Report the per-component int8^2 noise variance.
+                                llr_sigma2 = var_norm * 127.0f * 127.0f;
+
+                                // Clamp to a range where the int8 LUT keeps usable
+                                // dynamic range: too small zeroes the samples, too
+                                // large saturates them all identically.
+                                llr_scale = std::clamp(scale, 0.25f, 8.0f);
+                            }
+                            else
+                            {
+                                // Legacy heuristic: npwr = 2 * 10^(-SNR/20),
+                                // scale = 1/npwr — same as DVB-S2 demod.
+                                float npwr = 2.0f * powf(10.0f, -llr_snr / 20.0f);
+                                llr_scale = std::clamp(1.0f / npwr, 0.25f, 8.0f);
+                            }
 
                             // Scaling is a function of the int8 input only, so resolve it
                             // once per batch into a 256-entry table instead of per sample.
@@ -301,6 +378,12 @@ namespace satdump
                         {
 #if 1 // For debug if necessary
                             ldpc_corr = ldpc_dec->decode(ldpc_input_buffer, ldpc_output_buffer, d_ldpc_iterations);
+
+                            // Track how many iterations this batch actually used (with
+                            // early termination) and push it into the history buffer.
+                            ldpc_iterations_used = ldpc_dec->last_iterations();
+                            std::memmove(&ldpc_iter_history[0], &ldpc_iter_history[1], (200 - 1) * sizeof(float));
+                            ldpc_iter_history[200 - 1] = (float)ldpc_iterations_used;
 #else
                             for (int i = 0; i < d_ldpc_simd * d_ldpc_codeword_size; i++)
                                 ldpc_output_buffer[i] = ldpc_input_buffer[i] > 0;
@@ -359,11 +442,15 @@ namespace satdump
                     v["deframer_lock"] = deframer->getState() == deframer->STATE_SYNCED;
                 v["correlator_lock"] = correlator_locked;
                 v["correlator_corr"] = correlator_cor;
+                v["correlator_corr_norm"] = correlator_corr_norm;
                 v["ldpc_corr"] = ldpc_corr;
+                v["ldpc_iterations"] = ldpc_iterations_used;
                 v["ldpc_algorithm"] = codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm);
                 v["ldpc_nms_alpha"] = d_ldpc_nms_alpha_q8 / 256.0f;
                 v["llr_snr"] = llr_snr;
                 v["llr_scale"] = llr_scale;
+                v["llr_sigma2"] = llr_sigma2;
+                v["llr_scaling"] = d_llr_calibrated ? "calibrated" : "heuristic";
                 std::string lock_state = correlator_locked ? "SYNCED" : "NOSYNC";
                 std::string deframer_state;
                 v["lock_state"] = lock_state;
@@ -427,6 +514,9 @@ namespace satdump
                         ImGui::Text("Corr  : ");
                         ImGui::SameLine();
                         ImGui::TextColored(correlator_locked ? style::theme.green : style::theme.orange, UITO_C_STR(correlator_cor));
+                        ImGui::Text("Norm  : ");
+                        ImGui::SameLine();
+                        ImGui::TextColored(correlator_locked ? style::theme.green : style::theme.orange, "%.2f", correlator_corr_norm);
 
                         std::memmove(&cor_history[0], &cor_history[1], (200 - 1) * sizeof(float));
                         cor_history[200 - 1] = correlator_cor;
@@ -445,6 +535,8 @@ namespace satdump
                             ImGui::TextColored(style::theme.green, "NMS a=%.2f", d_ldpc_nms_alpha_q8 / 256.0f);
                         else if (d_ldpc_algorithm == codings::ldpc::LDPC_SELF_CORRECTED_MIN_SUM)
                             ImGui::TextColored(style::theme.green, "SCMS");
+                        else if (d_ldpc_algorithm == codings::ldpc::LDPC_SUM_PRODUCT)
+                            ImGui::TextColored(style::theme.green, "Sum-Prod (BP)");
                         else
                             ImGui::TextColored(style::theme.green, "Min-Sum");
 
@@ -459,6 +551,16 @@ namespace satdump
                                                  ImVec2(200 * ui_scale, 50 * ui_scale));
                     }
 
+                    ImGui::Button("LDPC Iterations", {200 * ui_scale, 20 * ui_scale});
+                    {
+                        ImGui::Text("Used  : ");
+                        ImGui::SameLine();
+                        ImGui::TextColored(ldpc_iterations_used >= d_ldpc_iterations ? style::theme.orange : style::theme.green, "%d / %d", ldpc_iterations_used, d_ldpc_iterations);
+
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##ldpciter", ldpc_iter_history, IM_ARRAYSIZE(ldpc_iter_history), 0, "", 0.0f, (float)d_ldpc_iterations,
+                                                 ImVec2(200 * ui_scale, 50 * ui_scale));
+                    }
+
                     ImGui::Button("LLR Scaling", {200 * ui_scale, 20 * ui_scale});
                     {
                         ImGui::Text("SNR   : ");
@@ -467,11 +569,12 @@ namespace satdump
                         ImGui::Text("Scale : ");
                         ImGui::SameLine();
                         ImGui::TextColored(style::theme.green, "%.2fx", llr_scale);
-                        ImGui::Text("OMS β: ");
-                        ImGui::SameLine();
-                        int16_t cur_beta = d_parameters.contains("ldpc_oms_beta") ? (int16_t)d_parameters["ldpc_oms_beta"].get<int>() : 0;
-                        ImGui::TextColored(cur_beta > 0 ? style::theme.green : style::theme.orange, "%d", (int)cur_beta);
-
+                        if (d_llr_calibrated)
+                        {
+                            ImGui::Text("σ²    : ");
+                            ImGui::SameLine();
+                            ImGui::TextColored(style::theme.green, "%.2f", llr_sigma2);
+                        }
                         std::memmove(&llr_scale_history[0], &llr_scale_history[1], (200 - 1) * sizeof(float));
                         llr_scale_history[200 - 1] = llr_scale;
 

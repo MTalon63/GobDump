@@ -202,7 +202,13 @@
 					"long_poly": true,
 					"derandomize": true,
 					"nrzm": false,
-					"cadu_size": 8192
+					"cadu_size": 8192,
+					"ldpc_algorithm": "normalized_min_sum",
+					"ldpc_nms_alpha": 0.75,
+					"correlator_threshold": 0.5,
+					"correlator_lock_after": 3,
+					"correlator_drop_after": 5,
+					"correlator_search_window": 64
 				}
 			},
 			"products": {

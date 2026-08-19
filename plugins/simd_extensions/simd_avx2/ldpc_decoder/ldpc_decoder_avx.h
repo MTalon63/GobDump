@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/codings/ldpc/ldpc_decoder.h"
+#include "common/codings/ldpc/ldpc_decoder_generic.h"
 
 #include <xmmintrin.h>
 #include <tmmintrin.h>
@@ -52,6 +53,20 @@ namespace codings
             int *d_row_pos_deg;
 
             void generic_cn_kernel(int cn_idx);
+
+            /* Sum-product (belief propagation) fallback.
+             *
+             * The AVX2 kernel implements the min-sum family only. A correct per-lane
+             * sum-product check node would require a per-lane φ gather (16-bit lanes
+             * have no direct AVX2 gather), which is risky to get right without a build
+             * to validate. Instead, when LDPC_SUM_PRODUCT is selected we fall back to
+             * the generic (scalar) decoder, which implements the true BP check node.
+             * The 16 interleaved frames are decoded one at a time by the generic
+             * decoder and the results are written back to the same output layout, so
+             * the rest of the pipeline is unaffected. This is a documented limitation:
+             * sum-product runs on the generic path, not the AVX kernel. */
+            Sparse_matrix d_pcm;
+            LDPCDecoderGeneric *d_generic_fallback = nullptr;
 
             // Used by generic_cn_kernel
             __m256i sign;

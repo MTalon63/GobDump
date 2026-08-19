@@ -3,8 +3,10 @@
 #include "rotation.h"
 #include "core/resources.h"
 #include "logger.h"
+#include <algorithm>
+#include <cmath>
 
-CorrelatorGeneric::CorrelatorGeneric(dsp::constellation_type_t mod, std::vector<uint8_t> syncword, int max_frm_size) : d_modulation(mod)
+CorrelatorGeneric::CorrelatorGeneric(dsp::constellation_type_t mod, std::vector<uint8_t> syncword, int max_frm_size, float threshold) : d_modulation(mod), d_threshold(threshold)
 {
     converted_buffer = dsp::create_volk_buffer<float>(max_frm_size * 2);
     syncword_length = syncword.size();
@@ -173,7 +175,7 @@ CorrelatorGeneric::~CorrelatorGeneric()
 #endif
 }
 
-int CorrelatorGeneric::correlate(int8_t *soft_input, phase_t &phase, bool &swap, float &cor, int length)
+int CorrelatorGeneric::correlate(int8_t *soft_input, phase_t &phase, bool &swap, float &cor, int length, int search_start, int search_len)
 {
     volk_8i_s32f_convert_32f(converted_buffer, soft_input, 127 / 2, length);
 
@@ -185,15 +187,28 @@ int CorrelatorGeneric::correlate(int8_t *soft_input, phase_t &phase, bool &swap,
     {
         clEnqueueWriteBuffer(cl_queue, buffer_input, true, 0, sizeof(float) * length, converted_buffer, 0, NULL, NULL);
 
-        size_t total_wg_size = length - syncword_length;
-        if (clEnqueueNDRangeKernel(cl_queue, corr_kernel, 1, NULL, &total_wg_size, NULL, 0, NULL, NULL) != CL_SUCCESS)
+        // Restrict the search to the requested window (search_len < 0 => whole frame),
+        // mirroring the CPU path. Clamp so the window stays within [0, length - syncword_length].
+        int search_end = (search_len < 0) ? (length - syncword_length) : std::min(search_start + search_len, length - syncword_length);
+        if (search_start < 0)
+            search_start = 0;
+        if (search_end < search_start)
+            search_end = search_start;
+
+        // Launch the kernel only over the window range. The kernel indexes the input
+        // and output arrays by get_global_id(0), so a global offset of search_start
+        // makes it compute exactly [search_start, search_end) and write at absolute
+        // indices, saving GPU work and matching the CPU path.
+        size_t global_offset = (size_t)search_start;
+        size_t total_wg_size = (size_t)(search_end - search_start);
+        if (clEnqueueNDRangeKernel(cl_queue, corr_kernel, 1, &global_offset, &total_wg_size, NULL, 0, NULL, NULL) != CL_SUCCESS)
             throw satdump_exception("Couldn't clEnqueueNDRangeKernel!");
 
         clEnqueueReadBuffer(cl_queue, buffer_corrs, true, 0, sizeof(float) * length, corro, 0, NULL, NULL);
         clEnqueueReadBuffer(cl_queue, buffer_matches, true, 0, sizeof(int) * length, matcho, 0, NULL, NULL);
 
         cor = 0;
-        for (int i = 0; i < length - syncword_length; i++)
+        for (int i = search_start; i < search_end; i++)
         {
             if (corro[i] > cor)
             {
@@ -208,7 +223,14 @@ int CorrelatorGeneric::correlate(int8_t *soft_input, phase_t &phase, bool &swap,
     {
         cor = 0;
 
-        for (int i = 0; i < length - syncword_length; i++)
+        // Restrict the search to the requested window (search_len < 0 => whole frame).
+        int search_end = (search_len < 0) ? (length - syncword_length) : std::min(search_start + search_len, length - syncword_length);
+        if (search_start < 0)
+            search_start = 0;
+        if (search_end < search_start)
+            search_end = search_start;
+
+        for (int i = search_start; i < search_end; i++)
         {
             for (int s = 0; s < (int)syncwords.size(); s++)
             {
@@ -259,6 +281,20 @@ int CorrelatorGeneric::correlate(int8_t *soft_input, phase_t &phase, bool &swap,
             phase = PHASE_180;
         swap = (best_sync / 2);
     }
+
+    /* Normalize the best raw dot-product by the product of the syncword and
+     * received-window norms. Each syncword element is +/-1 so its norm is
+     * sqrt(syncword_length); a perfect match then yields ~1.0 and pure noise ~0.0,
+     * making the result SNR-independent and thresholdable. */
+    float sync_norm = sqrtf((float)syncword_length);
+    float win_norm = 0.0f;
+    for (int x = 0; x < syncword_length; x++)
+        win_norm += converted_buffer[position + x] * converted_buffer[position + x];
+    win_norm = sqrtf(win_norm);
+
+    float denom = sync_norm * win_norm;
+    last_corr_norm = denom > 0.0f ? cor / denom : 0.0f;
+    last_locked = last_corr_norm >= d_threshold;
 
     return position;
 }

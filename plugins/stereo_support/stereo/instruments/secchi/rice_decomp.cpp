@@ -138,14 +138,14 @@ namespace soho_compression
                     for (i = 0; i < BlkSz; i++)
                     {
                         Pix = Block0[i];
-                        if ((Pix < (long)(ulong)MinPixAll) || (Pix > (long)(ulong)MaxPixAll))
+                        if ((Pix < (long)(u32)MinPixAll) || (Pix > (long)(u32)MaxPixAll))
                         {
                             if (Method >= 2)
                             { /*Lossy--just clip                    */
-                                if (Pix < (long)(ulong)MinPixAll)
-                                    Pix = (long)(ulong)MinPixAll;
+                                if (Pix < (long)(u32)MinPixAll)
+                                    Pix = (long)(u32)MinPixAll;
                                 else
-                                    Pix = (long)(ulong)MaxPixAll;
+                                    Pix = (long)(u32)MaxPixAll;
                             }
                             else
                             { /*Lossless--should not happen         */
@@ -323,7 +323,7 @@ namespace soho_compression
                     ncol < 0 || ncol > maxncol || BCol1 < 0 || BCol1 > BCol2 ||
                     BCol2 >= MaxBlkH || BRow1 < 0 || BRow1 > BRow2 || BRow2 >= MaxBlkV)
                     Error((char *)"Incorrect header parameter", 0, 0, 0);
-                nBitPix = nBitNeed((ulong)(MaxPixAll - MinPixAll));
+                nBitPix = nBitNeed((u32)(MaxPixAll - MinPixAll));
                 if (Valid == 0)
                     FoundHeader = 0;
             }
@@ -356,8 +356,8 @@ namespace soho_compression
         uword MSB, MaxMSB, Adapt;
         long Sum, Diff, Theta, Pix;
         MaxPix = (uword)RdBit(nBitPix) + MinPixAll;
-        MaxPixBit = nBitNeed((ulong)MaxPix);
-        Pix = (ulong)((uword)RdBit(MaxPixBit) + MinPixAll);
+        MaxPixBit = nBitNeed((u32)MaxPix);
+        Pix = (u32)((uword)RdBit(MaxPixBit) + MinPixAll);
         Predict[0] = (uword)Pix;
         Block[0] = Pix;
         MinAdapt = RdBit(4);
@@ -373,20 +373,20 @@ namespace soho_compression
             {
                 if (ii > 0)
                 {
-                    Sum += (long)(ulong)Predict[i - BlkSz - 1];
+                    Sum += (long)(u32)Predict[i - BlkSz - 1];
                     nSum++;
                 }
-                Sum += (long)(ulong)Predict[i - BlkSz];
+                Sum += (long)(u32)Predict[i - BlkSz];
                 nSum++;
                 if (ii < BlkSz - 1)
                 {
-                    Sum += (long)(ulong)Predict[i - BlkSz + 1];
+                    Sum += (long)(u32)Predict[i - BlkSz + 1];
                     nSum++;
                 }
             }
             if (ii > 0)
             {
-                Sum += (long)(ulong)Predict[i - 1];
+                Sum += (long)(u32)Predict[i - 1];
                 nSum++;
             }
             Predict[i] = (uword)((Sum + (nSum >> 1)) / nSum);
@@ -395,7 +395,7 @@ namespace soho_compression
             Adapt = RiceAdapt[ii + (jj << nRiceBits)];
             if (Adapt == 15u)
             {
-                Pix = (ulong)((uword)RdBit(MaxPixBit) + MinPixAll);
+                Pix = (u32)((uword)RdBit(MaxPixBit) + MinPixAll);
             }
             else if (Adapt > 0u)
             {
@@ -405,10 +405,10 @@ namespace soho_compression
                     MSB++;
                 if (Bit == 0)
                     MSB++;
-                Diff = (ulong)((uword)(MSB << Adapt) | (uword)RdBit(Adapt));
-                Theta = (long)(ulong)MaxPix - (long)(ulong)Predict[i];
-                if (Theta > (long)(ulong)Predict[i])
-                    Theta = (long)(ulong)Predict[i];
+                Diff = (u32)((uword)(MSB << Adapt) | (uword)RdBit(Adapt));
+                Theta = (long)(u32)MaxPix - (long)(u32)Predict[i];
+                if (Theta > (long)(u32)Predict[i])
+                    Theta = (long)(u32)Predict[i];
                 if (Diff <= Theta + Theta)
                 {
                     if (Diff & 1)
@@ -419,16 +419,16 @@ namespace soho_compression
                 else
                 {
                     Diff = Diff - Theta;
-                    if (Theta != (long)(ulong)Predict[i])
+                    if (Theta != (long)(u32)Predict[i])
                         Diff = -Diff;
                 }
-                Pix = (long)(ulong)Predict[i] + Diff;
+                Pix = (long)(u32)Predict[i] + Diff;
             }
             else
             {
-                Pix = (long)(ulong)Predict[i];
+                Pix = (long)(u32)Predict[i];
             }
-            if (Pix > (long)(ulong)MaxPix)
+            if (Pix > (long)(u32)MaxPix)
             {
                 Error((char *)"Out of bounds predict value (%d at pixel %d)", 0, (short)Pix, i);
                 return;
@@ -445,7 +445,7 @@ namespace soho_compression
         /*  Written by Mitchell R Grunes, ATSC/NRL, 07/11/96                          */
         int i;
         for (i = 0; i < nPixBlk; i++)
-            Block[i] = (long)(ulong)RdBit(16);
+            Block[i] = (long)(u32)RdBit(16);
     }
 
     /*============================================================================*/
@@ -579,11 +579,11 @@ namespace soho_compression
     }
 
     /*============================================================================*/
-    int SOHORiceDecompressor::nBitNeed(ulong i)
+    int SOHORiceDecompressor::nBitNeed(u32 i)
     { /*# of bits needed to represent i
         (i must be >= 0)                    */
         /*  Written by Mitchell R Grunes, ATSC/NRL, 07/11/96                          */
-        ulong j;
+        u32 j;
         int need;
         j = i;
         need = 0;
@@ -774,14 +774,14 @@ namespace soho_compression
         long index;
         uword *Image0;
         *Method = RdBit(3);
-        *BCol1 = RdBit(nBitNeed((ulong)(MaxBlkH - 1)));
-        *BCol2 = RdBit(nBitNeed((ulong)(MaxBlkH - 1)));
-        *BRow1 = RdBit(nBitNeed((ulong)(MaxBlkV - 1)));
-        *BRow2 = RdBit(nBitNeed((ulong)(MaxBlkV - 1)));
+        *BCol1 = RdBit(nBitNeed((u32)(MaxBlkH - 1)));
+        *BCol2 = RdBit(nBitNeed((u32)(MaxBlkH - 1)));
+        *BRow1 = RdBit(nBitNeed((u32)(MaxBlkV - 1)));
+        *BRow2 = RdBit(nBitNeed((u32)(MaxBlkV - 1)));
         *ncol = (*BCol2 - *BCol1 + 1) * BlkSz;
         *nrow = (*BRow2 - *BRow1 + 1) * BlkSz;
         *MaxPixAll = (uword)RdBit(16);
-        *MinPixAll = (uword)RdBit(nBitNeed((ulong)*MaxPixAll));
+        *MinPixAll = (uword)RdBit(nBitNeed((u32)*MaxPixAll));
         *SignFlag = RdBit(1);
         *nshift = RdBit(4);
         *SqrtFlag = RdBit(1);

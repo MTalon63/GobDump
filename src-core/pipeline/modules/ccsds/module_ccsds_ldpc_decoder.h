@@ -72,10 +72,26 @@ namespace satdump
                 float cor_history[200];
 
                 float correlator_cor;
-                bool correlator_locked;
+                float correlator_corr_norm = 0.0f;
+                bool correlator_locked = false;
+
+                // Correlator lock state machine (mirrors the CCSDS deframer):
+                // require N consecutive good (above-threshold) correlations to lock,
+                // M consecutive failures to drop back to NOSYNC.
+                int correlator_lock_after = 3;
+                int correlator_drop_after = 5;
+                int correlator_good_count = 0;
+                int correlator_bad_count = 0;
+                // Optional search window (in symbols) around the expected ASM position
+                // used while locked. 0 = search the whole frame.
+                int correlator_search_window = 0;
 
                 float ldpc_history[200];
                 int ldpc_corr;
+
+                // LDPC iterations actually used (with early termination) and its history.
+                int ldpc_iterations_used = 0;
+                float ldpc_iter_history[200];
 
                 static constexpr int SNR_ESTIMATOR_SAMPLES = 4096;
                 EVMSNREstimator snr_estimator{4};
@@ -83,7 +99,11 @@ namespace satdump
                 int8_t llr_scale_lut[256];
                 float llr_snr = 0;
                 float llr_scale = 1.0f;
+                float llr_sigma2 = 0;   // Noise variance of int8 soft samples (calibrated mode only)
                 float llr_scale_history[200];
+                // LLR scaling mode. true  = calibrated 2/sigma^2 (default),
+                // false = legacy heuristic 1/npwr (for A/B comparison).
+                bool d_llr_calibrated = true;
 
                 bool is_started = false;
 
