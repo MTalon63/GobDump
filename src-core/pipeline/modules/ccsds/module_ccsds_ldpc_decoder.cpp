@@ -509,96 +509,97 @@ namespace satdump
 
                 ImGui::BeginGroup();
                 {
-                    ImGui::Button("Correlator", {200 * ui_scale, 20 * ui_scale});
+                    // ---- Status header ----
+                    ImGui::Text("Lock  : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    ImGui::TextColored(correlator_locked ? style::theme.green : style::theme.orange, correlator_locked ? "SYNCED" : "NOSYNC");
+                    ImGui::Text("Algo  : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    if (d_ldpc_algorithm == codings::ldpc::LDPC_NORMALIZED_MIN_SUM)
+                        ImGui::TextColored(style::theme.green, "NMS a=%.2f", d_ldpc_nms_alpha_q8 / 256.0f);
+                    else if (d_ldpc_algorithm == codings::ldpc::LDPC_SELF_CORRECTED_MIN_SUM)
+                        ImGui::TextColored(style::theme.green, "SCMS");
+                    else if (d_ldpc_algorithm == codings::ldpc::LDPC_SUM_PRODUCT)
+                        ImGui::TextColored(style::theme.green, "Sum-Prod (BP)");
+                    else
+                        ImGui::TextColored(style::theme.green, "Min-Sum");
+                    ImGui::Text("Iter  : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    ImGui::TextColored(ldpc_iterations_used >= d_ldpc_iterations ? style::theme.orange : style::theme.green, "%d / %d", ldpc_iterations_used, d_ldpc_iterations);
+                    ImGui::Separator();
+
+                    // ---- Correlator ----
+                    ImGui::TextColored(style::theme.green, "Correlator");
+                    ImGui::Text("Corr  : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    ImGui::TextColored(correlator_locked ? style::theme.green : style::theme.orange, UITO_C_STR(correlator_cor));
+                    ImGui::Text("Norm  : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    ImGui::TextColored(correlator_locked ? style::theme.green : style::theme.orange, "%.2f", correlator_corr_norm);
+
+                    std::memmove(&cor_history[0], &cor_history[1], (200 - 1) * sizeof(float));
+                    cor_history[200 - 1] = correlator_cor;
+
+                    if (d_ldpc_asm_size == 32)
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", cor_history, IM_ARRAYSIZE(cor_history), 0, "", 15.0f, 35.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                    else
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", cor_history, IM_ARRAYSIZE(cor_history), 0, "", 25.0f, 70.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                    ImGui::Separator();
+
+                    // ---- LDPC ----
+                    ImGui::TextColored(style::theme.green, "LDPC");
+                    ImGui::Text("Diff  : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    ImGui::TextColored(ldpc_corr > 10 ? style::theme.orange : style::theme.green, UITO_C_STR(ldpc_corr));
+
+                    std::memmove(&ldpc_history[0], &ldpc_history[1], (200 - 1) * sizeof(float));
+                    ldpc_history[200 - 1] = ldpc_corr;
+
+                    widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", ldpc_history, IM_ARRAYSIZE(ldpc_history), 0, "", 0.0f, d_ldpc_codeword_size / 20,
+                                             ImVec2(200 * ui_scale, 50 * ui_scale));
+                    ImGui::Separator();
+
+                    // ---- LDPC Iterations ----
+                    ImGui::TextColored(style::theme.green, "LDPC Iterations");
+                    std::memmove(&ldpc_iter_history[0], &ldpc_iter_history[1], (200 - 1) * sizeof(float));
+                    ldpc_iter_history[200 - 1] = ldpc_iterations_used;
+
+                    widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##ldpciter", ldpc_iter_history, IM_ARRAYSIZE(ldpc_iter_history), 0, "", 0.0f, (float)d_ldpc_iterations,
+                                             ImVec2(200 * ui_scale, 50 * ui_scale));
+                    ImGui::Separator();
+
+                    // ---- LLR Scaling ----
+                    ImGui::TextColored(style::theme.green, "LLR Scaling");
+                    ImGui::Text("SNR   : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    ImGui::TextColored(style::theme.green, "%.1f dB", llr_snr);
+                    ImGui::Text("Scale : ");
+                    ImGui::SameLine(70 * ui_scale);
+                    ImGui::TextColored(style::theme.green, "%.2fx", llr_scale);
+                    if (d_llr_calibrated)
                     {
-                        ImGui::Text("Corr  : ");
-                        ImGui::SameLine();
-                        ImGui::TextColored(correlator_locked ? style::theme.green : style::theme.orange, UITO_C_STR(correlator_cor));
-                        ImGui::Text("Norm  : ");
-                        ImGui::SameLine();
-                        ImGui::TextColored(correlator_locked ? style::theme.green : style::theme.orange, "%.2f", correlator_corr_norm);
-
-                        std::memmove(&cor_history[0], &cor_history[1], (200 - 1) * sizeof(float));
-                        cor_history[200 - 1] = correlator_cor;
-
-                        if (d_ldpc_asm_size == 32)
-                            widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", cor_history, IM_ARRAYSIZE(cor_history), 0, "", 15.0f, 35.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
-                        else
-                            widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", cor_history, IM_ARRAYSIZE(cor_history), 0, "", 25.0f, 70.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                        ImGui::Text("σ²    : ");
+                        ImGui::SameLine(70 * ui_scale);
+                        ImGui::TextColored(style::theme.green, "%.2f", llr_sigma2);
                     }
+                    std::memmove(&llr_scale_history[0], &llr_scale_history[1], (200 - 1) * sizeof(float));
+                    llr_scale_history[200 - 1] = llr_scale;
 
-                    ImGui::Button("LDPC", {200 * ui_scale, 20 * ui_scale});
-                    {
-                        ImGui::Text("Algo  : ");
-                        ImGui::SameLine();
-                        if (d_ldpc_algorithm == codings::ldpc::LDPC_NORMALIZED_MIN_SUM)
-                            ImGui::TextColored(style::theme.green, "NMS a=%.2f", d_ldpc_nms_alpha_q8 / 256.0f);
-                        else if (d_ldpc_algorithm == codings::ldpc::LDPC_SELF_CORRECTED_MIN_SUM)
-                            ImGui::TextColored(style::theme.green, "SCMS");
-                        else if (d_ldpc_algorithm == codings::ldpc::LDPC_SUM_PRODUCT)
-                            ImGui::TextColored(style::theme.green, "Sum-Prod (BP)");
-                        else
-                            ImGui::TextColored(style::theme.green, "Min-Sum");
-
-                        ImGui::Text("Diff  : ");
-                        ImGui::SameLine();
-                        ImGui::TextColored(ldpc_corr > 10 ? style::theme.orange : style::theme.green, UITO_C_STR(ldpc_corr));
-
-                        std::memmove(&ldpc_history[0], &ldpc_history[1], (200 - 1) * sizeof(float));
-                        ldpc_history[200 - 1] = ldpc_corr;
-
-                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##", ldpc_history, IM_ARRAYSIZE(ldpc_history), 0, "", 0.0f, d_ldpc_codeword_size / 20,
-                                                 ImVec2(200 * ui_scale, 50 * ui_scale));
-                    }
-
-                    ImGui::Button("LDPC Iterations", {200 * ui_scale, 20 * ui_scale});
-                    {
-                        ImGui::Text("Used  : ");
-                        ImGui::SameLine();
-                        ImGui::TextColored(ldpc_iterations_used >= d_ldpc_iterations ? style::theme.orange : style::theme.green, "%d / %d", ldpc_iterations_used, d_ldpc_iterations);
-
-                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##ldpciter", ldpc_iter_history, IM_ARRAYSIZE(ldpc_iter_history), 0, "", 0.0f, (float)d_ldpc_iterations,
-                                                 ImVec2(200 * ui_scale, 50 * ui_scale));
-                    }
-
-                    ImGui::Button("LLR Scaling", {200 * ui_scale, 20 * ui_scale});
-                    {
-                        ImGui::Text("SNR   : ");
-                        ImGui::SameLine();
-                        ImGui::TextColored(style::theme.green, "%.1f dB", llr_snr);
-                        ImGui::Text("Scale : ");
-                        ImGui::SameLine();
-                        ImGui::TextColored(style::theme.green, "%.2fx", llr_scale);
-                        if (d_llr_calibrated)
-                        {
-                            ImGui::Text("σ²    : ");
-                            ImGui::SameLine();
-                            ImGui::TextColored(style::theme.green, "%.2f", llr_sigma2);
-                        }
-                        std::memmove(&llr_scale_history[0], &llr_scale_history[1], (200 - 1) * sizeof(float));
-                        llr_scale_history[200 - 1] = llr_scale;
-
-                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##llrscale", llr_scale_history, IM_ARRAYSIZE(llr_scale_history), 0, "", 0.0f, 8.0f,
-                                                 ImVec2(200 * ui_scale, 50 * ui_scale));
-                    }
+                    widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##llrscale", llr_scale_history, IM_ARRAYSIZE(llr_scale_history), 0, "", 0.0f, 8.0f,
+                                             ImVec2(200 * ui_scale, 50 * ui_scale));
 
                     if (d_internal_stream)
                     {
-                        ImGui::Spacing();
-
-                        ImGui::Button("Deframer", {200 * ui_scale, 20 * ui_scale});
-                        {
-                            ImGui::Text("State : ");
-
-                            ImGui::SameLine();
-
-                            if (deframer->getState() == deframer->STATE_NOSYNC)
-                                ImGui::TextColored(style::theme.red, "NOSYNC");
-                            else if (deframer->getState() == deframer->STATE_SYNCING)
-                                ImGui::TextColored(style::theme.orange, "SYNCING");
-                            else
-                                ImGui::TextColored(style::theme.green, "SYNCED");
-                        }
+                        ImGui::Separator();
+                        ImGui::TextColored(style::theme.green, "Deframer");
+                        ImGui::Text("State : ");
+                        ImGui::SameLine(70 * ui_scale);
+                        if (deframer->getState() == deframer->STATE_NOSYNC)
+                            ImGui::TextColored(style::theme.red, "NOSYNC");
+                        else if (deframer->getState() == deframer->STATE_SYNCING)
+                            ImGui::TextColored(style::theme.orange, "SYNCING");
+                        else
+                            ImGui::TextColored(style::theme.green, "SYNCED");
                     }
                 }
                 ImGui::EndGroup();

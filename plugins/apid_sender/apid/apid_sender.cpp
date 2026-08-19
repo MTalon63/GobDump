@@ -156,6 +156,7 @@ namespace apid
 
     void APIDSenderModule::drawUI(bool window)
     {
+#ifdef BUILD_GUI
         ImGui::Begin("Network Server", NULL, window ? 0 : NOWINDOW_FLAGS);
 
         ImGui::Text("Address  : ");
@@ -200,6 +201,7 @@ namespace apid
             drawProgressBar();
 
         ImGui::End();
+#endif
     }
 
     std::string APIDSenderModule::getID() { return "apid_sender"; }
