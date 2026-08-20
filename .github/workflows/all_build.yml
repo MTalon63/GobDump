@@ -93,7 +93,7 @@ jobs:
 
         env:
             SCCACHE_CACHE_SIZE: 4G
-            SCCACHE_DIR: ${{ runner.temp }}/sccache-cache
+            SCCACHE_DIR: D:\a\_temp\sccache-cache
 
         steps:
             - uses: actions/checkout@v4
@@ -202,7 +202,7 @@ jobs:
 
         env:
             SCCACHE_CACHE_SIZE: 4G
-            SCCACHE_DIR: ${{ runner.temp }}/sccache-cache
+            SCCACHE_DIR: D:\a\_temp\sccache-cache
 
         steps:
             - uses: actions/checkout@v4
