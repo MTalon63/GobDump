@@ -224,7 +224,7 @@ namespace satdump
             live_pipeline->stop();
             is_stopping_processing = is_processing = false;
 
-            if (satdump_cfg.main_cfg["user_interface"]["finish_processing_after_live"]["value"].get<bool>() && live_pipeline->getOutputFile().size() > 0)
+            if (!is_destroying && satdump_cfg.main_cfg["user_interface"]["finish_processing_after_live"]["value"].get<bool>() && live_pipeline->getOutputFile().size() > 0)
             {
                 pipeline::Pipeline pipeline = pipeline_selector.selected_pipeline;
                 std::string input_file = live_pipeline->getOutputFile();

@@ -84,6 +84,7 @@ namespace satdump
         uint64_t frequency_hz = 100000000;
         bool show_waterfall = true;
         bool is_started = false, is_recording = false, is_processing = false, is_stopping_processing = false;
+        bool is_destroying = false; // Set in the destructor to prevent firing events back into the explorer during teardown
 
         double xconverter_frequency = 0;
 

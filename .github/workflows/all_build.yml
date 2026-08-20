@@ -91,6 +91,10 @@ jobs:
     build_windows_x64:
         runs-on: windows-2022
 
+        env:
+            SCCACHE_CACHE_SIZE: 4G
+            SCCACHE_DIR: ${{ runner.temp }}/sccache-cache
+
         steps:
             - uses: actions/checkout@v4
 
@@ -98,8 +102,11 @@ jobs:
               uses: actions/cache@v4
               id: win-deps-x64
               with:
-                  path: vcpkg
+                  path: |
+                      vcpkg/installed
+                      vcpkg/scripts/buildsystems/vcpkg.cmake
                   key: win-deps-x64-${{ hashFiles('windows/Configure-vcpkg.ps1') }}
+                  restore-keys: win-deps-x64-
 
             - name: Set up Python 3.13
               if: steps.win-deps-x64.outputs.cache-hit != 'true'
@@ -141,9 +148,25 @@ jobs:
             - name: Create Build Environment
               run: cmake -E make_directory ${{runner.workspace}}/build
 
+            - name: Install sccache
+              shell: powershell
+              run: |
+                  $version = "v0.8.2"
+                  $asset = "sccache-$version-x86_64-pc-windows-msvc"
+                  Invoke-WebRequest -Uri "https://github.com/mozilla/sccache/releases/download/$version/$asset.zip" -OutFile "$env:TEMP\sccache.zip"
+                  Expand-Archive -Path "$env:TEMP\sccache.zip" -DestinationPath "$env:TEMP\sccache" -Force
+                  echo "$env:TEMP\sccache\$asset" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+
+            - name: Cache sccache
+              uses: actions/cache@v4
+              with:
+                  path: ${{ runner.temp }}/sccache-cache
+                  key: win-sccache-x64-${{ github.sha }}
+                  restore-keys: win-sccache-x64-
+
             - name: Configure CMake
               working-directory: ${{runner.workspace}}/build
-              run: cmake -DVCPKG_TARGET_TRIPLET="x64-windows" -DPLUGIN_AARONIA_SDR_SUPPORT=ON -DBUILD_MSVC=ON -DCMAKE_TOOLCHAIN_FILE="${{github.workspace}}\vcpkg\scripts\buildsystems\vcpkg.cmake" "$Env:GITHUB_WORKSPACE"
+              run: cmake -DVCPKG_TARGET_TRIPLET="x64-windows" -DPLUGIN_AARONIA_SDR_SUPPORT=ON -DBUILD_MSVC=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_TOOLCHAIN_FILE="${{github.workspace}}\vcpkg\scripts\buildsystems\vcpkg.cmake" "$Env:GITHUB_WORKSPACE"
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -177,6 +200,10 @@ jobs:
     build_windows_arm64:
         runs-on: windows-2022
 
+        env:
+            SCCACHE_CACHE_SIZE: 4G
+            SCCACHE_DIR: ${{ runner.temp }}/sccache-cache
+
         steps:
             - uses: actions/checkout@v4
 
@@ -184,8 +211,11 @@ jobs:
               uses: actions/cache@v4
               id: win-deps-arm64
               with:
-                  path: vcpkg
+                  path: |
+                      vcpkg/installed
+                      vcpkg/scripts/buildsystems/vcpkg.cmake
                   key: win-deps-arm64-${{ hashFiles('windows/Configure-vcpkg.ps1') }}
+                  restore-keys: win-deps-arm64-
 
             - name: Set up Python 3.13
               if: steps.win-deps-arm64.outputs.cache-hit != 'true'
@@ -217,9 +247,25 @@ jobs:
             - name: Create Build Environment
               run: cmake -E make_directory ${{runner.workspace}}/build
 
+            - name: Install sccache
+              shell: powershell
+              run: |
+                  $version = "v0.8.2"
+                  $asset = "sccache-$version-x86_64-pc-windows-msvc"
+                  Invoke-WebRequest -Uri "https://github.com/mozilla/sccache/releases/download/$version/$asset.zip" -OutFile "$env:TEMP\sccache.zip"
+                  Expand-Archive -Path "$env:TEMP\sccache.zip" -DestinationPath "$env:TEMP\sccache" -Force
+                  echo "$env:TEMP\sccache\$asset" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+
+            - name: Cache sccache
+              uses: actions/cache@v4
+              with:
+                  path: ${{ runner.temp }}/sccache-cache
+                  key: win-sccache-arm64-${{ github.sha }}
+                  restore-keys: win-sccache-arm64-
+
             - name: Configure CMake
               working-directory: ${{runner.workspace}}/build
-              run: cmake -A ARM64 -DVCPKG_TARGET_TRIPLET="arm64-windows" -DVCPKG_HOST_TRIPLET="x64-windows" -DVCPKG_USE_HOST_TOOLS=ON -DCMAKE_SYSTEM_VERSION="10.0.22621.0" -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=ARM64 -DCMAKE_CROSSCOMPILING=ON -DPLUGIN_LIMESDR_SDR_SUPPORT=OFF -DBUILD_MSVC=ON -DCMAKE_TOOLCHAIN_FILE="${{github.workspace}}\vcpkg\scripts\buildsystems\vcpkg.cmake" "$Env:GITHUB_WORKSPACE"
+              run: cmake -A ARM64 -DVCPKG_TARGET_TRIPLET="arm64-windows" -DVCPKG_HOST_TRIPLET="x64-windows" -DVCPKG_USE_HOST_TOOLS=ON -DCMAKE_SYSTEM_VERSION="10.0.22621.0" -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=ARM64 -DCMAKE_CROSSCOMPILING=ON -DPLUGIN_LIMESDR_SDR_SUPPORT=OFF -DBUILD_MSVC=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_TOOLCHAIN_FILE="${{github.workspace}}\vcpkg\scripts\buildsystems\vcpkg.cmake" "$Env:GITHUB_WORKSPACE"
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -472,6 +518,10 @@ jobs:
     build_macos_intel:
         runs-on: macos-15-intel
 
+        env:
+            CCACHE_DIR: ${{ github.workspace }}/.ccache
+            CCACHE_MAXSIZE: 4G
+
         steps:
             - uses: actions/checkout@v4
 
@@ -482,7 +532,7 @@ jobs:
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
               # sqlite3 libtool autoconf libjpeg-turbo libtiff libusb libpng zstd
-              run: brew install ninja dylibbundler automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
+              run: brew install ccache ninja dylibbundler automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -502,12 +552,19 @@ jobs:
               shell: bash
               run: $GITHUB_WORKSPACE/macOS/build_deps.sh
 
+            - name: Cache compiler objects
+              uses: actions/cache@v4
+              with:
+                  path: .ccache
+                  key: macos-ccache-intel-${{ github.sha }}
+                  restore-keys: macos-ccache-intel-
+
             - name: Configure CMake
               working-directory: ${{runner.workspace}}/build
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -G Ninja
+              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -G Ninja
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -534,6 +591,11 @@ jobs:
 
     build_macos_silicon:
         runs-on: macos-15
+
+        env:
+            CCACHE_DIR: ${{ github.workspace }}/.ccache
+            CCACHE_MAXSIZE: 4G
+
         steps:
             - uses: actions/checkout@v4
 
@@ -543,7 +605,7 @@ jobs:
             - name: Install brew dependencies
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
-              run: brew install ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
+              run: brew install ccache ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -563,12 +625,19 @@ jobs:
               shell: bash
               run: $GITHUB_WORKSPACE/macOS/build_deps.sh
 
+            - name: Cache compiler objects
+              uses: actions/cache@v4
+              with:
+                  path: .ccache
+                  key: macos-ccache-silicon-${{ github.sha }}
+                  restore-keys: macos-ccache-silicon-
+
             - name: Configure CMake
               working-directory: ${{runner.workspace}}/build
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -G Ninja
+              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -G Ninja
 
             - name: Build
               working-directory: ${{runner.workspace}}/build

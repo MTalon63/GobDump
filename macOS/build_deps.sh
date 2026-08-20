@@ -13,6 +13,13 @@ fi
 working_dir="$GITHUB_WORKSPACE/deps-temp"
 output_dir="$GITHUB_WORKSPACE/deps"
 
+# Idempotency guard: if the deps output dir already exists (e.g. restored from
+# the CI cache), skip the whole build so the script is safe to run unconditionally.
+if [ -d "$output_dir" ]; then
+    echo "Dependencies already built at $output_dir, skipping."
+    exit 0
+fi
+
 # Libusb from homebrew is used
 HOMEBREW_LIB="/usr/local"
 if [[ $(uname -m) == 'arm64' ]]; then

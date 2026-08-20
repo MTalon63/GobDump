@@ -224,6 +224,7 @@ namespace satdump
 
     RecorderApplication::~RecorderApplication()
     {
+        is_destroying = true; // Prevent stop_processing() from firing events back into the explorer during teardown
         save_settings();
 
     retry_vfo:
