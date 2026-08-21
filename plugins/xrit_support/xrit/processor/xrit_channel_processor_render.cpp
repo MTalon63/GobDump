@@ -17,16 +17,21 @@ namespace satdump
             {
                 auto &dec = decMap.second;
 
-                if (dec->textureID == 0)
-                {
-                    dec->textureID = makeImageTexture();
-                    dec->textureBuffer = new uint32_t[dec->img_width * dec->img_height];
-                    memset(dec->textureBuffer, 0, sizeof(uint32_t) * dec->img_width * dec->img_height);
-                    dec->hasToUpdate = true;
-                }
-
+                // Only allocate a preview texture for channels that are
+                // actually being received/saved. IDLE channels are never
+                // displayed, so their texture buffer is released by the
+                // processor and must not be re-allocated here. It is created
+                // lazily when a new image group starts for the channel.
                 if (dec->imageStatus != XRITChannelProcessor::IDLE)
                 {
+                    if (dec->textureID == 0)
+                    {
+                        dec->textureID = makeImageTexture();
+                        dec->textureBuffer = new uint32_t[dec->img_width * dec->img_height];
+                        memset(dec->textureBuffer, 0, sizeof(uint32_t) * dec->img_width * dec->img_height);
+                        dec->hasToUpdate = true;
+                    }
+
                     if (dec->hasToUpdate)
                     {
                         updateImageTexture(dec->textureID, dec->textureBuffer, dec->img_width, dec->img_height);

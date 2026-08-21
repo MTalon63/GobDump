@@ -90,11 +90,24 @@ namespace satdump
                 // UI Stuff
                 bool hasToUpdate = false;
                 unsigned int textureID = 0;
-                uint32_t *textureBuffer;
+                uint32_t *textureBuffer = nullptr;
             };
 
             std::map<std::string, std::unique_ptr<wip_images>> all_wip_images;
             std::mutex ui_img_mtx;
+
+        private:
+            /**
+             * @brief Release the GUI preview texture buffer for a WIP image.
+             *
+             * Safe to call once the image is fully saved and no longer being
+             * previewed (imageStatus == IDLE). The preview only displays
+             * channels whose imageStatus != IDLE, so dropping the buffer here
+             * does not affect the preview; it is re-allocated lazily when a
+             * new image group starts for the channel.
+             * @param wip the WIP image whose texture buffer should be freed
+             */
+            void freeWIPTexture(wip_images *wip);
 
         public:
             std::string directory = "";

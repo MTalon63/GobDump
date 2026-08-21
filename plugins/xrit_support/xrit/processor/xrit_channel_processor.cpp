@@ -1,6 +1,7 @@
 #include "xrit_channel_processor.h"
 #include "core/exception.h"
 #include "get_img.h"
+#include "imgui/imgui_image.h"
 #include "logger.h"
 #include "xrit/fy4/fy4_headers.h"
 #include "xrit/fy4/segment_decoder.h"
@@ -106,6 +107,15 @@ namespace satdump
                     // for the process lifetime. The GUI preview texture is kept
                     // in all_wip_images, so the preview is unaffected.
                     segmented_decoders.erase(seg_dec_id);
+
+                    // The image is now fully saved and no longer being previewed
+                    // (the renderer only displays channels whose imageStatus !=
+                    // IDLE). Release the 256x256 preview texture buffer so it is
+                    // not held for the process lifetime. It is re-allocated
+                    // lazily when a new image group starts for this channel.
+                    ui_img_mtx.lock();
+                    freeWIPTexture(wip_img.get());
+                    ui_img_mtx.unlock();
                 }
             }
         }
@@ -129,11 +139,29 @@ namespace satdump
             ui_img_mtx.unlock();
         }
 
+        void XRITChannelProcessor::freeWIPTexture(wip_images *wip)
+        {
+            if (wip->textureID > 0)
+            {
+                // In CLI mode the texture functions are never bound, but a
+                // texture is only ever created by the GUI renderer, so this
+                // is only reached when the UI is active. Guard anyway.
+                if (deleteImageTexture)
+                    deleteImageTexture(wip->textureID);
+                wip->textureID = 0;
+            }
+            if (wip->textureBuffer != nullptr)
+            {
+                delete[] wip->textureBuffer;
+                wip->textureBuffer = nullptr;
+            }
+            wip->hasToUpdate = false;
+        }
+
         XRITChannelProcessor::~XRITChannelProcessor()
         {
             for (auto &decMap : all_wip_images)
-                if (decMap.second->textureID > 0)
-                    delete[] decMap.second->textureBuffer;
+                freeWIPTexture(decMap.second.get());
         }
     } // namespace xrit
 } // namespace satdump
