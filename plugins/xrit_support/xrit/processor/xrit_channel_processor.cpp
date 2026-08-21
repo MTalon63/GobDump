@@ -99,6 +99,13 @@ namespace satdump
                     saveImg(segDecoder->info, segDecoder->image);
                     segDecoder->reset();
                     wip_img->imageStatus = IDLE;
+
+                    // Release the full-res WIP buffer held by this decoder.
+                    // The decoder is dropped entirely so it is re-created fresh
+                    // for the next image group, instead of lingering in the map
+                    // for the process lifetime. The GUI preview texture is kept
+                    // in all_wip_images, so the preview is unaffected.
+                    segmented_decoders.erase(seg_dec_id);
                 }
             }
         }
@@ -107,14 +114,17 @@ namespace satdump
         {
             // Free up texture memory!
             ui_img_mtx.lock();
-            for (auto &seg : segmented_decoders)
+            for (auto it = segmented_decoders.begin(); it != segmented_decoders.end();)
             {
-                auto &segDecoder = seg.second;
+                auto &segDecoder = it->second;
                 if (segDecoder && segDecoder->hasData())
                 {
                     saveImg(segDecoder->info, segDecoder->image);
                     segDecoder->reset();
                 }
+                // Drop the decoder entirely so its full-res WIP buffer is
+                // released. It will be re-created fresh if needed.
+                it = segmented_decoders.erase(it);
             }
             ui_img_mtx.unlock();
         }
