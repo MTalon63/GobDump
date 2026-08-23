@@ -26,3 +26,5 @@ deps/
 build_p2/
 
 docs/audit/
+
+tools/ldpc_ber_test/
