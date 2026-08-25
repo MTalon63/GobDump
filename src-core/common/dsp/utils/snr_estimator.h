@@ -69,6 +69,7 @@ public:
     ~EVMSNREstimator() {}
 
     void update(complex_t *input, int size);
+    void reset();
     float snr();
     float signal();
     float noise();

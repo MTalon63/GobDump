@@ -446,6 +446,10 @@ namespace satdump
                                     deframer->reset();
                                     viterbi_lock = d_rate_pool[0].getState();
 
+                                    mer_db = 0;
+                                    avg_mer = 0;
+                                    mer_estimator.reset();
+
                                     // Pre-charge the timer with a negative cooldown debt.
                                     // The next reset cannot fire until the timer has climbed
                                     // through the entire cooldown and then the full timeout period.

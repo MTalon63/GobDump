@@ -57,14 +57,19 @@ float M2M4SNREstimator::noise() { return 10.0f * log10f((float)d_noise); }
 EVMSNREstimator::EVMSNREstimator(int order, float alpha)
 {
     d_order = order;
+    d_alpha = alpha;
+    d_beta = 1.0 - alpha;
+    reset();
+}
+
+void EVMSNREstimator::reset()
+{
     d_pwr = 0;
     d_pwr_re = 0;
     d_pwr_im = 0;
     d_err = 0;
     d_signal = 0;
     d_noise = 0;
-    d_alpha = alpha;
-    d_beta = 1.0 - alpha;
 }
 
 void EVMSNREstimator::update(complex_t *input, int size)

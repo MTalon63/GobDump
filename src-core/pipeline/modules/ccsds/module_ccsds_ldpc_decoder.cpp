@@ -107,6 +107,8 @@ namespace satdump
                     d_llr_calibrated = (llr_scaling == "calibrated");
                 }
 
+                mer_estimator = EVMSNREstimator(d_constellation == dsp::BPSK ? 2 : 4, 0.001f);
+
                 float corr_threshold = parameters.count("correlator_threshold") > 0 ? parameters["correlator_threshold"].get<float>() : 0.5f;
 
                 correlator = std::make_unique<CorrelatorGeneric>(
@@ -209,7 +211,16 @@ namespace satdump
                         correlator_bad_count++;
                         correlator_good_count = 0;
                         if (correlator_bad_count >= correlator_drop_after)
+                        {
+                            if (correlator_locked)
+                            {
+                                mer_db = 0;
+                                avg_mer = 0;
+                                memset(mer_history, 0, sizeof(mer_history));
+                                mer_estimator.reset();
+                            }
                             correlator_locked = false;
+                        }
                     }
 
                     if (pos != 0 && pos < d_ldpc_frame_size) // Safety
@@ -238,6 +249,29 @@ namespace satdump
                     else
                     {
                         rotate_soft((int8_t *)soft_buffer, d_ldpc_frame_size, phase, swap);
+                    }
+
+                    if (correlator_locked)
+                    {
+                        int n_syms = d_constellation == dsp::BPSK ? d_ldpc_frame_size : d_ldpc_frame_size / 2;
+                        static thread_local std::vector<complex_t> mer_buf;
+                        if ((int)mer_buf.size() < n_syms)
+                            mer_buf.resize(n_syms);
+                        if (d_constellation == dsp::BPSK)
+                        {
+                            for (int i = 0; i < n_syms; i++)
+                                mer_buf[i] = complex_t(soft_buffer[i] / 127.0f, 0.0f);
+                        }
+                        else
+                        {
+                            for (int i = 0; i < n_syms; i++)
+                                mer_buf[i] = complex_t(soft_buffer[i * 2 + 0] / 127.0f, soft_buffer[i * 2 + 1] / 127.0f);
+                        }
+                        mer_estimator.update(mer_buf.data(), n_syms);
+                        mer_db = mer_estimator.snr();
+                        if (mer_db > peak_mer)
+                            peak_mer = mer_db;
+                        avg_mer = avg_mer * 0.99f + mer_db * 0.01f;
                     }
 
                     // Derand
@@ -451,6 +485,8 @@ namespace satdump
                 v["llr_scale"] = llr_scale;
                 v["llr_sigma2"] = llr_sigma2;
                 v["llr_scaling"] = d_llr_calibrated ? "calibrated" : "heuristic";
+                if (correlator_locked)
+                    v["mer_db"] = mer_db;
                 std::string lock_state = correlator_locked ? "SYNCED" : "NOSYNC";
                 std::string deframer_state;
                 v["lock_state"] = lock_state;
@@ -600,6 +636,41 @@ namespace satdump
                         ImGui::TextColored(style::theme.green, "Sum-Prod (BP)");
                     else
                         ImGui::TextColored(style::theme.green, "Min-Sum");
+                }
+                ImGui::EndGroup();
+
+                ImGui::SameLine();
+
+                ImGui::BeginGroup();
+                {
+                    ImGui::Button("MER", {200 * ui_scale, 20 * ui_scale});
+                    {
+                        ImGui::Text("MER     : ");
+                        ImGui::SameLine();
+                        if (!correlator_locked)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", mer_db);
+
+                        ImGui::Text("Peak MER: ");
+                        ImGui::SameLine();
+                        if (peak_mer <= 0.0f)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", peak_mer);
+
+                        ImGui::Text("Avg MER : ");
+                        ImGui::SameLine();
+                        if (avg_mer <= 0.0f)
+                            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
+                        else
+                            ImGui::TextColored(style::theme.green, "%.2f dB", avg_mer);
+
+                        std::memmove(&mer_history[0], &mer_history[1], (200 - 1) * sizeof(float));
+                        mer_history[200 - 1] = correlator_locked ? mer_db : 0.0f;
+
+                        widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##mer", mer_history, IM_ARRAYSIZE(mer_history), 0, "", 0.0f, 30.0f, ImVec2(200 * ui_scale, 50 * ui_scale));
+                    }
                 }
                 ImGui::EndGroup();
 

@@ -95,6 +95,12 @@ namespace satdump
 
                 static constexpr int SNR_ESTIMATOR_SAMPLES = 4096;
                 EVMSNREstimator snr_estimator{4};
+
+                EVMSNREstimator mer_estimator{4};
+                float mer_db = 0.0f;
+                float mer_history[200] = {0};
+                float peak_mer = 0.0f;
+                float avg_mer = 0.0f;
                 std::vector<complex_t> snr_sample_buffer = std::vector<complex_t>(SNR_ESTIMATOR_SAMPLES);
                 int8_t llr_scale_lut[256];
                 float llr_snr = 0;
