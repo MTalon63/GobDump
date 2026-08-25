@@ -178,23 +178,23 @@ namespace satdump
         }
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////
-        eventBus->register_handler<RecorderSetFrequencyEvent>([this](const RecorderSetFrequencyEvent &evt) { set_frequency(evt.frequency); });
+        event_handler_ids.push_back(eventBus->register_handler<RecorderSetFrequencyEvent>([this](const RecorderSetFrequencyEvent &evt) { set_frequency(evt.frequency); }));
 
-        eventBus->register_handler<RecorderStartDeviceEvent>([this](const RecorderStartDeviceEvent &) { start(); });
-        eventBus->register_handler<RecorderStopDeviceEvent>([this](const RecorderStopDeviceEvent &) { stop(); });
-        eventBus->register_handler<RecorderSetDeviceSamplerateEvent>([this](const RecorderSetDeviceSamplerateEvent &evt) { source_ptr->set_samplerate(evt.samplerate); });
-        eventBus->register_handler<RecorderSetDeviceDecimationEvent>([this](const RecorderSetDeviceDecimationEvent &evt) { current_decimation = evt.decimation; });
-        eventBus->register_handler<RecorderSetDeviceLoOffsetEvent>([this](const RecorderSetDeviceLoOffsetEvent &evt) { xconverter_frequency = evt.offset; });
+        event_handler_ids.push_back(eventBus->register_handler<RecorderStartDeviceEvent>([this](const RecorderStartDeviceEvent &) { start(); }));
+        event_handler_ids.push_back(eventBus->register_handler<RecorderStopDeviceEvent>([this](const RecorderStopDeviceEvent &) { stop(); }));
+        event_handler_ids.push_back(eventBus->register_handler<RecorderSetDeviceSamplerateEvent>([this](const RecorderSetDeviceSamplerateEvent &evt) { source_ptr->set_samplerate(evt.samplerate); }));
+        event_handler_ids.push_back(eventBus->register_handler<RecorderSetDeviceDecimationEvent>([this](const RecorderSetDeviceDecimationEvent &evt) { current_decimation = evt.decimation; }));
+        event_handler_ids.push_back(eventBus->register_handler<RecorderSetDeviceLoOffsetEvent>([this](const RecorderSetDeviceLoOffsetEvent &evt) { xconverter_frequency = evt.offset; }));
 
-        eventBus->register_handler<RecorderStartProcessingEvent>(
+        event_handler_ids.push_back(eventBus->register_handler<RecorderStartProcessingEvent>(
             [this](const RecorderStartProcessingEvent &evt)
             {
                 pipeline_selector.select_pipeline(evt.pipeline_id);
                 start_processing();
-            });
-        eventBus->register_handler<RecorderStopProcessingEvent>([this](const RecorderStopProcessingEvent &) { stop_processing(); });
+            }));
+        event_handler_ids.push_back(eventBus->register_handler<RecorderStopProcessingEvent>([this](const RecorderStopProcessingEvent &) { stop_processing(); }));
 
-        eventBus->register_handler<RecorderSetFFTSettingsEvent>(
+        event_handler_ids.push_back(eventBus->register_handler<RecorderSetFFTSettingsEvent>(
             [this](const RecorderSetFFTSettingsEvent &evt)
             {
                 if (evt.fft_min != -1)
@@ -219,11 +219,15 @@ namespace satdump
                         if (fft_sizes_lut[i] == fft_size)
                             selected_fft_size = i;
                 }
-            });
+            }));
     }
 
     RecorderApplication::~RecorderApplication()
     {
+        for (uint64_t id : event_handler_ids)
+            eventBus->unregister_handler(id);
+        event_handler_ids.clear();
+
         is_destroying = true; // Prevent stop_processing() from firing events back into the explorer during teardown
         save_settings();
 

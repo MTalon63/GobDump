@@ -1,6 +1,33 @@
 #define SATDUMP_DLL_EXPORT 1
 #include "imgui_image.h"
 
+#include <mutex>
+#include <vector>
+
+static std::vector<unsigned int> pending_texture_deletes;
+static std::mutex pending_texture_deletes_mtx;
+
+void queueImageTextureDelete(unsigned int texture_id)
+{
+    std::lock_guard<std::mutex> lck(pending_texture_deletes_mtx);
+    pending_texture_deletes.push_back(texture_id);
+}
+
+void drainPendingImageTextureDeletes()
+{
+    std::vector<unsigned int> to_delete;
+    {
+        std::lock_guard<std::mutex> lck(pending_texture_deletes_mtx);
+        to_delete.swap(pending_texture_deletes);
+    }
+
+    if (!deleteImageTexture) // only bound in GUI mode
+        return;
+
+    for (unsigned int id : to_delete)
+        deleteImageTexture(id);
+}
+
 SATDUMP_DLL size_t maxTextureSize;
 SATDUMP_DLL std::function<unsigned int()> makeImageTexture;
 SATDUMP_DLL std::function<void(unsigned int, uint32_t *, int, int)> updateImageTexture;

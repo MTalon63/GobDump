@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui/imgui.h"
+#include "imgui/imgui_image.h"
 #include "imgui/imgui_markdown.h"
 #include <map>
 #include <string>
@@ -22,8 +23,12 @@ namespace satdump
 
         public:
             MarkdownHelper();
+            ~MarkdownHelper();
             void render();
             void set_md(std::string md);
+
+        private:
+            void clear_texture_buffer();
         };
     } // namespace widgets
 } // namespace satdump

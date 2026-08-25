@@ -5,6 +5,7 @@
  * @brief Event bus implementation
  */
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <typeinfo>
@@ -27,7 +28,15 @@ namespace satdump
     class EventBus
     {
     private:
-        std::vector<std::pair<std::string, std::function<void(void *)>>> all_handlers;
+        struct HandlerEntry
+        {
+            uint64_t id;
+            std::string type_name;
+            std::function<void(void *)> fun;
+        };
+
+        std::vector<HandlerEntry> all_handlers;
+        uint64_t next_id = 1;
 
     public:
         /**
@@ -35,15 +44,35 @@ namespace satdump
          * when a specific event is fired.
          *
          * @param handler_fun function to register
+         * @return ID to pass to unregister_handler()
          */
         template <typename T>
-        void register_handler(std::function<void(T)> handler_fun)
+        uint64_t register_handler(std::function<void(T)> handler_fun)
         {
-            all_handlers.push_back({std::string(typeid(T).name()), [handler_fun](void *raw)
+            uint64_t id = next_id++;
+            all_handlers.push_back({id, std::string(typeid(T).name()), [handler_fun](void *raw)
                                     {
                                         T evt = *((T *)raw); // Cast struct to original type
                                         handler_fun(evt);    // Call real handler
                                     }});
+            return id;
+        }
+
+        /**
+         * @brief Unregister a previously registered handler.
+         * Must not be called while the bus is being fired
+         * from another thread.
+         *
+         * @param id ID returned by register_handler()
+         */
+        void unregister_handler(uint64_t id)
+        {
+            for (auto it = all_handlers.begin(); it != all_handlers.end(); ++it)
+                if (it->id == id)
+                {
+                    all_handlers.erase(it);
+                    return;
+                }
         }
 
         /**
@@ -55,9 +84,9 @@ namespace satdump
         template <typename T>
         void fire_event(T evt)
         {
-            for (std::pair<std::string, std::function<void(void *)>> h : all_handlers) // Iterate through all registered functions
-                if (std::string(typeid(T).name()) == h.first)                          // Check struct type is the same
-                    h.second((void *)&evt);                                            // Fire handler up
+            for (HandlerEntry &h : all_handlers)                          // Iterate through all registered functions
+                if (std::string(typeid(T).name()) == h.type_name)         // Check struct type is the same
+                    h.fun((void *)&evt);                                  // Fire handler up
         }
 
         /**
@@ -70,9 +99,9 @@ namespace satdump
          */
         void fire_event(void *evt, std::string evt_name)
         {
-            for (std::pair<std::string, std::function<void(void *)>> h : all_handlers) // Iterate through all registered functions
-                if (evt_name == h.first)                                               // Check struct type is the same
-                    h.second(evt);                                                     // Fire handler up
+            for (HandlerEntry &h : all_handlers) // Iterate through all registered functions
+                if (evt_name == h.type_name)     // Check struct type is the same
+                    h.fun(evt);                  // Fire handler up
         }
     };
 } // namespace satdump

@@ -176,6 +176,8 @@ namespace satdump
         std::mutex vfos_mtx;
         std::vector<VFOInfo> vfo_list;
 
+        std::vector<uint64_t> event_handler_ids;
+
         void add_vfo_live(std::string id, std::string name, double freq, pipeline::Pipeline vpipeline, nlohmann::json vpipeline_params);
         void add_vfo_reco(std::string id, std::string name, double freq, dsp::BasebandType type, int decimation = -1);
         void del_vfo(std::string id);

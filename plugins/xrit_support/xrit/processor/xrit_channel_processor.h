@@ -10,6 +10,7 @@
 #include "xrit/segment_decoder.h"
 #include "xrit/xrit_file.h"
 #include <mutex>
+#include <vector>
 
 namespace satdump
 {
@@ -97,17 +98,14 @@ namespace satdump
             std::mutex ui_img_mtx;
 
         private:
-            /**
-             * @brief Release the GUI preview texture buffer for a WIP image.
-             *
-             * Safe to call once the image is fully saved and no longer being
-             * previewed (imageStatus == IDLE). The preview only displays
-             * channels whose imageStatus != IDLE, so dropping the buffer here
-             * does not affect the preview; it is re-allocated lazily when a
-             * new image group starts for the channel.
-             * @param wip the WIP image whose texture buffer should be freed
-             */
+            // Frees the preview buffer; queues the GL texture for deletion
             void freeWIPTexture(wip_images *wip);
+
+        private:
+            // GL IDs queued off-thread (no GL context there); drained on the
+            // UI thread. Static so IDs survive processor destruction.
+            static std::vector<unsigned int> pending_texture_deletes;
+            static std::mutex pending_texture_deletes_mtx;
 
         public:
             std::string directory = "";
@@ -116,6 +114,9 @@ namespace satdump
 
         public:
             ~XRITChannelProcessor();
+
+            // Must be called on the UI thread with the GL context current
+            static void drainPendingTextureDeletes();
 
             /**
              * @brief Push a file to process. See class documenation for

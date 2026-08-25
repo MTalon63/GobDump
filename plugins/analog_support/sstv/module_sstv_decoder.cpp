@@ -32,7 +32,13 @@ namespace sstv
             throw satdump_exception("SSTV Mode parameter must be present!");
     }
 
-    SSTVDecoderModule::~SSTVDecoderModule() {}
+    SSTVDecoderModule::~SSTVDecoderModule()
+    {
+        if (textureID != 0)
+            queueImageTextureDelete(textureID);
+        if (textureBuffer != nullptr)
+            delete[] textureBuffer;
+    }
 
     void SSTVDecoderModule::process()
     {

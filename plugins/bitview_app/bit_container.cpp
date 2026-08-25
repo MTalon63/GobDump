@@ -62,6 +62,10 @@ namespace satdump
 
     BitContainer::~BitContainer()
     {
+        for (auto &part : image_parts)
+            if (part.image_id != 0)
+                queueImageTextureDelete(part.image_id);
+
         delete[] wip_texture_buffer;
         munmap(d_file_memory_ptr, d_file_memory_size);
         close(fd);

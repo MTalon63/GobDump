@@ -46,7 +46,8 @@ namespace noaa_apt
         if (textureID != 0)
         {
             delete[] textureBuffer;
-            // deleteImageTexture(textureID);
+            // No GL context here; deleted on the UI thread instead
+            queueImageTextureDelete(textureID);
         }
     }
 

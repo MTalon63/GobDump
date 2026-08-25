@@ -62,7 +62,8 @@ namespace satdump
 
     LoadingScreenSink::~LoadingScreenSink()
     {
-        // deleteImageTexture(image_texture);
+        if (image_texture != 0 && deleteImageTexture)
+            deleteImageTexture(image_texture);
     }
 
     void LoadingScreenSink::receive(slog::LogMsg log)

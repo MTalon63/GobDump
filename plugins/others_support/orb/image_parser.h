@@ -41,6 +41,13 @@ namespace orb
 
         ~ImageParser()
         {
+            for (auto &ch : decoded_imgs)
+            {
+                if (ch.second.textureID != 0)
+                    queueImageTextureDelete(ch.second.textureID);
+                if (ch.second.textureBuffer != nullptr)
+                    delete[] ch.second.textureBuffer;
+            }
         }
 
         void work(ccsds::CCSDSPacket &pkt)

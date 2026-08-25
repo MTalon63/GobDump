@@ -194,10 +194,7 @@ namespace inmarsat
                     pkt_history_mtx.lock();
                     pkt_history_egc.push_back(msg);
                     if (pkt_history_egc.size() > 100)
-                    {
                         pkt_history_egc.erase(pkt_history_egc.begin());
-                        pkt_history.shrink_to_fit();
-                    }
                     pkt_history_mtx.unlock();
                 }
             };

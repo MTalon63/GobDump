@@ -19,6 +19,7 @@
 #include "core/resources.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_flags.h"
+#include "imgui/imgui_image.h"
 #include "imgui_notify/imgui_notify.h"
 #include "main_ui.h"
 #include "notify_logger_sink.h"
@@ -139,6 +140,11 @@ namespace satdump
         }
 
         std::pair<int, int> dims = backend::beginFrame();
+
+        // Per-frame UI-thread hook (GL context current), before any early-out
+        eventBus->fire_event<UIRenderFrameEvent>({});
+
+        drainPendingImageTextureDeletes();
 
         // On Windows minimizing makes the window dimensions 0,
         // which of course cause a whole lot of issues...

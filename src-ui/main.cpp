@@ -301,6 +301,9 @@ int main(int argc, char *argv[])
 
     satdump::exitMainUI();
 
+    // Final drain of deferred GL texture deletions before GL teardown
+    satdump::eventBus->fire_event<satdump::UIRenderFrameEvent>({});
+
     // Cleanup
 #ifndef IMGUI_IMPL_OPENGL_ES2
     if (fallback_gl)

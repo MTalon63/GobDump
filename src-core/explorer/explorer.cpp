@@ -177,9 +177,6 @@ namespace satdump
                         ImGui::SeparatorText("Processing");
 
                         handler_present |= processing_handler->drawTreeMenu(curr_handler);
-                        for (auto &h : processing_handler->getAllSubHandlers())
-                            if (h->getName() == "PROCESSING_DONE") // TODOREWORK MASSIVE HACK
-                                processing_handler->delSubHandler(h);
 
                         rendering_separators = true;
                     }
@@ -438,6 +435,11 @@ namespace satdump
 
         void ExplorerApplication::draw()
         {
+            // Purge PROCESSING_DONE handlers every frame, not just when the sidebar is drawn
+            for (auto &h : processing_handler->getAllSubHandlers())
+                if (h->getName() == "PROCESSING_DONE") // TODOREWORK MASSIVE HACK
+                    processing_handler->delSubHandler(h);
+
             drawMenuBar();
 
             ImVec2 explorer_size = ImGui::GetContentRegionAvail();

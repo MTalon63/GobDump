@@ -16,17 +16,31 @@ ImageViewWidget::ImageViewWidget()
     id_num++;
 }
 
-ImageViewWidget::~ImageViewWidget() {}
+ImageViewWidget::~ImageViewWidget()
+{
+    image_mtx.lock();
+    for (auto &chunk : img_chunks)
+        if (chunk.texture_id != 0)
+            queueImageTextureDelete(chunk.texture_id);
+    img_chunks.clear();
+    image_mtx.unlock();
+}
 
 void ImageViewWidget::update(image::Image &image)
 {
     image_mtx.lock();
     if (image.width() == 0 || image.height() == 0)
     {
+        for (auto &chunk : img_chunks)
+            if (chunk.texture_id != 0)
+                queueImageTextureDelete(chunk.texture_id);
         img_chunks.resize(0);
     }
     else if (image.width() <= maxTextureSize && image.height() <= maxTextureSize)
     {
+        for (size_t i = 1; i < img_chunks.size(); i++)
+            if (img_chunks[i].texture_id != 0)
+                queueImageTextureDelete(img_chunks[i].texture_id);
         img_chunks.resize(1);
         fimg_width = img_chunks[0].img_width = image.width();
         fimg_height = img_chunks[0].img_height = image.height();
@@ -45,6 +59,9 @@ void ImageViewWidget::update(image::Image &image)
             chunksx = 1;
         if (chunksy == 0)
             chunksy = 1;
+        for (size_t i = chunksx * chunksy; i < img_chunks.size(); i++)
+            if (img_chunks[i].texture_id != 0)
+                queueImageTextureDelete(img_chunks[i].texture_id);
         img_chunks.resize(chunksx * chunksy);
 
         for (int ix = 0; ix < chunksx; ix++)

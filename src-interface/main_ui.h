@@ -32,6 +32,14 @@ namespace satdump
     {
     };
 
+    /**
+     * @brief Fired every frame on the UI thread, GL context current. Lets
+     * plugins defer GL work to the UI thread.
+     */
+    struct UIRenderFrameEvent
+    {
+    };
+
     struct AddRecorderEvent // TODOREWORK Temporary!?
     {
     };

@@ -119,6 +119,16 @@ namespace satdump
             mdConfig.imageCallback = image_callback;
         }
 
+        MarkdownHelper::~MarkdownHelper() { clear_texture_buffer(); }
+
+        void MarkdownHelper::clear_texture_buffer()
+        {
+            for (auto &t : texture_buffer)
+                if (t.second.isValid)
+                    queueImageTextureDelete((unsigned int)(intptr_t)t.second.user_texture_id);
+            texture_buffer.clear();
+        }
+
         void MarkdownHelper::render()
         {
             mdConfig.headingFormats[0] = {style::bigFont, true};
@@ -131,7 +141,7 @@ namespace satdump
         void MarkdownHelper::set_md(std::string md)
         {
             markdown_ = md;
-            texture_buffer.clear();
+            clear_texture_buffer();
         }
     } // namespace widgets
 } // namespace satdump

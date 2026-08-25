@@ -39,6 +39,11 @@ namespace elektro_arktika
                 {
                     auto recs = parseSKLRecord(&frm);
                     skl_records.insert(skl_records.end(), recs.begin(), recs.end());
+
+                    // Cap at one day of 1-second records (~8.6 MB), else unbounded growth
+                    constexpr size_t skl_records_max = 86400;
+                    if (skl_records.size() > skl_records_max)
+                        skl_records.erase(skl_records.begin(), skl_records.end() - skl_records_max);
                 }
 
                 records_mtx.unlock();

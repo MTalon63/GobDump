@@ -17,6 +17,8 @@ namespace satdump
 
         WaterfallPlot::~WaterfallPlot()
         {
+            if (texture_id != 0)
+                queueImageTextureDelete(texture_id);
             if (raw_img_buffer != nullptr)
                 free(raw_img_buffer);
         }

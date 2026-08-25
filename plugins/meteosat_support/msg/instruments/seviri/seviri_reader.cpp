@@ -3,6 +3,7 @@
 #include "common/ccsds/ccsds_time.h"
 #include "common/repack.h"
 #include "init.h"
+#include "imgui/imgui_image.h"
 #include "logger.h"
 #include "products/image_product.h"
 #include "utils/stats.h"
@@ -57,7 +58,10 @@ namespace meteosat
         SEVIRIReader::~SEVIRIReader()
         {
             if (textureID > 0)
+            {
+                queueImageTextureDelete(textureID);
                 delete[] textureBuffer;
+            }
 
             if (can_make_composites)
             {

@@ -98,15 +98,21 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            # Cache the vcpkg tree metadata (including the .vcpkg-root marker,
+            # scripts/ and triplets/) alongside installed/, since on cache hits
+            # Configure-vcpkg.ps1 is skipped and vcpkg is never cloned. Without
+            # the marker the toolchain fails with "Could not find .vcpkg-root".
             - name: Cache dependencies
               uses: actions/cache@v4
               id: win-deps-x64
               with:
                   path: |
                       vcpkg/installed
-                      vcpkg/scripts/buildsystems/vcpkg.cmake
-                  key: win-deps-x64-${{ hashFiles('windows/Configure-vcpkg.ps1') }}
-                  restore-keys: win-deps-x64-
+                      vcpkg/scripts
+                      vcpkg/triplets
+                      vcpkg/triplets_community
+                      vcpkg/.vcpkg-root
+                  key: win-deps-x64-v2-${{ hashFiles('windows/Configure-vcpkg.ps1') }}
 
             - name: Set up Python 3.13
               if: steps.win-deps-x64.outputs.cache-hit != 'true'
@@ -207,15 +213,21 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            # Cache the vcpkg tree metadata (including the .vcpkg-root marker,
+            # scripts/ and triplets/) alongside installed/, since on cache hits
+            # Configure-vcpkg.ps1 is skipped and vcpkg is never cloned. Without
+            # the marker the toolchain fails with "Could not find .vcpkg-root".
             - name: Cache dependencies
               uses: actions/cache@v4
               id: win-deps-arm64
               with:
                   path: |
                       vcpkg/installed
-                      vcpkg/scripts/buildsystems/vcpkg.cmake
-                  key: win-deps-arm64-${{ hashFiles('windows/Configure-vcpkg.ps1') }}
-                  restore-keys: win-deps-arm64-
+                      vcpkg/scripts
+                      vcpkg/triplets
+                      vcpkg/triplets_community
+                      vcpkg/.vcpkg-root
+                  key: win-deps-arm64-v2-${{ hashFiles('windows/Configure-vcpkg.ps1') }}
 
             - name: Set up Python 3.13
               if: steps.win-deps-arm64.outputs.cache-hit != 'true'

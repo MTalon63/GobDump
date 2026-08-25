@@ -2,6 +2,7 @@
 
 #include "common/colormaps.h"
 #include "imgui/imgui.h"
+#include "imgui/imgui_image.h"
 #include <functional>
 #include <mutex>
 #include <volk/volk_alloc.hh>
@@ -107,7 +108,11 @@ namespace satdump
                 this->waterfall_lines = waterfall_lines;
             }
 
-            ~FFTWaterfallWidget() {}
+            ~FFTWaterfallWidget()
+            {
+                if (waterfall_texture_id != 0)
+                    queueImageTextureDelete(waterfall_texture_id);
+            }
 
             void draw(ImVec2 size, bool waterfall);
 
