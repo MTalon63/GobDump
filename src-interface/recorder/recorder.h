@@ -2,6 +2,7 @@
 
 #include "core/config.h"
 #include "handlers/handler.h"
+#include "i18n.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_internal.h"
 
@@ -230,6 +231,6 @@ namespace satdump
 
     public:
         std::string getID() { return "recorder"; }
-        std::string getName() { return "Recorder"; }
+        std::string getName() { return _("Recorder"); }
     };
 }; // namespace satdump
