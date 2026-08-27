@@ -291,11 +291,11 @@ namespace satdump
             {
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10 * ui_scale);
                 ImGui::SeparatorText(_("Advanced Settings"));
-                if (ImGui::CollapsingHeader(_("TLE Settings")))
+                if (ImGui::CollapsingHeader(_("Kepler Settings")))
                 {
-                    widgets::JSONTreeEditor(satdump::satdump_cfg.main_cfg["tle_settings"], "tle_settings", false);
-                    if (ImGui::Button(_("Reset##tle_settings")))
-                        satdump::satdump_cfg.main_cfg["tle_settings"] = satdump::satdump_cfg.default_cfg["tle_settings"];
+                    widgets::JSONTreeEditor(satdump::satdump_cfg.main_cfg["kepler_settings"], "kepler_settings", false);
+                    if (ImGui::Button(_("Reset##kepler_settings")))
+                        satdump::satdump_cfg.main_cfg["kepler_settings"] = satdump::satdump_cfg.default_cfg["kepler_settings"];
                 }
                 if (ImGui::CollapsingHeader(_("Advanced Settings")))
                 {
