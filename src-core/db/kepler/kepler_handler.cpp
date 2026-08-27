@@ -78,7 +78,7 @@ namespace satdump
         // Schedule updates while running
         if (honor_setting)
         {
-            eventBus->register_handler<AutoUpdateKeplersEvent>([this](AutoUpdateKeplersEvent evt) { updateKeplerDatabase(); });
+            eventBus->register_handler<AutoUpdateKeplersEvent>([this](AutoUpdateKeplersEvent) { updateKeplerDatabase(); });
             std::shared_ptr<AutoUpdateKeplersEvent> evt = std::make_shared<AutoUpdateKeplersEvent>();
             taskScheduler->add_task<AutoUpdateKeplersEvent>("auto_kepler_update_todorework", evt, last_update, update_interval);
         }
@@ -270,6 +270,7 @@ namespace satdump
         }
 
         sqlite3_finalize(res);
+        }
 
         return ret;
     }

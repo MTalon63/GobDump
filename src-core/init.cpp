@@ -22,6 +22,13 @@
 
 #include "core/opencl.h"
 
+#ifdef _WIN32
+static inline void gob_setenv(const char *name, const char *value, int) { _putenv_s(name, value); }
+static inline void gob_unsetenv(const char *name) { _putenv_s(name, ""); }
+#define setenv(name, value, overwrite) gob_setenv(name, value, overwrite)
+#define unsetenv(name) gob_unsetenv(name)
+#endif
+
 #include "common/dsp/buffer.h"
 
 #include "products/product.h"
