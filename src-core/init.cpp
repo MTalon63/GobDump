@@ -60,7 +60,9 @@ namespace satdump
         else
             unsetenv("LANGUAGE");
 
+#if !defined(_WIN32) && !defined(__ANDROID__) && !defined(__APPLE__)
         setlocale(LC_ALL, "");
+#endif
         bindtextdomain("satdump", resources::getResourcePath("i18n").c_str());
         textdomain("satdump");
 
