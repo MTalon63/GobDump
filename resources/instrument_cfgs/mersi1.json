@@ -4,8 +4,15 @@
         {
             "name": "MERSI-1 321",
             "expression": "ch3, ch2, ch1",
-            "image": { 
-                "individual_equalize": true,
+            "image": {
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "autogen": true
@@ -13,8 +20,15 @@
         {
             "name": "MERSI-1 441",
             "expression": "ch4, ch4, ch1",
-            "image": { 
-                "equalize": true,
+            "image": {
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ],
                 "geocorrect": true
             }
         }

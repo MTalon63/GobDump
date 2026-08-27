@@ -5,7 +5,14 @@
             "name": "Outgoing shortwave IR",
             "expression": "ch1",
             "image" : {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             }
         }
     ]

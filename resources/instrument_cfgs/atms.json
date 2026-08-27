@@ -5,7 +5,14 @@
             "name": "ATMS False Color",
             "expression": "ch16, ch17, ch18",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/sounders/ATMSFC.md",
             "autogen": true
@@ -14,7 +21,14 @@
             "name": "MHS 221",
             "expression": "ch17,ch17,ch16",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/sounders/MHS221.md"
         },
@@ -22,7 +36,14 @@
             "name": "MHS 421",
             "expression": "ch20,ch17,ch16",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/sounders/MHS221.md"
         },
@@ -30,7 +51,14 @@
             "name": "AMSU Surface Relative Temperature",
             "expression": "cos(ln(ch1) + ln(ch2)+0.8)",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             }
         },
         {

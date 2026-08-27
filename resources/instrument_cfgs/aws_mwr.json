@@ -5,28 +5,56 @@
             "name": "AMSU False Color",
             "expression": "ch4, ch2, ch1",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             }
         },
         {
             "name": "MHS 221",
             "expression": "ch10, ch10, ch9",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             }
         },
         {
             "name": "MHS 421",
             "expression": "ch15, ch10, ch9",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             }
         },
         {
             "name": "ATMS False Color",
             "expression": "ch9, ch10, ch11",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "autogen": true
         },
@@ -34,14 +62,28 @@
             "name": "Microwave Airmass",
             "expression": "ch15, ch14, ch13",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             }
         },
         {
             "name": "MWR 325 GHz + 89 GHz Blend",
             "expression": "ch9,ch11,ch19",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "autogen": true
         },
@@ -49,7 +91,14 @@
             "name": "MWR 325 GHz Airmass",
             "expression": "ch19, ch18, ch17",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "autogen": true
         },
@@ -57,7 +106,14 @@
             "name": "19,10,1",
             "expression": "ch19, ch10, ch1",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             }
         },
         //Composites to compare with STAR ICVS and EPS STERNA
