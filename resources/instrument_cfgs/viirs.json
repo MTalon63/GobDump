@@ -5,7 +5,14 @@
             "name": "AVHRR 221 False Color",
             "expression": "chi2, chi2, chi1",
             "image": {
-                "equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/221.md"
         },
@@ -13,7 +20,14 @@
             "name": "AVHRR 3a21 False Color",
             "expression": "chi3, chi2, chi1",
             "image": {
-                "equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/321.md",
             "autogen": true
@@ -23,7 +37,14 @@
             "expression": "chm16,chm15,chm12",
             "image": {
                 "invert": true,
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/543b.md"
         },
@@ -35,7 +56,14 @@
             "name": "True Color",
             "expression": "chm5, chm4, chm3",
             "image": {
-                "equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/TrueColor.md"
         },
@@ -43,7 +71,14 @@
             "name": "Urban False Color",
             "expression": "chm11,chm10,chm5",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/ShortwaveIRFC.md"
         },
@@ -51,8 +86,24 @@
             "name": "Night Microphysics",
             "expression": "chi5-chi4,chi4-chi3,chi4",
             "image": {
-                "individual_equalize": true,
-                "white_balance": true
+                "filters": [
+                    [
+                        "equalize",
+                        [
+                            true,
+                            {
+                                "per_channel": true
+                            }
+                        ]
+                    ],
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             },
             "description": "descriptions/NightMicro.md"
         },
@@ -60,7 +111,14 @@
             "name": "Day Microphysics",
             "expression": "chi1, chi3^2.5,chi4",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/DayMicro.md"
         },
@@ -68,7 +126,14 @@
             "name": "10.8µm Thermal IR (Uncalibrated)",
             "expression": "1-chi4",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/ThermalUncal.md"
         },
@@ -76,7 +141,14 @@
             "name": "CIR (Color Infrared)",
             "expression": "chi3, chm5, chm4",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/CIR.md"
         },
@@ -84,8 +156,24 @@
             "name": "Agriculture",
             "expression": "chm10,chm7,chm3",
             "image": {
-                "equalize": true,
-                "white_balance": true
+                "filters": [
+                    [
+                        "equalize",
+                        [
+                            true,
+                            {
+                                "per_channel": false
+                            }
+                        ]
+                    ],
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             },
             "description": "descriptions/Agriculture.md"
         },
@@ -93,8 +181,15 @@
             "name": "Geology",
             "expression": "chm11,chm10,chm3",
             "image": {
-                "individual_equalize": true,
-                "white_balance": true
+                "filters": [
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             },
             "description": "descriptions/Geology.md"
         },
@@ -102,7 +197,14 @@
             "name": "Bathymetric",
             "expression": "chm5, chm4, chm1",
             "image": {
-                "equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/Bathymetric.md"
         },
@@ -110,7 +212,15 @@
             "name": "Cirrus IR (ABI band 4 like)",
             "expression": "chm9",
             "image": {
-                "white_balance": true
+                "filters": [
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             },
             "description": "descriptions/Cirrus.md"
         },
@@ -118,7 +228,14 @@
             "name": "Cloud Type RGB",
             "expression": "chm9^1.5, chm5^0.75, chm10",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/CloudType.md"
         },
@@ -126,7 +243,14 @@
             "name": "Cloud Phase RGB",
             "expression": "chm10, chm11, chm5",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/CloudPhase.md"
         },
@@ -134,7 +258,14 @@
             "name": "Dust-Ash RGB",
             "expression": "chm16-chm15, chm15-chm14, chm15",
             "image": {
-                "individual_equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/DustAshRGB.md"
         },
@@ -142,7 +273,15 @@
             "name": "Fire Temperature RGB",
             "expression": "chm12, chm11, chm10",
             "image": {
-                "white_balance": true
+                "filters": [
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             },
             "description": "descriptions/FireTempRGB.md"
         },
@@ -154,7 +293,14 @@
             "name": "Panchromatic",
             "expression": "chdnb",
             "image": {
-                "equalize": true
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ]
             },
             "description": "descriptions/Panchromatic.md"
         },

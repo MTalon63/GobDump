@@ -20,7 +20,15 @@
             "name": "True Color",
             "expression": "ch1, ch4, ch3",
             "image": {
-                "white_balance": true,
+                "filters": [
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/TrueColor.md"
@@ -29,7 +37,15 @@
             "name": "MODIS 221/143 Mix",
             "expression": "(ch2 + ch1) / 2, (ch2 + ch4) / 2, (ch1 + ch3) / 2",
             "image": {
-                "white_balance": true,
+                "filters": [
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ],
                 "geocorrect": true
             }
         },
@@ -37,8 +53,24 @@
             "name": "Day Microphysics",
             "expression": "ch17, ch22^2.5, ch31",
             "image": {
-                "individual_equalize": true,
-                "white_balance": true,
+                "filters": [
+                    [
+                        "equalize",
+                        [
+                            true,
+                            {
+                                "per_channel": true
+                            }
+                        ]
+                    ],
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/DayMicro.md"
@@ -47,7 +79,14 @@
             "name": "CIR (Color Infrared)",
             "expression": "ch2, ch1, ch4",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/CIR.md"
@@ -56,7 +95,14 @@
             "name": "Geology",
             "expression": "ch7, ch6, ch3",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/Geology.md"
@@ -65,7 +111,14 @@
             "name": "Agriculture",
             "expression": "ch6, ch2, ch3",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/Agriculture.md"
@@ -74,7 +127,14 @@
             "name": "Bathymetric",
             "expression": "ch1, ch4, ch9",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/Bathymetric.md"
@@ -83,7 +143,14 @@
             "name": "AVHRR 543b IR False Color",
             "expression": "cch32=(32, reflective_radiance, , ); cch31=(31, reflective_radiance, , ); cch20=(20, reflective_radiance, , ); 1-cch32, 1-cch31, 1-cch20",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/543b.md"
@@ -115,19 +182,35 @@
         {
             "name": "Differential Water Vapor RGB",
             "expression": "cch28=(28, brightness_temperature, 180, 400); cch27=(27, brightness_temperature, 180, 400); ((cch28-cch27+0.01363636363)/0.15)^3.86548125242,((cch28-0.15068181818)/0.29545454545)^2.5,((cch27-0.12954545454)/0.1609090909)^2.5"
-        },/*
+        }, /*
         {
             "name": "MeCIDA T6a Cirrus Detection (full)",
             "expression": "cch3=(3, reflective_radiance, 0.000000, 16.850000);cch2=(2, reflective_radiance, 0.000000, 20.240000);cch1=(1, reflective_radiance, 0.000000, 17.760000);cch11=(11, brightness_temperature, 000.000000, 1000.000000);cch8=(8, brightness_temperature, 000.000000, 1000.000000);(cch8-cch11) > -0.0007 ? cch8 < 0.258 ? 0 : cch3  : cch3,(cch8-cch11) > -0.0007 ? cch8 < 0.258 ? 1 : cch2  : cch2,(cch8-cch11) > -0.0007 ? cch8 < 0.258 ? 1 : cch1  : cch1",
-            "image": {
-                "remove_background": true
-            }
+"image": {
+        "filters": [
+            [
+                "remove_background",
+                [
+                    true,
+                    null
+                ]
+            ]
+        ]
+    }
         },*/
         {
             "name": "MeCIDA T6a Cirrus Detection (transparent)",
             "expression": "cch11=(33, brightness_temperature, 000.000000, 1000.000000);cch8=(30, brightness_temperature, 000.000000, 1000.000000);0, (cch8-cch11) > -0.0007 ? cch8 < 0.258 ? 1 : 0 : 0, (cch8-cch11) > -0.0007 ? cch8 < 0.258 ? 1 : 0 : 0,(cch8-cch11) > -0.0007 ? cch8 < 0.258 ? 1 : 0 : 0",
             "image": {
-                "remove_background": true
+                "filters": [
+                    [
+                        "remove_background",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             }
         }
     ],

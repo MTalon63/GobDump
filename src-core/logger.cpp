@@ -1,16 +1,16 @@
 #define SATDUMP_DLL_EXPORT 1
 #include "logger.h"
-#include <iostream>
-#include <ctime>
 #include <algorithm>
+#include <ctime>
 #include <filesystem>
+#include <iostream>
 #ifdef __ANDROID__
 #include <android/log.h>
 static char ag_LogTag[] = "SatDump";
 #endif
 #if defined(_WIN32)
-#include <windows.h>
 #include <wincon.h>
+#include <windows.h>
 #endif
 
 #include "init.h"
@@ -34,13 +34,8 @@ bool init_buffer_active = true;
 
 namespace slog
 {
-    const std::string log_schar[] = {"T", "D", "I", "W", "E", "C"};
-    const std::string colors[] = {"\033[37m",
-                                  "\033[36m",
-                                  "\033[32m",
-                                  "\033[33m\033[1m",
-                                  "\033[31m\033[1m",
-                                  "\033[1m\033[41m"};
+    const std::string log_schar[] = {"T", "D", "I", "N", "W", "E", "C"};
+    const std::string colors[] = {"\033[37m", "\033[36m", "\033[32m", "\033[35m", "\033[33m\033[1m", "\033[31m\033[1m", "\033[1m\033[41m"};
 
     template <typename... T>
     std::string vformat(const char *fmt, T &&...args)
@@ -85,25 +80,20 @@ namespace slog
 #endif
         std::tm *tmr = &tmv;
 
-        std::string timestamp =
-            (tmr->tm_hour < 10 ? "0" : "") + std::to_string(tmr->tm_hour) + ":" +       // Hour
-            (tmr->tm_min < 10 ? "0" : "") + std::to_string(tmr->tm_min) + ":" +         // Min
-            (tmr->tm_sec < 10 ? "0" : "") + std::to_string(tmr->tm_sec) + " - " +       // Sec
-            (tmr->tm_mday < 10 ? "0" : "") + std::to_string(tmr->tm_mday) + "/" +       // Day
-            (tmr->tm_mon + 1 < 10 ? "0" : "") + std::to_string(tmr->tm_mon + 1) + "/" + // Mon
-            (tmr->tm_year < 10 ? "0" : "") + std::to_string(tmr->tm_year + 1900);       // Year
+        std::string timestamp = (tmr->tm_hour < 10 ? "0" : "") + std::to_string(tmr->tm_hour) + ":" +       // Hour
+                                (tmr->tm_min < 10 ? "0" : "") + std::to_string(tmr->tm_min) + ":" +         // Min
+                                (tmr->tm_sec < 10 ? "0" : "") + std::to_string(tmr->tm_sec) + " - " +       // Sec
+                                (tmr->tm_mday < 10 ? "0" : "") + std::to_string(tmr->tm_mday) + "/" +       // Day
+                                (tmr->tm_mon + 1 < 10 ? "0" : "") + std::to_string(tmr->tm_mon + 1) + "/" + // Mon
+                                (tmr->tm_year < 10 ? "0" : "") + std::to_string(tmr->tm_year + 1900);       // Year
 
         if (cpos != nullptr)
             *cpos = timestamp.size() + 3;
 
         if (color)
-            return vformat("[%s] %s(%s) %s\033[m\n",
-                           timestamp.c_str(),
-                           colors[m.lvl].c_str(), log_schar[m.lvl].c_str(), m.str.c_str());
+            return vformat("[%s] %s(%s) %s\033[m\n", timestamp.c_str(), colors[m.lvl].c_str(), log_schar[m.lvl].c_str(), m.str.c_str());
         else
-            return vformat("[%s] (%s) %s\n",
-                           timestamp.c_str(),
-                           log_schar[m.lvl].c_str(), m.str.c_str());
+            return vformat("[%s] (%s) %s\n", timestamp.c_str(), log_schar[m.lvl].c_str(), m.str.c_str());
     }
 
     void StdOutSink::receive(LogMsg log)
@@ -116,12 +106,9 @@ namespace slog
     }
 
 #if defined(_WIN32)
-    const int colors_win[] = {FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-                              FOREGROUND_GREEN | FOREGROUND_BLUE,
-                              FOREGROUND_GREEN,
-                              FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-                              FOREGROUND_RED | FOREGROUND_INTENSITY,
-                              BACKGROUND_RED | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY};
+    const int colors_win[] = {
+        FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,      FOREGROUND_GREEN | FOREGROUND_BLUE,    FOREGROUND_GREEN,
+        FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY, FOREGROUND_RED | FOREGROUND_INTENSITY, BACKGROUND_RED | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY};
 
     int win_set_foreground_color(HANDLE &out_handle_, int attribs)
     {
@@ -178,10 +165,7 @@ namespace slog
 
         outf = std::ofstream(log_path);
     }
-    FileSink::~FileSink()
-    {
-        outf.close();
-    }
+    FileSink::~FileSink() { outf.close(); }
 
     void FileSink::receive(LogMsg log)
     {
@@ -242,12 +226,7 @@ namespace slog
 
 #ifdef __ANDROID__
     const android_LogPriority log_lvls_a[] = {
-        ANDROID_LOG_VERBOSE,
-        ANDROID_LOG_DEBUG,
-        ANDROID_LOG_INFO,
-        ANDROID_LOG_WARN,
-        ANDROID_LOG_ERROR,
-        ANDROID_LOG_FATAL,
+        ANDROID_LOG_VERBOSE, ANDROID_LOG_DEBUG, ANDROID_LOG_INFO, ANDROID_LOG_WARN, ANDROID_LOG_ERROR, ANDROID_LOG_FATAL,
     };
 
     void AndroidSink::receive(LogMsg log)
@@ -260,15 +239,9 @@ namespace slog
     }
 #endif
 
-    void Logger::set_level(LogLevel lvl)
-    {
-        logger_lvl = lvl;
-    }
+    void Logger::set_level(LogLevel lvl) { logger_lvl = lvl; }
 
-    LogLevel Logger::get_level()
-    {
-        return logger_lvl;
-    }
+    LogLevel Logger::get_level() { return logger_lvl; }
 
     void Logger::add_sink(std::shared_ptr<LoggerSink> sink)
     {
@@ -282,13 +255,12 @@ namespace slog
     void Logger::del_sink(std::shared_ptr<LoggerSink> sink)
     {
         sink_mtx.lock();
-        auto it = std::find_if(sinks.begin(), sinks.end(), [&sink](std::shared_ptr<LoggerSink> &c)
-                               { return sink.get() == c.get(); });
+        auto it = std::find_if(sinks.begin(), sinks.end(), [&sink](std::shared_ptr<LoggerSink> &c) { return sink.get() == c.get(); });
         if (it != sinks.end())
             sinks.erase(it);
         sink_mtx.unlock();
     }
-}
+} // namespace slog
 
 void initLogger()
 {

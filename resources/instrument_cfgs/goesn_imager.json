@@ -11,7 +11,15 @@
             "name": "False Color + IR Merge",
             "expression": "cch4=(4, emissive_radiance, 5, 110); s=(4, sun_angle, 0.000000, 32.000000);lut=lut(lut/goes/gvar/fc_lut.png);lut(ch1, ch4, 0)*s+(1-s)*(1-cch4),lut(ch1, ch4, 1)*s+(1-s)*(1-cch4),lut(ch1, ch4, 2)*s+(1-s)*(1-cch4)",
             "image": {
-                "remove_background": true
+                "filters": [
+                    [
+                        "remove_background",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             }
         },
         {
@@ -26,8 +34,24 @@
             "name": "AVHRR 543b IR False Color",
             "expression": "ch5 == 0 ? 0 : 1-ch5, ch4 == 0 ? 0 : 1-ch4, ch2 == 0 ? 0 : 1-ch2",
             "image": {
-                "individual_equalize": true,
-                "white_balance": true
+                "filters": [
+                    [
+                        "equalize",
+                        [
+                            true,
+                            {
+                                "per_channel": true
+                            }
+                        ]
+                    ],
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ]
             },
             "description": "descriptions/543b.md",
             "autogen": true

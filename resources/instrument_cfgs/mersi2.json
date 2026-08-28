@@ -5,7 +5,14 @@
             "name": "True Color",
             "expression": "ch3, ch2, ch1",
             "image": {
-                "equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/TrueColor.md",
@@ -30,7 +37,14 @@
             "name": "MERSI False Color",
             "expression": "ch3, (ch2 * 0.43 + ch4 * 0.57), ch1",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             }
         },
@@ -38,7 +52,14 @@
             "name": "Urban False Color",
             "expression": "ch9, ch8, ch3",
             "image": {
-                "equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/ShortwaveIRFC.md"
@@ -47,7 +68,14 @@
             "name": "CIR (Color Infrared)",
             "expression": "ch4, ch3, ch2",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/CIR.md"
@@ -56,7 +84,14 @@
             "name": "Agriculture",
             "expression": "ch8,ch4,ch1",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/Agriculture.md"
@@ -65,7 +100,14 @@
             "name": "Geology",
             "expression": "ch9,ch8,ch1",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/Geology.md"
@@ -74,7 +116,14 @@
             "name": "MERSI Airmass",
             "expression": "ch9, ch12, ch11",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/MERSIAirmass.md"
@@ -91,7 +140,14 @@
             "name": "Day Microphysics",
             "expression": "ch3, ch8^2.5, ch5",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/DayMicro.md"
@@ -100,7 +156,14 @@
             "name": "AVHRR 3a21 False Color",
             "expression": "ch8, ch4, ch3",
             "image": {
-                "equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": false
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/321.md"
@@ -109,7 +172,14 @@
             "name": "10.8µm Thermal IR (Uncalibrated)",
             "expression": "1.0 - ch5",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/ThermalUncal.md"
@@ -118,7 +188,17 @@
             "name": "NO enhancement (Uncalibrated)",
             "expression": "lut=lut(lut/WXtoImg-NO_mod_meteor.png);lut(ch5, ch6, 0), lut(ch5, ch6, 1), lut(ch5, ch6, 2)",
             "image": {
-                "individual_equalize": false,
+                "filters": [
+                    [
+                        "equalize",
+                        [
+                            false,
+                            {
+                                "per_channel": true
+                            }
+                        ]
+                    ]
+                ],
                 "geocorrect": true
             }
         },
@@ -126,7 +206,17 @@
             "name": "7.35 µm Uncalibrated Water Vapor",
             "expression": "cch12=(12, equalized, 0, 0);lut=lut(lut/cal/purpleorange.png);lut(cch12, 0, 0), lut(cch12,0,1), lut(cch12,0,2)",
             "image": {
-                "equalize": false,
+                "filters": [
+                    [
+                        "equalize",
+                        [
+                            false,
+                            {
+                                "per_channel": true
+                            }
+                        ]
+                    ]
+                ],
                 "geocorrect": true
             }
         }
