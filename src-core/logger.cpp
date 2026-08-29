@@ -9,7 +9,6 @@
 static char ag_LogTag[] = "SatDump";
 #endif
 #if defined(_WIN32)
-#include <wincon.h>
 #include <windows.h>
 #endif
 
