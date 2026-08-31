@@ -1,12 +1,14 @@
 #include "kepler_handler.h"
 #include "core/config.h"
 #include "db/db_handler.h"
+#include "init.h"
 #include "logger.h"
 #include "nlohmann/json_utils.h"
 #include "utils/format.h"
 #include "utils/string.h"
 #include "utils/time.h"
 #include <string>
+#include <thread>
 
 namespace satdump
 {
@@ -47,7 +49,7 @@ namespace satdump
         satdump_cfg.tryAssignValueFromSatDumpGeneral(update_setting, "kepler_update_interval");
         time_t last_update = std::stoull(h->get_meta("kepler_last_updated", "0"));
         bool honor_setting = true;
-        time_t update_interval;
+        time_t update_interval = 604800;
 
         if (update_setting == "Never")
             honor_setting = false;
@@ -67,11 +69,14 @@ namespace satdump
             honor_setting = false;
         }
 
-        // Update now, if needed
+        // Defer the initial update to the background scheduler thread so a slow or unreachable
+        // server can never block the UI thread during startup.
         time_t now = time(NULL);
-        if ((honor_setting && now > last_update + update_interval) || h->get_table_size("kepler") <= 0)
+        bool needs_update = (honor_setting && now > last_update + update_interval) || h->get_table_size("kepler") <= 0;
+        if (needs_update && tle_do_update_on_init)
         {
-            updateKeplerDatabase();
+            std::shared_ptr<AutoUpdateKeplersEvent> evt = std::make_shared<AutoUpdateKeplersEvent>();
+            taskScheduler->add_task<AutoUpdateKeplersEvent>("auto_kepler_update_init", evt, now - update_interval, update_interval);
             last_update = now;
         }
 
