@@ -19,7 +19,7 @@ int main_autotrack(int argc, char *argv[])
     {
         logger->error("Usage : " + std::string(argv[0]) + " autotrack autotrack_config.json");
         logger->error("Sample command :");
-        logger->error("./satdump autotrack autotrack_config.json");
+        logger->error("./gobdump autotrack autotrack_config.json");
         return 1;
     }
 

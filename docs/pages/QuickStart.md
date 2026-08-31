@@ -22,7 +22,7 @@ This provides controls to open files, add new tools, change settings and get hel
 
 ### Root
 
-This section collects and organizes hierarchically all the modules, tools and data the user adds to the SatDump section.
+This section collects and organizes hierarchically all the modules, tools and data the user adds to the GobDump section.
 
 ### Trash
 

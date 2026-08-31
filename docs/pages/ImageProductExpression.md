@@ -59,7 +59,7 @@ lut_name=lut(path/to/lut.png)
 ```
 
 - `lut_name` desired LUT function name
-- `path/to/lut.png` path to a lut (can be any image format) relative to SatDump's resources folder
+- `path/to/lut.png` path to a lut (can be any image format) relative to GobDump's resources folder
 
 The lut can then be used as follow in an expression :
 
@@ -89,7 +89,7 @@ equ_name=equp(path/to/image.png)
 ```
 
 - `equ_name` desired EquP function name
-- `path/to/image.png` Equirectangular image to load, relative to SatDump's resources folder
+- `path/to/image.png` Equirectangular image to load, relative to GobDump's resources folder
 
 ```
 equ_name(equ_channel)
@@ -118,7 +118,7 @@ macro_name = equation
 
 ## Channel alignement/scaling
 
-For several instruments, channels are not actually aligned with one or the other, or may be of different resolutions. SatDump will automatically deal with this.
+For several instruments, channels are not actually aligned with one or the other, or may be of different resolutions. GobDump will automatically deal with this.
 
 ![Macro Example](img_exp/align.png)
 

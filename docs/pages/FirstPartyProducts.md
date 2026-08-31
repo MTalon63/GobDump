@@ -1,6 +1,6 @@
 # First-Party Products
 
-SatDump supports decoding and processing a select portfolio of first party products from space and meteorological agencies.
+GobDump supports decoding and processing a select portfolio of first party products from space and meteorological agencies.
 
 > [!note]
 > This module is experimental and could contain bugs; users are encouraged to test and report any issues [on the GitHub](https://github.com/SatDump/SatDump/issues).

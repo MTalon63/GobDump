@@ -13,7 +13,7 @@ EGLDisplay g_EglDisplay = EGL_NO_DISPLAY;
 EGLSurface g_EglSurface = EGL_NO_SURFACE;
 static EGLContext g_EglContext = EGL_NO_CONTEXT;
 static bool g_Initialized = false;
-static char g_LogTag[] = "SatDump";
+static char g_LogTag[] = "GobDump";
 extern struct android_app *g_App;
 extern std::string android_plugins_dir;
 bool was_init = false;

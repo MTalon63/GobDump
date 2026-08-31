@@ -149,7 +149,7 @@ void AutoTrackApp::setup_webserver()
             else if (uri == "/")
             {
                 std::string page = (std::string) "<!DOCTYPE html><html lang=\"EN\"><head>" + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" +
-                                   "<meta charset=\"utf-8\"><title>SatDump Status Page</title>" + "<script type=\"text/javascript\">" + "function xhr() {\n" + "var http;\n" +
+                                   "<meta charset=\"utf-8\"><title>GobDump Status Page</title>" + "<script type=\"text/javascript\">" + "function xhr() {\n" + "var http;\n" +
                                    "if (window.XMLHttpRequest) {\n" + "http = new XMLHttpRequest();\n" + "} else {\n" + "http = new ActiveXObject(\"Microsoft.XMLHTTP\");\n" + "}" +
                                    "var url = \"/status\";\n" + "http.open(\"GET\", url, true);\n" + "http.onreadystatechange = function() { \n" +
                                    "if (http.readyState == 4 && http.status == 200) {\n" + "document.getElementById('main-content').innerHTML = http.responseText;\n" + "}\n" + "}\n" +

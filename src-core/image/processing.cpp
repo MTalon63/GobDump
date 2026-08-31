@@ -112,7 +112,7 @@ namespace satdump
             }
         }
 
-        void kuwahara_filter(Image &img)
+        void kuwahara_filter(Image &img, float *p)
         {
             const int radius = 1;
             const float num_pixels = (float)((radius + 1) * (radius + 1));
@@ -181,6 +181,9 @@ namespace satdump
                             }
                         }
                     }
+
+                    if (p != nullptr)
+                        *p = c * (1.0 / (float)img.channels()) + ((float(y) / float(d_height)) / (float)d_channels);
                 }
             }
         }

@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">GobDump</string>
+    <string name="app_description">GobDump is a fork of SatDump, a general-purpose satellite data processing application.</string>
 </resources>

@@ -73,12 +73,12 @@ namespace webhook_app
 
     void WebhookSender::test(const WebhookConfig &config)
     {
-        send_webhook(config.url, get_payload_key(config.url), "Hello from SatDump!");
+        send_webhook(config.url, get_payload_key(config.url), "Hello from GobDump!");
     }
 
     void WebhookSender::handle_event(const satdump::SatDumpStartedEvent &)
     {
-        send_webhook(url, payload_key, "Started SatDump");
+        send_webhook(url, payload_key, "Started GobDump");
     }
 
     void WebhookSender::handle_event(const satdump::TLEsUpdatedEvent &)

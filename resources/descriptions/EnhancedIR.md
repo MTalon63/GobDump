@@ -22,4 +22,4 @@ Meteorology.
 
 It is hard to recognize land features during the summer or in hot latitudes. It is possible to overlay the transparent version on top of other enhancements to obviate this issue.
 
-Additionally, the "Cloud Top IR" enhancement can be used and provides a similar view, with better terrain contrast. The choice between either enhancement in winter depends mostly on the necessity to compare SatDump data with other meteorological agencies' data and from personal preference.
+Additionally, the "Cloud Top IR" enhancement can be used and provides a similar view, with better terrain contrast. The choice between either enhancement in winter depends mostly on the necessity to compare GobDump data with other meteorological agencies' data and from personal preference.

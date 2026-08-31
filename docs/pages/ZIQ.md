@@ -1,8 +1,8 @@
 # ZIQ (Baseband Format)
 
-In SatDump, a non-standard baseband format is available : ZIQ. The main difference compared to other raw formats is that ZIQ support compressed the raw samples to save on disk space.
+In GobDump, a non-standard baseband format is available : ZIQ. The main difference compared to other raw formats is that ZIQ support compressed the raw samples to save on disk space.
 
-As many usecases of SatDump may require recording rather large basebands (easily 100GB+ on X-Band!), experimentation was done using several algorithms to see what could be done. ZSTD revealed rather good compression ratios (often 40% or more at 8-bits) with a minimal performance impact. As it ended up being extremely useful, it was decided to turn it into something easier to use, hence carrying an information header and more as a WAV file would, and that's how ZIQ became a thing (ZIQ because it uses the Z-Standard, and IQ as it is used for storing complex IQ basebands).
+As many usecases of GobDump may require recording rather large basebands (easily 100GB+ on X-Band!), experimentation was done using several algorithms to see what could be done. ZSTD revealed rather good compression ratios (often 40% or more at 8-bits) with a minimal performance impact. As it ended up being extremely useful, it was decided to turn it into something easier to use, hence carrying an information header and more as a WAV file would, and that's how ZIQ became a thing (ZIQ because it uses the Z-Standard, and IQ as it is used for storing complex IQ basebands).
 
 The full ZIQ implementation (C++) can be found in src-core/common/ziq.h and src-core/common/ziq.cpp. Anyone is free to reuse it for implementation in their project. Do keep in mind this implementation uses VOLK for SIMD acceleration, so you may have to change that before use in your own project.
 

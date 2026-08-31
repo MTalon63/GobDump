@@ -32,17 +32,23 @@ namespace satdump
             setCanSubBeReorgTo(true);
 
             img_handler.enableOverlayMenu = false;
+            img_handler.sendCropToRoot = true;
+            img_handler.removeProjectionInfoFromCrop = true;
 
             setConfig(satdump::db->get_user_json("projection_defaults"));
         }
 
-        ProjectionHandler::~ProjectionHandler() { satdump::db->set_user_json("projection_defaults", getConfig()); }
+        ProjectionHandler::~ProjectionHandler()
+        {
+            ProcessingHandler::~ProcessingHandler();
+            satdump::db->set_user_json("projection_defaults", getConfig());
+        }
 
         void ProjectionHandler::drawMenu()
         {
             bool needs_to_be_disabled = is_processing;
 
-            if (ImGui::CollapsingHeader("Projection", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader(_("Projection"), ImGuiTreeNodeFlags_DefaultOpen))
             {
                 if (needs_to_be_disabled)
                     style::beginDisabled();
@@ -50,7 +56,7 @@ namespace satdump
                 projui.drawUI();
 
                 //            needs_to_update |= TODO; // TODOREWORK move in top drawMenu?
-                if (ImGui::Button("Project"))
+                if (ImGui::Button(_("Project")))
                     needs_to_update = true;
 
                 if (needs_to_be_disabled)
@@ -466,6 +472,7 @@ namespace satdump
                 }
 
                 img_handler.setImage(img);
+                img_handler.setName(proj_name + " Image");
             }
             catch (std::exception &e)
             {
@@ -479,7 +486,7 @@ namespace satdump
 
             img_handler.drawMenuBar();
 
-            if (widgets::MenuItemTooltip(u8"\uF706", "Image To Handler"))
+            if (widgets::MenuItemTooltip(u8"\uF706", _("Image To Handler")))
             {
                 std::shared_ptr<ImageHandler> a = std::make_shared<ImageHandler>();
                 a->setConfig(img_handler.getConfig());

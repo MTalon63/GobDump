@@ -2,10 +2,26 @@
     "name": "MSU-MR",
     "presets": [
         {
+            "name": "NDVI",
+            "expression": "cch1=(1, sun_angle_compensated_reflective_radiance, 1.000000, 78);cch2=(2, sun_angle_compensated_reflective_radiance, 1.000000, 100);lut=lut(lut/NDVI.png);lut(0, ((cch2-cch1)/((cch2+cch1) == 0 ? 0.000001 : (cch1+cch2))+1)/2, 0),lut(0, ((cch2-cch1)/((cch2+cch1) == 0 ? 0.000001 : (cch1+cch2))+1)/2, 1),lut(0, ((cch2-cch1)/((cch2+cch1) == 0 ? 0.000001 : (cch1+cch2))+1)/2, 2)",
+            "image": {
+                "geocorrect": true
+            },
+            "description": "descriptions/NDVI.md"
+        },
+        {
             "name": "AVHRR 221 False Color (uncalibrated)",
             "expression": "ch2, ch2, ch1",
             "image": {
-                "white_balance": true,
+                "filters": [
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/221.md"
@@ -30,7 +46,15 @@
             "name": "AVHRR 3a21 False Color (uncalibrated)",
             "expression": "ch3, ch2, ch1",
             "image": {
-                "white_balance": true,
+                "filters": [
+                    [
+                        "white_balance",
+                        [
+                            true,
+                            null
+                        ]
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/321.md",
@@ -79,7 +103,14 @@
             "name": "10.8µm Thermal IR (Uncalibrated)",
             "expression": "1 - ch5",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/ThermalUncal.md"
@@ -96,7 +127,14 @@
             "name": "AVHRR 543b IR False Color",
             "expression": "1 - ch6, 1 - ch5, 1 - ch4",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/543b.md"
@@ -105,7 +143,14 @@
             "name": "AVHRR 3b45 IR False Color",
             "expression": "1 - ch4, 1 - ch5, 1 - ch6",
             "image": {
-                "individual_equalize": true,
+                "filters": [
+                    [
+                        "equalize",
+                        {
+                            "per_channel": true
+                        }
+                    ]
+                ],
                 "geocorrect": true
             },
             "description": "descriptions/3b45.md"

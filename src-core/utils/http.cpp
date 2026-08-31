@@ -6,6 +6,7 @@
 #include <mutex>
 
 #define CURL_TIMEOUT 5000
+#define CURL_CONNECT_TIMEOUT 5
 
 namespace satdump
 {
@@ -52,12 +53,13 @@ namespace satdump
         if (curl)
         {
             curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error_buffer);
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, std::string((std::string) "SatDump/v" + satdump::SATDUMP_VERSION).c_str());
+            curl_easy_setopt(curl, CURLOPT_USERAGENT, std::string((std::string) "GobDump/v" + satdump::SATDUMP_VERSION).c_str());
             curl_easy_setopt(curl, CURLOPT_URL, url_str.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_std_string);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result);
             curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, CURL_CONNECT_TIMEOUT);
 
 #ifdef CURLSSLOPT_NATIVE_CA
             curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
@@ -111,12 +113,13 @@ namespace satdump
         if (curl)
         {
             curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error_buffer);
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, std::string((std::string) "SatDump/v" + satdump::SATDUMP_VERSION).c_str());
+            curl_easy_setopt(curl, CURLOPT_USERAGENT, std::string((std::string) "GobDump/v" + satdump::SATDUMP_VERSION).c_str());
             curl_easy_setopt(curl, CURLOPT_URL, url_str.c_str());
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_req.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_std_string);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, CURL_CONNECT_TIMEOUT);
 
 #ifdef CURLSSLOPT_NATIVE_CA
             curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);

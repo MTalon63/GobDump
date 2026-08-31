@@ -37,6 +37,8 @@ namespace satdump
         {
             if (log.lvl == slog::LOG_INFO)
                 lvl = "Info";
+            else if (log.lvl == slog::LOG_NOTICE)
+                lvl = "Notice";
             else if (log.lvl == slog::LOG_WARN)
                 lvl = "Warning";
             else if (log.lvl == slog::LOG_ERROR)
@@ -112,7 +114,7 @@ namespace satdump
             last_size = display_size;
 
             ImGui::SetNextWindowBgAlpha(1.0);
-            ImGui::Begin("SatDump Log", &show_log, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse);
+            ImGui::Begin(_("GobDump Log"), &show_log, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse);
             widgets::LoggerSinkWidget::draw();
 
             ImGui::End();

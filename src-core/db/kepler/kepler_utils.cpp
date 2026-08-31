@@ -260,7 +260,7 @@ namespace satdump
         logger->info(url_str);
         std::string result;
         int http_res = 1, trials = 0;
-        while (http_res == 1 && trials < 10)
+        while (http_res == 1 && trials < 3)
         {
             if ((http_res = perform_http_request(url_str, result)) != 1)
             {
@@ -295,7 +295,7 @@ namespace satdump
         logger->info(url_str);
         std::string result;
         int http_res = 1, trials = 0;
-        while (http_res == 1 && trials < 10)
+        while (http_res == 1 && trials < 3)
         {
             if ((http_res = perform_http_request(url_str, result)) != 1)
             {

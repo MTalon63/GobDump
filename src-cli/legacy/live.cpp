@@ -31,7 +31,7 @@ int main_live(int argc, char *argv[])
         logger->error(" --source [airspy/rtlsdr/etc] --gain 20 --bias");
         logger->error("As well as --timeout in seconds");
         logger->error("Sample command :");
-        logger->error("./satdump live metop_ahrpt metop_output_directory --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780");
+        logger->error("./gobdump live metop_ahrpt metop_output_directory --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780");
         return 1;
     }
 

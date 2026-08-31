@@ -70,7 +70,7 @@ namespace style
         }
         catch (std::exception &)
         {
-            logger->error("Failed to load any theme! Your SatDump installation may be missing critical files.");
+            logger->error("Failed to load any theme! Your GobDump installation may be missing critical files.");
             return;
         }
 

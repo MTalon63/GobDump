@@ -31,7 +31,7 @@ Quick-Start :
 ![Image showing the processing window](gui-menu.png)
 
 ![As described below](gui-processing.png)
-_SatDump (1.0) demodulating a DVB-S2 baseband_
+_GobDump (1.0) demodulating a DVB-S2 baseband_
 
 ### Live processing or recording (directly from your SDR)
 
@@ -42,20 +42,20 @@ Quick-Start :
 - Choose a pipeline
 - Start it, and done!
 
-![SatDump as described below](gui-live-source.png)
-_SatDump tuned to 103 MHz using a HydraSDR_
+![GobDump as described below](gui-live-source.png)
+_GobDump tuned to 103 MHz using a HydraSDR_
 
 ## CLI Version
 
-![Satdump CLI initializing](cli-init.png)
+![GobDump CLI initializing](cli-init.png)
 
 ### Offline processing
 
 ```
-Usage : satdump pipeline [pipeline_id] [input_level] [input_file] [output_file_or_directory] [additional options as required]
+Usage : gobdump pipeline [pipeline_id] [input_level] [input_file] [output_file_or_directory] [additional options as required]
 Extra options can be found by adding --help to the end of the command
 Sample command :
-satdump pipeline metop_ahrpt baseband /home/user/metop_baseband.cs16 metop_output_directory --samplerate 6e6 --baseband_format cs16
+gobdump pipeline metop_ahrpt baseband /home/user/metop_baseband.cs16 metop_output_directory --samplerate 6e6 --baseband_format cs16
 ```
 
 You can find a list of Satellite pipelines and their parameters [Here](https://docs.satdump.org/pipelines.html).
@@ -63,27 +63,27 @@ You can find a list of Satellite pipelines and their parameters [Here](https://d
 ### Live processing
 
 ```
-Usage : satdump legacy live [pipeline_id] [output_file_or_directory] [additional options as required]
+Usage : gobdump legacy live [pipeline_id] [output_file_or_directory] [additional options as required]
 Extra options (examples. Any parameter used in modules or sources can be used here) :
   --samplerate [baseband_samplerate] --baseband_format [cf32/cs32/cs16/cs8/w8] --dc_block --iq_swap
   --source [airspy/rtlsdr/etc] --gain 20 --bias
 As well as --timeout in seconds
 Sample command :
-satdump legacy live metop_ahrpt metop_output_directory --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780
+gobdump legacy live metop_ahrpt metop_output_directory --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780
 ```
 
-You can find a list of all SDR Options [Here](https://docs.satdump.org/sdr_options.html). Run `satdump sdr_probe` to get a list of available SDRs and their IDs.
+You can find a list of all SDR Options [Here](https://docs.satdump.org/sdr_options.html). Run `gobdump sdr_probe` to get a list of available SDRs and their IDs.
 
 ### Recording
 
 ```
-Usage : satdump legacy record [output_baseband (without extension!)] [additional options as required]
+Usage : gobdump legacy record [output_baseband (without extension!)] [additional options as required]
 Extra options (examples. Any parameter used in sources can be used here) :
   --samplerate [baseband_samplerate] --baseband_format [cf32/cs32/cs16/cs8/cu8/w16] --dc_block --iq_swap
   --source [airspy/rtlsdr/etc] --gain 20 --bias
 As well as --timeout in seconds
 Sample command :
-satdump legacy record baseband_name --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780 --baseband_format cf32
+gobdump legacy record baseband_name --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780 --baseband_format cf32
 ```
 
 # Building / Installing
@@ -92,7 +92,7 @@ satdump legacy record baseband_name --source airspy --samplerate 6e6 --frequency
 
 The fastest way to get started is to head over to the [Releases](https://github.com/altillimity/SatDump/releases) page, where you can download SatDump's installer or portable app - no compilation necessary.
 
-Our builds are made with Visual Studio 2019 for x64, so the appropriate Visual C++ Runtime will be required (though, likely to be already installed). You can get it [here](https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0). Once downloaded, run either satdump-ui.exe or satdump.exe (CLI) to get started!
+Our builds are made with Visual Studio 2019 for x64, so the appropriate Visual C++ Runtime will be required (though, likely to be already installed). You can get it [here](https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0). Once downloaded, run either gobdump-ui.exe or gobdump.exe (CLI) to get started!
 
 For compilation information, see the dedicated documentation [here](https://docs.satdump.org/build_windows.html).
 
@@ -120,14 +120,14 @@ General build instructions (Homebrew is required!)
 # Install build tools and dependencies
 brew install cmake dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost libusb nng volk libjpeg-turbo libtiff libomp libpng glfw3 libusb fftw libxml2 portaudio jemalloc nng zstd armadillo hdf5 sqlite3
 
-# Clone SatDump
+# Clone GobDump
 git clone https://github.com/SatDump/SatDump.git && cd SatDump
 mkdir build && cd build
 
 # Build additional dependencies
 ../macOS/build_deps.sh
 
-# Build SatDump
+# Build GobDump
 cmake -DCMAKE_BUILD_TYPE=Release ..  # If you want to bundle the app, you must also add -DBUNDLING_MODE=ON, that makes the binary usable in a bundle
 make -j$(sysctl -n hw.logicalcpu)
 
@@ -136,7 +136,7 @@ ln -s ../pipelines .        # Symlink pipelines so it can run
 ln -s ../resources .        # Symlink resources so it can run
 ln -s ../gobdump_cfg.json . # Symlink settings so it can run
 
-./satdump-ui
+./gobdump-ui
 
 # If -DBUNDLING_MODE was ON and you want to bundle the app
 ../macOS/bundle.sh
@@ -312,7 +312,7 @@ cd ../..
 rm -rf nng
 ```
 
-#### Build SatDump
+#### Build GobDump
 
 ```
 git clone https://github.com/SatDump/SatDump.git
@@ -387,7 +387,7 @@ and have it start automatically on boot, simply launch the container with `docke
 
 #### X11 under docker
 
-To use the `satdump-ui` under docker you need to make a few changes.
+To use the `gobdump-ui` under docker you need to make a few changes.
 It is possible to run this on WSL2 as well, change the source to `/run/desktop/mnt/host/wslg/.X11-unix` instead.
 In the [docker-compose.yml](docker-compose.yml) you need to uncomment a few lines and make it looks like this:
 
@@ -402,4 +402,4 @@ If the user in the container is not authorized for X11, you will probably get th
 This is due to the ACL controlling access to your screen.
 There's several ways to solve this, a few very broad and insecure, but the following should be acceptable on a non-shared system.
 
-On the host, run: `xhost +local:docker` , then to start the ui: `docker compose run --rm -it satdump satdump-ui`
+On the host, run: `xhost +local:docker` , then to start the ui: `docker compose run --rm -it satdump gobdump-ui`

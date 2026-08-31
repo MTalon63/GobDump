@@ -22,4 +22,4 @@ Meteorology.
 
 No specific limitation. 
 
-The choice between either enhancement in winter depends mostly on the necessity to compare SatDump data with other meteorological agencies' data and from personal preference.
+The choice between either enhancement in winter depends mostly on the necessity to compare GobDump data with other meteorological agencies' data and from personal preference.

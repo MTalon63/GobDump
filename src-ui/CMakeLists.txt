@@ -38,6 +38,10 @@ add_subdirectory(nfd)
 
 # Link against the core
 target_link_libraries(gobdump-ui PUBLIC gobdump_core gobdump_interface nfd::nfd)
+set_target_properties(gobdump_core PROPERTIES SOVERSION "${PROJECT_VERSION}")
+set_target_properties(gobdump_core PROPERTIES VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+set_target_properties(gobdump_interface PROPERTIES SOVERSION "${PROJECT_VERSION}")
+set_target_properties(gobdump_interface PROPERTIES VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
 
 # OpenGL or OpenGL ES
 option(BUILD_GLES "Build the GUI with OpenGL ES" OFF)

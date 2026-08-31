@@ -1,17 +1,18 @@
 #include "image_handler.h"
 #include "../vector/shapefile_handler.h"
 #include "common/widgets/menuitem_tooltip.h"
+#include "common/widgets/very_small_button.h"
 #include "core/config.h"
 #include "core/plugin.h"
 #include "core/style.h"
 #include "explorer/explorer.h"
+#include "handlers/image/image_filter.h"
+#include "handlers/processing_handler.h"
 #include "handlers/projection/projection_handler.h"
 #include "handlers/vector/addmenu.h"
 #include "handlers/vector/shapefile_handler.h"
-#include "image/brightness_contrast.h"
+#include "i18n.h"
 #include "image/earth_curvature.h"
-#include "image/hue_saturation.h"
-#include "image/image_background.h"
 #include "image/io.h"
 #include "image/meta.h"
 #include "image/processing.h"
@@ -39,7 +40,7 @@ namespace satdump
             {
                 if (is_processing)
                 {
-                    logger->error("Cannot crop while processing!"); // TODOREWORK see when adding other functions - maybe a global image lock?
+                    logger->error(_("Cannot crop while processing!")); // TODOREWORK see when adding other functions - maybe a global image lock?
                     return;
                 }
 
@@ -69,10 +70,24 @@ namespace satdump
                 geocorrect_image = false;
 
                 auto sh = std::make_shared<ImageHandler>(img);
-                sh->image_name = image_name + " Crop";
-                addSubHandler(sh);
-                eventBus->fire_event<explorer::ExplorerSelectHandlerEvent>({sh});
+                sh->image_name = image_name + _(" Crop");
+
+                if (removeProjectionInfoFromCrop)
+                    image::set_metadata_proj_cfg(img, {});
+
+                if (sendCropToRoot)
+                {
+                    eventBus->fire_event<explorer::ExplorerAddHandlerEvent>({sh, true});
+                }
+                else
+                {
+                    addSubHandler(sh);
+                    eventBus->fire_event<explorer::ExplorerSelectHandlerEvent>({sh});
+                }
             };
+
+            // Load image filters
+            image_filters = getImageFilters();
         }
 
         ImageHandler::ImageHandler(image::Image img) : ImageHandler::ImageHandler() { setImage(img); }
@@ -81,6 +96,7 @@ namespace satdump
 
         ImageHandler::~ImageHandler()
         {
+            ProcessingHandler::~ProcessingHandler();
             if (file_save_thread.joinable())
                 file_save_thread.join();
         }
@@ -89,89 +105,165 @@ namespace satdump
         {
             bool needs_to_be_disabled = is_processing;
 
-            if (ImGui::CollapsingHeader("Image"))
+            if (ImGui::CollapsingHeader(_("Image")))
             {
                 bool needs_to_update = false;
 
                 if (needs_to_be_disabled)
                     style::beginDisabled();
 
-                needs_to_update |= ImGui::Checkbox("Median Blur", &median_blur_img);
-                needs_to_update |= ImGui::Checkbox("Despeckle", &despeckle_img);
-
-                if (ImGui::RadioButton("Rotate 0", rotate_image == 0))
+                if (ImGui::RadioButton(_("Rotate 0"), rotate_image == 0))
                     needs_to_update = 1, rotate_image = 0;
-                if (ImGui::RadioButton("Rotate 90", rotate_image == 90))
+                if (ImGui::RadioButton(_("Rotate 90"), rotate_image == 90))
                     needs_to_update = 1, rotate_image = 90;
-                if (ImGui::RadioButton("Rotate 180", rotate_image == 180))
+                if (ImGui::RadioButton(_("Rotate 180"), rotate_image == 180))
                     needs_to_update = 1, rotate_image = 180;
-                if (ImGui::RadioButton("Rotate 270", rotate_image == 270))
+                if (ImGui::RadioButton(_("Rotate 270"), rotate_image == 270))
                     needs_to_update = 1, rotate_image = 270;
 
                 if (image_proj_valid)
-                    needs_to_update |= ImGui::Checkbox("Geo Correct", &geocorrect_image); // TODOREWORK Disable if it can't be?
-                needs_to_update |= ImGui::Checkbox("Equalize", &equalize_img);
-                needs_to_update |= ImGui::Checkbox("Individual Equalize", &equalize_perchannel_img);
-                needs_to_update |= ImGui::Checkbox("White Balance", &white_balance_img);
-                needs_to_update |= ImGui::Checkbox("Normalize", &normalize_img);
-                needs_to_update |= ImGui::Checkbox("Invert", &invert_img);
-
-                needs_to_update |= ImGui::Checkbox("Brightness/contrast", &brightness_contrast_image);
-                if (brightness_contrast_image)
-                {
-                    ImGui::SliderFloat("Brightness", &brightness_contrast_brightness_image, -2, 2);
-                    needs_to_update |= ImGui::IsItemDeactivatedAfterEdit();
-                    ImGui::SliderFloat("Contrast", &brightness_contrast_contrast_image, -2, 2);
-                    needs_to_update |= ImGui::IsItemDeactivatedAfterEdit();
-                }
-
-                if (image_proj_valid)
-                    needs_to_update |= ImGui::Checkbox("Remove Background", &remove_background_img);
-
-                needs_to_update |= ImGui::Checkbox("Hue/Saturation", &huesaturation_img);
-                if (huesaturation_img)
-                {
-                    for (int i = 0; i < 7; i++)
-                    {
-                        std::string cname[] = {"All", "Red", "Yellow", "Green", "Cyan", "Blue", "Magenta"};
-                        float hue = huesaturation_cfg_img.hue[i] * 180.0;
-                        float saturation = huesaturation_cfg_img.saturation[i] * 100.0;
-                        float lightness = huesaturation_cfg_img.lightness[i] * 100.0;
-                        ImGui::SliderFloat(std::string(cname[i] + " Hue").c_str(), &hue, -180, 180);
-                        needs_to_update |= ImGui::IsItemDeactivatedAfterEdit();
-                        ImGui::SliderFloat(std::string(cname[i] + " Saturation").c_str(), &saturation, -100, 100);
-                        needs_to_update |= ImGui::IsItemDeactivatedAfterEdit();
-                        ImGui::SliderFloat(std::string(cname[i] + " Lightness").c_str(), &lightness, -100, 100);
-                        needs_to_update |= ImGui::IsItemDeactivatedAfterEdit();
-                        huesaturation_cfg_img.hue[i] = hue / 180.0;
-                        huesaturation_cfg_img.saturation[i] = saturation / 100.0;
-                        huesaturation_cfg_img.lightness[i] = lightness / 100.0;
-                    }
-
-                    float overlap = huesaturation_cfg_img.overlap;
-                    ImGui::SliderFloat("Overlap", &overlap, -100.0, 100.0);
-                    needs_to_update |= ImGui::IsItemDeactivatedAfterEdit();
-                    huesaturation_cfg_img.overlap = overlap;
-                }
+                    needs_to_update |= ImGui::Checkbox(_("Geo Correct"), &geocorrect_image); // TODOREWORK Disable if it can't be?
 
                 if (needs_to_be_disabled)
                     style::endDisabled();
 
                 if (image_calib_valid)
                 {
-                    ImGui::Text("Calibration Unit %s", image_calib.unit.c_str());
-                    ImGui::Text("Calibration Min %f", image_calib.min);
-                    ImGui::Text("Calibration Max %f", image_calib.max);
+                    ImGui::Text(_("Calibration Unit %s"), image_calib.unit.c_str());
+                    ImGui::Text(_("Calibration Min %f"), image_calib.min);
+                    ImGui::Text(_("Calibration Max %f"), image_calib.max);
                 }
 
                 if (needs_to_update)
                 {
                     if (file_save_thread_running)
-                        logger->error("Please wait for saving to end first!");
+                        logger->error(_("Please wait for saving to end first!"));
                     else
                         asyncProcess();
                 }
                 wasMenuTriggered = needs_to_update;
+            }
+
+            if (ImGui::CollapsingHeader(_("Filters")))
+            {
+                if (needs_to_be_disabled)
+                    style::beginDisabled();
+
+                if (ImGui::BeginListBox("##filterscombo", {ImGui::GetContentRegionAvail().x, 0}))
+                {
+                    bool quit = false;
+
+                    for (int i = 0; i < active_filters.size(); i++)
+                    {
+                        if (quit)
+                            break;
+
+                        auto &f = active_filters[i];
+
+                        std::string name = image_filters[f.first].name;
+
+                        ImGui::PushID(i);
+                        ImGui::BeginGroup();
+
+                        if (f.second.progress > 0)
+                        {
+                            auto min = ImGui::GetCursorScreenPos();
+                            auto max = ImGui::GetCursorScreenPos() + ImVec2(ImGui::GetContentRegionAvail().x, ImGui::CalcTextSize(name.c_str()).y);
+                            max.x = min.x + (max.x - min.x) * f.second.progress;
+                            min.y += ImGui::CalcTextSize(name.c_str()).y * 0.9;
+                            min.y += 5 * ui_scale;
+                            max.y += 5 * ui_scale;
+                            ImGui::GetWindowDrawList()->AddRectFilled(min, max, style::theme.yellow);
+                        }
+                        else if (f.second.progress == -1)
+                        {
+                            auto min = ImGui::GetCursorScreenPos();
+                            auto max = ImGui::GetCursorScreenPos() + ImVec2(ImGui::GetContentRegionAvail().x, ImGui::CalcTextSize(name.c_str()).y);
+                            float offset = fmod(ImGui::GetTime() * 100, (max.x - min.x));
+                            max.x = offset + min.x + (max.x - min.x) * 0.1;
+                            min.x = offset;
+                            min.y += ImGui::CalcTextSize(name.c_str()).y * 0.9;
+                            min.y += 5 * ui_scale;
+                            max.y += 5 * ui_scale;
+                            ImGui::GetWindowDrawList()->AddRectFilled(min, max, style::theme.yellow);
+                        }
+
+                        // Settings
+                        if (!image_filters[f.first].has_menu)
+                            style::beginDisabled();
+                        if (widgets::VerySmallButton(u8"\uF085"))
+                        {
+                            image_filter_configurator = image_filters[f.first].configMenuGetter();
+                            if (image_filter_configurator)
+                            {
+                                image_filter_configurator->set(f.second.cfg);
+                                image_filter_configurator_set_in = i;
+                            }
+                        }
+                        if (!image_filters[f.first].has_menu)
+                            style::endDisabled();
+
+                        if (f.second.cfg.size() && ImGui::IsItemHovered())
+                            ImGui::SetTooltip("%s", f.second.cfg.dump(4).c_str());
+
+                        ImGui::SameLine();
+
+                        // Delete
+                        if (widgets::VerySmallButton(u8"\uF1F8") && i < active_filters.size())
+                        {
+                            active_filters.erase(active_filters.begin() + i);
+                            quit = true;
+                            asyncProcess();
+                        }
+
+                        ImGui::SameLine();
+
+                        // Up
+                        if (i == 0)
+                            style::beginDisabled();
+                        if (widgets::VerySmallButton(u8"\uF062") && i > 0)
+                        {
+                            std::swap(active_filters[i], active_filters[i - 1]);
+                            asyncProcess();
+                        }
+                        if (i == 0)
+                            style::endDisabled();
+
+                        ImGui::SameLine();
+
+                        // Down
+                        if (i == active_filters.size() - 1)
+                            style::beginDisabled();
+                        if (widgets::VerySmallButton(u8"\uF063") && i + 1 < active_filters.size())
+                        {
+                            std::swap(active_filters[i], active_filters[i + 1]);
+                            asyncProcess();
+                        }
+                        if (i == active_filters.size() - 1)
+                            style::endDisabled();
+
+                        ImGui::SameLine();
+
+                        // Disable/Enable
+                        if (widgets::VerySmallButton(active_filters[i].second.enabled ? u8"\uF06E" : u8"\uF070"))
+                        {
+                            active_filters[i].second.enabled = !active_filters[i].second.enabled;
+                            asyncProcess();
+                        }
+
+                        ImGui::SameLine();
+
+                        ImGui::Text("%s", name.c_str());
+
+                        ImGui::EndGroup();
+                        ImGui::PopID();
+                        ImGui::Separator();
+                    }
+                    ImGui::EndListBox();
+
+                    if (needs_to_be_disabled)
+                        style::endDisabled();
+                }
             }
         }
 
@@ -182,7 +274,7 @@ namespace satdump
             if (needs_to_be_disabled)
                 style::beginDisabled();
 
-            if (widgets::MenuItemTooltip(u8"\ueb4b", "Save Image"))
+            if (widgets::MenuItemTooltip(u8"\ueb4b", _("Save Image")))
             {
                 auto fun = [this]()
                 {
@@ -192,11 +284,11 @@ namespace satdump
                     std::string save_type = "png";
                     satdump_cfg.tryAssignValueFromSatDumpGeneral(save_type, "image_format");
                     std::string default_path = satdump_cfg.getValueFromSatDumpDirectories<std::string>("default_image_output_directory");
-                    std::string saved_at = save_image_dialog(getSaneName(), default_path, "Save Image", &getImage(), &save_type);
+                    std::string saved_at = save_image_dialog(getSaneName(), default_path, _("Save Image"), &getImage(), &save_type);
                     if (saved_at == "")
-                        logger->info("Save cancelled");
+                        logger->info(_("Save cancelled"));
                     else
-                        logger->info("Saved current image at %s", saved_at.c_str());
+                        logger->info(_("Saved current image at %s"), saved_at.c_str());
                     file_save_thread_running = false;
                     set_is_processing(false);
                 };
@@ -204,7 +296,7 @@ namespace satdump
                 if (file_save_thread.joinable())
                     file_save_thread.join();
                 if (file_save_thread_running)
-                    logger->error("Please wait for processing to end first!");
+                    logger->error(_("Please wait for processing to end first!"));
                 else
                     file_save_thread = std::thread(fun);
             }
@@ -225,14 +317,14 @@ namespace satdump
             /////////////
 
             // Refresh button
-            if (widgets::MenuItemTooltip(u8"\uf01e", "Refresh (Image Only)"))
+            if (widgets::MenuItemTooltip(u8"\uf01e", _("Refresh (Image Only)")))
                 asyncProcess();
 
             // Basic controls
-            image_view.zoom_in_next |= widgets::MenuItemTooltip(u8"\ueb81", "Zoom In");
-            image_view.zoom_out_next |= widgets::MenuItemTooltip(u8"\ueb82", "Zoom Out");
-            image_view.autoFitNextFrame |= widgets::MenuItemTooltip(u8"\uF69E", "Fit");
-            image_view.select_crop_next |= widgets::MenuItemTooltip(u8"\uF69D", "Crop", NULL, image_view.select_crop_next);
+            image_view.zoom_in_next |= widgets::MenuItemTooltip(u8"\ueb81", _("Zoom In"));
+            image_view.zoom_out_next |= widgets::MenuItemTooltip(u8"\ueb82", _("Zoom Out"));
+            image_view.autoFitNextFrame |= widgets::MenuItemTooltip(u8"\uF69E", _("Fit"));
+            image_view.select_crop_next |= widgets::MenuItemTooltip(u8"\uF69D", _("Crop"), NULL, image_view.select_crop_next);
 
             if (image_proj_valid)
             {
@@ -240,7 +332,7 @@ namespace satdump
                     style::beginDisabled();
 
                 // Show a menu that allows putting this image on an existing or new projection
-                if (widgets::BeginMenuTooltip(u8"\uf484", "Add to projection"))
+                if (widgets::BeginMenuTooltip(u8"\uf484", _("Add to projection")))
                 {
                     std::vector<std::shared_ptr<Handler>> hs;
                     eventBus->fire_event<explorer::GetAllOfTypeEvent>({"projection_handler", hs});
@@ -256,7 +348,7 @@ namespace satdump
                     if (n > 0)
                         ImGui::Separator();
 
-                    if (ImGui::MenuItem("New Projection"))
+                    if (ImGui::MenuItem(_("New Projection")))
                     {
                         auto p = std::make_shared<ProjectionHandler>();
                         p->addSubHandler(std::make_shared<ImageHandler>(getImage(), getName()), true);
@@ -269,119 +361,149 @@ namespace satdump
                 if (rotate_image)
                     style::endDisabled();
             }
+
+            // Render filters menu
+            if (widgets::BeginMenuTooltip(_(u8"\uF0C3"), _("Filters"), !is_processing))
+            {
+                for (auto &filter : image_filters)
+                {
+                    if (ImGui::MenuItem(filter.second.name.c_str()))
+                    {
+                        auto menu = filter.second.configMenuGetter();
+
+                        if (menu)
+                        {
+                            menu->type = filter.first;
+                            image_filter_configurator_set_in = -1;
+                            image_filter_configurator = menu;
+                        }
+                        else
+                        {
+                            active_filters.push_back({filter.first, {{}}});
+                            asyncProcess();
+                        }
+                    }
+                }
+
+                ImGui::EndMenu();
+            }
         }
 
         void ImageHandler::drawContents(ImVec2 win_size)
         {
-            ImGui::BeginChild("ContentChild", win_size, false, ImGuiWindowFlags_NoScrollbar);
-
-            if (imgview_needs_update)
+            if (ImGui::BeginChild("ContentChild", win_size, false, ImGuiWindowFlags_NoScrollbar))
             {
-                image_view.update(getImage());
-                imgview_needs_update = false;
-
-                image_view.mouseCallback = [this](float x, float y)
+                if (imgview_needs_update)
                 {
-                    auto &img = getImage();
-                    ImGui::BeginTooltip();
+                    image_view.update(getImage());
+                    imgview_needs_update = false;
 
-                    for (int i = 0; i < img.channels(); i++)
-                        ImGui::Text("Raw %d : %d F %f", i + 1, img.get(0, x, y), img.getf(0, x, y));
-
-                    if (image_calib_valid && image.channels() == 1)
+                    image_view.mouseCallback = [this](float x, float y)
                     {
-                        int xc = x; // Correction only needs to be undone for calib
-                        if (correct_fwd_lut.size() > 0 && x > 0 && x < correct_fwd_lut.size())
-                            xc = correct_fwd_lut[x];
+                        auto &img = getImage();
+                        ImGui::BeginTooltip();
 
-                        double val = image_calib.getVal(img.getf(0, xc, y));
-                        ImGui::Text("Unit : %f %s", val, image_calib.unit.c_str());
-                    }
+                        for (int i = 0; i < img.channels(); i++)
+                            ImGui::Text(_("Raw %d : %d F %f"), i + 1, img.get(0, x, y), img.getf(0, x, y));
 
-                    // Handle rotations
-                    if (rotate_image)
-                    {
-                        if (rotate_image == 180)
+                        if (image_calib_valid && image.channels() == 1)
                         {
-                            x = (img.width() - 1) - x;
-                            y = (img.height() - 1) - y;
-                        }
-                        else if (rotate_image == 90)
-                        {
-                            auto x1 = y;
-                            y = (img.width() - 1) - x;
-                            x = x1;
-                        }
-                        else if (rotate_image == 270)
-                        {
-                            auto x1 = (img.height() - 1) - y;
-                            y = x;
-                            x = x1;
-                        }
-                    }
+                            int xc = x; // Correction only needs to be undone for calib
+                            if (correct_fwd_lut.size() > 0 && x > 0 && x < correct_fwd_lut.size())
+                                xc = correct_fwd_lut[x];
 
-                    if (image_proj_valid)
-                    {
-                        geodetic::geodetic_coords_t pos;
-                        if (image_proj.inverse(x, y, pos))
-                        {
-                            ImGui::Text("Lat : Invalid!");
-                            ImGui::Text("Lon : Invalid!");
+                            double val = image_calib.getVal(img.getf(0, xc, y));
+                            ImGui::Text(_("Unit : %f %s"), val, image_calib.unit.c_str());
                         }
-                        else
+
+                        // Handle rotations
+                        if (rotate_image)
                         {
-                            ImGui::Text("Lat : %f", pos.lat);
-                            ImGui::Text("Lon : %f", pos.lon);
+                            if (rotate_image == 180)
+                            {
+                                x = (img.width() - 1) - x;
+                                y = (img.height() - 1) - y;
+                            }
+                            else if (rotate_image == 90)
+                            {
+                                auto x1 = y;
+                                y = (img.width() - 1) - x;
+                                x = x1;
+                            }
+                            else if (rotate_image == 270)
+                            {
+                                auto x1 = (img.height() - 1) - y;
+                                y = x;
+                                x = x1;
+                            }
                         }
-                    }
-                    additionalMouseCallback(x, y);
-                    ImGui::EndTooltip();
-                };
+
+                        if (image_proj_valid)
+                        {
+                            geodetic::geodetic_coords_t pos;
+                            if (image_proj.inverse(x, y, pos))
+                            {
+                                ImGui::Text(_("Lat : Invalid!"));
+                                ImGui::Text(_("Lon : Invalid!"));
+                            }
+                            else
+                            {
+                                ImGui::Text(_("Lat : %f"), pos.lat);
+                                ImGui::Text(_("Lon : %f"), pos.lon);
+                            }
+                        }
+                        additionalMouseCallback(x, y);
+                        ImGui::EndTooltip();
+                    };
+                }
+
+                image_view.draw({ImGui::GetWindowSize().x, ImGui::GetWindowSize().y + 14 * ui_scale});
+
+                ImGui::EndChild();
             }
 
-            image_view.draw({ImGui::GetWindowSize().x, ImGui::GetWindowSize().y + 14 * ui_scale});
+            // Render image filter config
+            if (image_filter_configurator)
+            {
+                ImGui::OpenPopup(_("Filter Config"));
+                if (ImGui::BeginPopupModal(_("Filter Config"), NULL, ImGuiWindowFlags_AlwaysAutoResize))
+                {
+                    image_filter_configurator->draw();
 
-            ImGui::EndChild();
+                    if (ImGui::Button(_("Apply")))
+                    {
+                        if (image_filter_configurator_set_in == -1)
+                            active_filters.push_back({image_filter_configurator->type, {image_filter_configurator->get()}});
+                        else if (image_filter_configurator_set_in < active_filters.size())
+                            active_filters[image_filter_configurator_set_in].second.cfg = image_filter_configurator->get();
+                        image_filter_configurator.reset();
+                        asyncProcess();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(_("Cancel")))
+                        image_filter_configurator.reset();
+
+                    ImGui::EndPopup();
+                }
+            }
         }
 
         void ImageHandler::setConfig(nlohmann::json p)
         {
-            equalize_img = getValueOrDefault(p["equalize"], false);
-            equalize_perchannel_img = getValueOrDefault(p["individual_equalize"], false);
-            white_balance_img = getValueOrDefault(p["white_balance"], false);
-            normalize_img = getValueOrDefault(p["normalize"], false);
-            invert_img = getValueOrDefault(p["invert"], false);
-            median_blur_img = getValueOrDefault(p["median_blur"], median_blur_img);
-            despeckle_img = getValueOrDefault(p["despeckle"], despeckle_img);
             rotate_image = getValueOrDefault(p["rotate180"], rotate_image);
             geocorrect_image = getValueOrDefault(p["geocorrect"], geocorrect_image);
-            brightness_contrast_image = getValueOrDefault(p["brightness_contrast"], false);
-            brightness_contrast_brightness_image = getValueOrDefault(p["brightness_contrast_brightness"], 0);
-            brightness_contrast_contrast_image = getValueOrDefault(p["brightness_contrast_contrast"], 0);
-            huesaturation_img = getValueOrDefault(p["hue_saturation"], false);
-            if (p.contains("hue_saturation_cfg"))
-                huesaturation_cfg_img = p["hue_saturation_cfg"];
-            remove_background_img = getValueOrDefault(p["remove_background"], false);
+            if (p.contains("filters"))
+                active_filters = p["filters"];
+            else
+                active_filters.clear();
         }
 
         nlohmann::json ImageHandler::getConfig()
         {
             nlohmann::json p;
-            p["equalize"] = equalize_img;
-            p["individual_equalize"] = equalize_perchannel_img;
-            p["white_balance"] = white_balance_img;
-            p["normalize"] = normalize_img;
-            p["invert"] = invert_img;
-            p["median_blur"] = median_blur_img;
-            p["despeckle"] = despeckle_img;
             p["rotate"] = rotate_image;
             p["geocorrect"] = geocorrect_image;
-            p["brightness_contrast"] = brightness_contrast_image;
-            p["brightness_contrast_brightness"] = brightness_contrast_brightness_image;
-            p["brightness_contrast_contrast"] = brightness_contrast_contrast_image;
-            p["hue_saturation"] = huesaturation_img;
-            p["hue_saturation_cfg"] = huesaturation_cfg_img;
-            p["remove_background"] = remove_background_img;
+            p["filters"] = active_filters;
             return p;
         }
 
@@ -410,8 +532,7 @@ namespace satdump
 
         void ImageHandler::do_process()
         {
-            bool image_needs_processing = huesaturation_img | equalize_img | equalize_perchannel_img | white_balance_img | normalize_img | invert_img | median_blur_img | rotate_image |
-                                          geocorrect_image | despeckle_img | brightness_contrast_image | remove_background_img /*OVERLAY*/;
+            bool image_needs_processing = rotate_image | geocorrect_image | active_filters.size();
 
             correct_fwd_lut.clear();
             correct_rev_lut.clear();
@@ -422,26 +543,28 @@ namespace satdump
 
                 try
                 {
-                    if (huesaturation_img)
-                        image::hue_saturation(curr_image, huesaturation_cfg_img);
-                    if (equalize_img)
-                        image::equalize(curr_image, false);
-                    if (equalize_perchannel_img)
-                        image::equalize(curr_image, true);
-                    if (white_balance_img)
-                        image::white_balance(curr_image);
-                    if (normalize_img)
-                        image::normalize(curr_image);
-                    if (invert_img)
-                        image::linear_invert(curr_image);
-                    if (median_blur_img)
-                        image::median_blur(curr_image);
-                    if (despeckle_img)
-                        image::kuwahara_filter(curr_image);
-                    if (brightness_contrast_image)
-                        image::brightness_contrast(curr_image, brightness_contrast_brightness_image, brightness_contrast_contrast_image);
-                    if (remove_background_img)
-                        image::remove_background(curr_image, nullptr); // TODOREWORK progress?
+                    for (auto &f : active_filters)
+                    {
+                        if (f.second.enabled)
+                        {
+                            f.second.progress = -1;
+
+                            if (image_filters.count(f.first))
+                            {
+                                logger->info("Applying filter : " + f.first);
+                                image_filters[f.first].perform(curr_image, f.second.cfg, &f.second.progress);
+                            }
+                            else
+                            {
+                                logger->error("Could not find image filter " + f.first + "!");
+                            }
+
+                            f.second.progress = 1;
+                        }
+                    }
+
+                    for (auto &f : active_filters)
+                        f.second.progress = 0;
 
                     if (geocorrect_image)
                     { // TODOREWORK handle disabling projs, etc
@@ -449,7 +572,7 @@ namespace satdump
                         curr_image = image::earth_curvature::perform_geometric_correction(curr_image, success, &correct_rev_lut, &correct_fwd_lut);
                         if (!success)
                         {
-                            logger->error("Failed Geo-Correcting image!");
+                            logger->error(_("Failed Geo-Correcting image!"));
                             correct_fwd_lut.clear();
                             correct_rev_lut.clear();
                         }
@@ -457,7 +580,7 @@ namespace satdump
                 }
                 catch (std::exception &e)
                 {
-                    logger->error("Error processing image! %s", e.what());
+                    logger->error(_("Error processing image! %s"), e.what());
                 }
             }
             else

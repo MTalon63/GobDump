@@ -1,4 +1,7 @@
 #define SATDUMP_DLL_EXPORT 1
+#include "db/kepler/kepler_handler.h"
+#include "i18n.h"
+#include <cstdlib>
 #include "init.h"
 #include "core/config.h"
 #include "core/plugin.h"
@@ -18,6 +21,13 @@
 #include "common/tracking/tle.h"
 
 #include "core/opencl.h"
+
+#ifdef _WIN32
+static inline void gob_setenv(const char *name, const char *value, int) { _putenv_s(name, value); }
+static inline void gob_unsetenv(const char *name) { _putenv_s(name, ""); }
+#define setenv(name, value, overwrite) gob_setenv(name, value, overwrite)
+#define unsetenv(name) gob_unsetenv(name)
+#endif
 
 #include "common/dsp/buffer.h"
 
@@ -42,20 +52,41 @@ namespace satdump
     SATDUMP_DLL std::shared_ptr<KeplerDBHandler> db_keplers;
     SATDUMP_DLL std::shared_ptr<IersDBHandler> db_iers;
 
+#if ENABLE_I18N
+    void initLanguage(std::string lang)
+    {
+        if (lang.size())
+            setenv("LANGUAGE", lang.c_str(), true);
+        else
+            unsetenv("LANGUAGE");
+
+#if !defined(_WIN32) && !defined(__ANDROID__) && !defined(__APPLE__)
+        setlocale(LC_ALL, "");
+#endif
+        bindtextdomain("gobdump", resources::getResourcePath("i18n").c_str());
+        textdomain("gobdump");
+
+        current_language = lang;
+    }
+
+    SATDUMP_DLL std::string current_language;
+#endif
+
     void initSatDump(bool is_gui)
     {
+#if ENABLE_I18N
+        initLanguage();
+#endif
+
         auto lvl = logger->get_level();
         logger->set_level(slog::LOG_INFO);
-        logger->info("   _____       _     _____                        ");
-        logger->info("  / ____|     | |   |  __ \\                       ");
-        logger->info(" | |  __  ___ | |__ | |  | |_   _ _ __ ___  _ __  ");
-        logger->info(" | | |_ |/ _ \\| '\\| '_ \\| |  | | | | | '_ ` _ \\| '_ \\ ");
-        logger->info(" | |__| | (_) | |_) | |__| | |_| | | | | | | |_) |");
-        logger->info("  \\_____|\\___/|_.__/|_____/ \\__,_|_| |_| |_| .__/ ");
-        logger->info("                                           | |    ");
-        logger->info("                                           |_|    ");
-        logger->info("");
-        logger->info("Starting " + getSatDumpVersionName());
+        logger->info("   _____       __  ____                      ");
+        logger->info("  / ___/____ _/ /_/ __ \\__  ______ ___  ____ ");
+        logger->info("  \\__ \\/ __ `/ __/ / / / / / / __ `__ \\/ __ \\");
+        logger->info(" ___/ / /_/ / /_/ /_/ / /_/ / / / / / / /_/ /");
+        logger->info("/____/\\__,_/\\__/_____/\\__,_/_/ /_/ /_/ .___/ ");
+        logger->info("                                    /_/      ");
+        logger->info(_("Starting ") + getSatDumpVersionName());
         logger->info("");
         logger->set_level(lvl);
 
@@ -81,11 +112,17 @@ namespace satdump
         }
         catch (std::exception &e)
         {
-            logger->critical("Error loading GobDump config! GobDump will now exit. Error:\n%s", e.what());
+            logger->critical(_("Error loading GobDump config! GobDump will now exit. Error:\n%s"), e.what());
             // if (is_gui)
             //    pfd::message("SatDump", "Error loading SatDump config! SatDump will now exit. Error:\n\n" + std::string(e.what()), pfd::choice::ok, pfd::icon::error); TODOREWORK bring this back
             exit(1);
         }
+
+#if ENABLE_I18N
+        std::string override_lang = db->get_user("language");
+        if (override_lang != "")
+            initLanguage(override_lang);
+#endif
 
         if (satdump_cfg.main_cfg["satdump_general"].contains("log_to_file"))
         {
@@ -125,7 +162,7 @@ namespace satdump
         pipeline::loadPipelines(resources::getResourcePath("pipelines"));
 
         // List them
-        logger->debug("Registered pipelines :");
+        logger->debug(_("Registered pipelines :"));
         for (auto &pipeline : pipeline::pipelines)
             logger->debug(" - " + pipeline.id);
 
@@ -147,18 +184,10 @@ namespace satdump
         {
             if (satdump_cfg.main_cfg["advanced_settings"].contains("default_buffer_size"))
             {
-                // Was assigned straight from config with no validation, so a negative or absurd value
-                // propagated into every DSP allocation.
-                try
-                {
-                    int new_sz = satdump_cfg.main_cfg["advanced_settings"]["default_buffer_size"].get<int>();
-                    if (dsp::setDefaultBufferSize(new_sz) == new_sz)
-                        logger->warn("DSP Buffer size was changed to %d", new_sz);
-                }
-                catch (std::exception &e)
-                {
-                    logger->error("Invalid default_buffer_size in config : %s", e.what());
-                }
+                int new_sz = satdump_cfg.main_cfg["advanced_settings"]["default_buffer_size"].get<int>();
+                dsp::STREAM_BUFFER_SIZE = new_sz;
+                dsp::RING_BUF_SZ = new_sz;
+                logger->warn(_("DSP Buffer size was changed to %d"), new_sz);
             }
         }
         dsp::lockDefaultBufferSize(); // Buffers get allocated past this point
@@ -168,7 +197,7 @@ namespace satdump
         const char *spice_kernels[] = {de440_f.c_str()};
         t_calcephbin *de440 = calceph_open_array(1, spice_kernels); //// calceph_open("/home/alan/Downloads/de440s.bsp");
         if (!de440)
-            logger->error("Could not open ephemeris data! NOVAS will not work!");
+            logger->error(_("Could not open ephemeris data! NOVAS will not work!"));
         novas_use_calceph(de440);
 
         // Let plugins know we started
@@ -182,10 +211,10 @@ namespace satdump
         logger->error("██║  ██║██╔══██║██║╚██╗██║██║   ██║██╔══╝  ██╔══██╗");
         logger->error("██████╔╝██║  ██║██║ ╚████║╚██████╔╝███████╗██║  ██║");
         logger->error("╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝");
-        logger->error("SatDump has NOT been built in Release mode.");
-        logger->error("If you are not a developer but intending to use the software,");
-        logger->error("you probably do not want this. If so, make sure to");
-        logger->error("specify -DCMAKE_BUILD_TYPE=Release in CMake.");
+        logger->error(_("GobDump has NOT been built in Release mode."));
+        logger->error(_("If you are not a developer but intending to use the software,"));
+        logger->error(_("you probably do not want this. If so, make sure to"));
+        logger->error(_("specify -DCMAKE_BUILD_TYPE=Release in CMake."));
 #endif
 
         // Start task scheduler
@@ -194,7 +223,7 @@ namespace satdump
 
     void exitSatDump()
     {
-        logger->info("Exiting GobDump! Bye!");
+        logger->info(_("Exiting GobDump! Bye!"));
         taskScheduler.reset();
     }
 } // namespace satdump

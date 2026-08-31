@@ -1,11 +1,14 @@
 #include "kepler_handler.h"
 #include "core/config.h"
 #include "db/db_handler.h"
+#include "init.h"
 #include "logger.h"
 #include "nlohmann/json_utils.h"
 #include "utils/format.h"
 #include "utils/string.h"
+#include "utils/time.h"
 #include <string>
+#include <thread>
 
 namespace satdump
 {
@@ -46,7 +49,7 @@ namespace satdump
         satdump_cfg.tryAssignValueFromSatDumpGeneral(update_setting, "kepler_update_interval");
         time_t last_update = std::stoull(h->get_meta("kepler_last_updated", "0"));
         bool honor_setting = true;
-        time_t update_interval;
+        time_t update_interval = 604800;
 
         if (update_setting == "Never")
             honor_setting = false;
@@ -66,18 +69,21 @@ namespace satdump
             honor_setting = false;
         }
 
-        // Update now, if needed
+        // Defer the initial update to the background scheduler thread so a slow or unreachable
+        // server can never block the UI thread during startup.
         time_t now = time(NULL);
-        if ((honor_setting && now > last_update + update_interval) || h->get_table_size("kepler") <= 0)
+        bool needs_update = (honor_setting && now > last_update + update_interval) || h->get_table_size("kepler") <= 0;
+        if (needs_update && tle_do_update_on_init)
         {
-            updateKeplerDatabase();
+            std::shared_ptr<AutoUpdateKeplersEvent> evt = std::make_shared<AutoUpdateKeplersEvent>();
+            taskScheduler->add_task<AutoUpdateKeplersEvent>("auto_kepler_update_init", evt, now - update_interval, update_interval);
             last_update = now;
         }
 
         // Schedule updates while running
         if (honor_setting)
         {
-            eventBus->register_handler<AutoUpdateKeplersEvent>([this](AutoUpdateKeplersEvent evt) { updateKeplerDatabase(); });
+            eventBus->register_handler<AutoUpdateKeplersEvent>([this](AutoUpdateKeplersEvent) { updateKeplerDatabase(); });
             std::shared_ptr<AutoUpdateKeplersEvent> evt = std::make_shared<AutoUpdateKeplersEvent>();
             taskScheduler->add_task<AutoUpdateKeplersEvent>("auto_kepler_update_todorework", evt, last_update, update_interval);
         }
@@ -180,10 +186,11 @@ namespace satdump
     {
         bool ret = false;
 
+        // If no time is specified we assume current
         if (time == -1)
-        {
-            sqlite3_stmt *res;
+            time = getTime();
 
+        sqlite3_stmt *res;
             if (sqlite3_prepare_v2(h->db,
                                    ("select satellite_number, element_number, name, designator, epoch, inclination, right_ascension, eccentricity, argument_of_perigee, mean_anomaly, mean_motion, "
                                     "derivative_mean_motion, second_derivative_mean_motion, bstar_drag_term, revolutions_at_epoch from kepler where satellite_number=" +
@@ -209,15 +216,32 @@ namespace satdump
                 kep.bstar_drag_term = sqlite3_column_double(res, 13);
                 kep.revolutions_at_epoch = sqlite3_column_int(res, 14);
 
-                ret = true;
-            }
-
-            sqlite3_finalize(res);
-        }
-        else
+        if (sqlite3_prepare_v2(h->db,
+                               ("select satellite_number, element_number, name, designator, epoch, inclination, right_ascension, eccentricity, argument_of_perigee, mean_anomaly, mean_motion, "
+                                "derivative_mean_motion, second_derivative_mean_motion, bstar_drag_term, revolutions_at_epoch from kepler where satellite_number=" +
+                                std::to_string(norad) + " order by abs(epoch - " + std::to_string(time) + ") asc limit 1")
+                                   .c_str(),
+                               -1, &res, 0))
+            logger->error("Couldn't fetch Kepler data from DB! " + std::string(sqlite3_errmsg(h->db)));
+        else if (sqlite3_step(res) == SQLITE_ROW)
         {
-            sqlite3_stmt *res;
+            kep.satellite_number = sqlite3_column_int(res, 0);
+            kep.element_number = sqlite3_column_int(res, 1);
+            kep.name = (char *)sqlite3_column_text(res, 2);
+            kep.designator = (char *)sqlite3_column_text(res, 3);
+            kep.epoch = sqlite3_column_double(res, 4);
+            kep.inclination = sqlite3_column_double(res, 5);
+            kep.right_ascension = sqlite3_column_double(res, 6);
+            kep.eccentricity = sqlite3_column_double(res, 7);
+            kep.argument_of_perigee = sqlite3_column_double(res, 8);
+            kep.mean_anomaly = sqlite3_column_double(res, 9);
+            kep.mean_motion = sqlite3_column_double(res, 10);
+            kep.derivative_mean_motion = sqlite3_column_double(res, 11);
+            kep.second_derivative_mean_motion = sqlite3_column_double(res, 12);
+            kep.bstar_drag_term = sqlite3_column_double(res, 13);
+            kep.revolutions_at_epoch = sqlite3_column_int(res, 14);
 
+            ret = true;
             if (sqlite3_prepare_v2(h->db,
                                    ("select satellite_number, element_number, name, designator, epoch, inclination, right_ascension, eccentricity, argument_of_perigee, mean_anomaly, mean_motion, "
                                     "derivative_mean_motion, second_derivative_mean_motion, bstar_drag_term, revolutions_at_epoch from kepler where satellite_number=" +
@@ -248,6 +272,9 @@ namespace satdump
             }
 
             sqlite3_finalize(res);
+        }
+
+        sqlite3_finalize(res);
         }
 
         return ret;
