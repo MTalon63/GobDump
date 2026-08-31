@@ -6,7 +6,7 @@ This aims at editing the auto generated projections and the possible parameters 
 ## General
 
 The settings for the auto generated projections are saved in satdump_cfg.json
-Beware that you need to edit /usr/share/satdump/satdump_cfg.json (with su) if you installed SatDump system-wide.
+Beware that you need to edit /usr/share/satdump/satdump_cfg.json (with su) if you installed GobDump system-wide.
 
 The settings for the different instruments and their composites can be found under: 
 

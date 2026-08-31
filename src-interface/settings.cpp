@@ -122,7 +122,7 @@ namespace satdump
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text(_("Theme"));
                     if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip(_("Set the style and color of SatDump"));
+                        ImGui::SetTooltip(_("Set the style and color of GobDump"));
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Combo("##themeselection", &selected_theme, themes_str.c_str());
 
@@ -134,7 +134,7 @@ namespace satdump
                 }
             }
 
-            if (ImGui::CollapsingHeader(_("General SatDump")))
+            if (ImGui::CollapsingHeader(_("General GobDump")))
             {
                 if (ImGui::BeginTable("##satdumpgeneralsettings", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
                 {
@@ -176,7 +176,7 @@ namespace satdump
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text(_("OpenCL Device"));
                     if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip(_("OpenCL Device SatDump will use for accelerated computing where it can help, eg, for some image processing tasks such as projections."));
+                        ImGui::SetTooltip(_("OpenCL Device GobDump will use for accelerated computing where it can help, eg, for some image processing tasks such as projections."));
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Combo("##opencldeviceselection", &opencl_devices_id, opencl_devices_str.c_str());
 #endif
@@ -357,7 +357,7 @@ namespace satdump
             }
 
             saved_message.draw();
-            ImGui::TextColored(style::theme.yellow, _("Note : Some settings will require SatDump to be restarted\nto take effect!"));
+            ImGui::TextColored(style::theme.yellow, _("Note : Some settings will require GobDump to be restarted\nto take effect!"));
         }
     } // namespace settings
 } // namespace satdump

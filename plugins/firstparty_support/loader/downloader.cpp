@@ -55,7 +55,7 @@ namespace satdump
             if (curl)
             {
                 curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error_buffer);
-                curl_easy_setopt(curl, CURLOPT_USERAGENT, std::string((std::string) "SatDump/v" + satdump::SATDUMP_VERSION).c_str());
+                curl_easy_setopt(curl, CURLOPT_USERAGENT, std::string((std::string) "GobDump/v" + satdump::SATDUMP_VERSION).c_str());
                 curl_easy_setopt(curl, CURLOPT_URL, url_str.c_str());
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_std_ofstream);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &output_filestream);

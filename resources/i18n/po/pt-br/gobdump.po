@@ -295,8 +295,8 @@ msgid "Documentation"
 msgstr "Documentação"
 
 #: src-interface/status_logger_sink.cpp:117
-msgid "SatDump Log"
-msgstr "Registro do SatDump"
+msgid "GobDump Log"
+msgstr "Registro do GobDump"
 
 #: src-interface/settings.cpp:115
 msgid "Core Settings"
@@ -311,12 +311,12 @@ msgid "Theme"
 msgstr "Tema"
 
 #: src-interface/settings.cpp:125
-msgid "Set the style and color of SatDump"
-msgstr "Definir o estilo e cor do SatDump"
+msgid "Set the style and color of GobDump"
+msgstr "Definir o estilo e cor do GobDump"
 
 #: src-interface/settings.cpp:137
-msgid "General SatDump"
-msgstr "Configurações Gerais do SatDump"
+msgid "General GobDump"
+msgstr "Configurações Gerais do GobDump"
 
 #: src-interface/settings.cpp:144
 msgid "Language"
@@ -332,10 +332,10 @@ msgstr "Dispositivo OpenCL"
 
 #: src-interface/settings.cpp:179
 msgid ""
-"OpenCL Device SatDump will use for accelerated computing where it can help, "
+"OpenCL Device GobDump will use for accelerated computing where it can help, "
 "eg, for some image processing tasks such as projections."
 msgstr ""
-"Dispositivo OpenCL que o SatDump utilizará para computação acelerada onde "
+"Dispositivo OpenCL que o GobDump utilizará para computação acelerada onde "
 "necessário, por exemplo, para projeção de imagens."
 
 #: src-interface/settings.cpp:190
@@ -415,10 +415,10 @@ msgstr "Configurações salvas"
 
 #: src-interface/settings.cpp:360
 msgid ""
-"Note : Some settings will require SatDump to be restarted\n"
+"Note : Some settings will require GobDump to be restarted\n"
 "to take effect!"
 msgstr ""
-"Observação: Algumas configurações necessitam que o SatDump\n"
+"Observação: Algumas configurações necessitam que o GobDump\n"
 "seja reiniciado para serem carregas!"
 
 #: src-interface/notify_logger_sink.cpp:23
@@ -434,8 +434,8 @@ msgid "Error"
 msgstr "Erro"
 
 #: src-interface/loader/loader.cpp:29
-msgid "SatDump"
-msgstr "SatDump"
+msgid "GobDump"
+msgstr "GobDump"
 
 #: src-interface/loader/loader.cpp:30
 msgid "General Purpose Satellite Data Processor"
@@ -840,8 +840,8 @@ msgstr "Copiado da Área de Trabalho!"
 #.
 #.
 #: src-core/explorer/explorer.cpp:362
-msgid "Welcome to SatDump!"
-msgstr "Bem-Vindo ao SatDump!"
+msgid "Welcome to GobDump!"
+msgstr "Bem-Vindo ao GobDump!"
 
 #: src-core/explorer/explorer.cpp:428 src-core/explorer/explorer.cpp:430
 msgid "Add Recorder"
@@ -1434,10 +1434,10 @@ msgstr "Iniciando "
 #: src-core/init.cpp:105
 #, c-format
 msgid ""
-"Error loading SatDump config! SatDump will now exit. Error:\n"
+"Error loading GobDump config! GobDump will now exit. Error:\n"
 "%s"
 msgstr ""
-"Error ao carregar a configuração do SatDump! SatDump será encerrado agora. "
+"Error ao carregar a configuração do GobDump! GobDump será encerrado agora. "
 "Erro:\n"
 "%s"
 
@@ -1457,8 +1457,8 @@ msgstr ""
 "Não foi possível carregar os dados de efemérides! NOVAS não funcionará!"
 
 #: src-core/init.cpp:203
-msgid "SatDump has NOT been built in Release mode."
-msgstr "SatDump NÃO foi compilado no modo de Lançamento."
+msgid "GobDump has NOT been built in Release mode."
+msgstr "GobDump NÃO foi compilado no modo de Lançamento."
 
 #: src-core/init.cpp:204
 msgid "If you are not a developer but intending to use the software,"
@@ -1473,8 +1473,8 @@ msgid "specify -DCMAKE_BUILD_TYPE=Release in CMake."
 msgstr "especificar -DCMAKE_BUILD_TYPE=Release no CMake."
 
 #: src-core/init.cpp:215
-msgid "Exiting SatDump! Bye!"
-msgstr "Encerrando o SatDump! Tchau!"
+msgid "Exiting GobDump! Bye!"
+msgstr "Encerrando o GobDump! Tchau!"
 
 #~ msgid "Individual Equalize"
 #~ msgstr "Equalização Individual"

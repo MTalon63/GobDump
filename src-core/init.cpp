@@ -63,8 +63,8 @@ namespace satdump
 #if !defined(_WIN32) && !defined(__ANDROID__) && !defined(__APPLE__)
         setlocale(LC_ALL, "");
 #endif
-        bindtextdomain("satdump", resources::getResourcePath("i18n").c_str());
-        textdomain("satdump");
+        bindtextdomain("gobdump", resources::getResourcePath("i18n").c_str());
+        textdomain("gobdump");
 
         current_language = lang;
     }
@@ -112,7 +112,7 @@ namespace satdump
         }
         catch (std::exception &e)
         {
-            logger->critical(_("Error loading SatDump config! SatDump will now exit. Error:\n%s"), e.what());
+            logger->critical(_("Error loading GobDump config! GobDump will now exit. Error:\n%s"), e.what());
             // if (is_gui)
             //    pfd::message("SatDump", "Error loading SatDump config! SatDump will now exit. Error:\n\n" + std::string(e.what()), pfd::choice::ok, pfd::icon::error); TODOREWORK bring this back
             exit(1);
@@ -211,7 +211,7 @@ namespace satdump
         logger->error("██║  ██║██╔══██║██║╚██╗██║██║   ██║██╔══╝  ██╔══██╗");
         logger->error("██████╔╝██║  ██║██║ ╚████║╚██████╔╝███████╗██║  ██║");
         logger->error("╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝");
-        logger->error(_("SatDump has NOT been built in Release mode."));
+        logger->error(_("GobDump has NOT been built in Release mode."));
         logger->error(_("If you are not a developer but intending to use the software,"));
         logger->error(_("you probably do not want this. If so, make sure to"));
         logger->error(_("specify -DCMAKE_BUILD_TYPE=Release in CMake."));
@@ -223,7 +223,7 @@ namespace satdump
 
     void exitSatDump()
     {
-        logger->info(_("Exiting SatDump! Bye!"));
+        logger->info(_("Exiting GobDump! Bye!"));
         taskScheduler.reset();
     }
 } // namespace satdump

@@ -2,7 +2,7 @@
 
 The LUT Generator is a tool intended to help create and edit monodimensional (1D) color look-up tables (LUTs). It is designed to be functionally similar to the *Color Tables* tool in McIDAS.
 
-As with all tools in SatDump, more than one LUT Generator can be opened and operated at once.
+As with all tools in GobDump, more than one LUT Generator can be opened and operated at once.
 
 ## General Overview
 
@@ -42,10 +42,10 @@ The `Current` menu in the top menu bar serves to save and load a LUT. Only the `
 
  ## Preview Image controls
 
-* `Open`: loads a specified image. All image types supported by SatDump are allowed.
+* `Open`: loads a specified image. All image types supported by GobDump are allowed.
 * `Refresh Preview`: refreshes the preview.
 
-Similarly to the other image viewers in SatDump, the preview image can be dragged with the left mouse button, can be zoomed in or out with the mouse scrollwheel and the zoom can be set to fit the preview size by double-clicking the right mouse button.
+Similarly to the other image viewers in GobDump, the preview image can be dragged with the left mouse button, can be zoomed in or out with the mouse scrollwheel and the zoom can be set to fit the preview size by double-clicking the right mouse button.
 
 ![A 32 cell LUT applied to an AVHRR channel 4 image](lut_generator/avhrr_4.png)
 

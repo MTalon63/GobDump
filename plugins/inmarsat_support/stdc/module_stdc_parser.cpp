@@ -62,7 +62,7 @@ namespace inmarsat
                         if (d_station_id != "")
                         {
                             msg2["source"]["station_id"] = d_station_id;
-                            msg2["source"]["app"]["name"] = "SatDump";
+                            msg2["source"]["app"]["name"] = "GobDump";
                             msg2["source"]["app"]["version"] = (std::string)satdump::SATDUMP_VERSION;
                         }
 

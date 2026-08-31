@@ -3,7 +3,7 @@
   <id>eu.mrtalon.gobdump</id>
   
   <name>GobDump</name>
-  <summary>GobDump is a fork of widely satellite reception tool, SatDump.</summary>
+  <summary>GobDump is a general-purpose satellite data processing application, forked from SatDump.</summary>
   
   <metadata_license>GPL-3.0-or-later</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
@@ -20,10 +20,10 @@
       <image>https://www.satdump.org/assets/release_110/SatDump_autotrack.png</image>
     </screenshot>
     <screenshot>
-      <image>https://github.com/SatDump/SatDump/blob/master/gui_recording.png</image>
+      <image>https://github.com/MrTalon63/GobDump/blob/master/gui_recording.png</image>
     </screenshot>
     <screenshot>
-      <image>https://github.com/SatDump/SatDump/blob/master/cli_example.png</image>
+      <image>https://github.com/MrTalon63/GobDump/blob/master/cli_example.png</image>
     </screenshot>
   </screenshots>
 </component>

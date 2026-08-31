@@ -1,6 +1,6 @@
 # Image Filename Template
 
-This box allows the user to customise the proposed file name when saving a new image, or when SatDump automatically saves an image.
+This box allows the user to customise the proposed file name when saving a new image, or when GobDump automatically saves an image.
 
 There are five presets:
 
