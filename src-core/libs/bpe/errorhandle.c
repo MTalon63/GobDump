@@ -29,7 +29,7 @@ const char *BpeErrorMsg[] = {
  * Set by _bpe_set_ctx() before calling encode/decode; cleared after.
  * Allows ErrorMsg() to reach the context from deep call stacks that
  * do not pass StructCodingPara* (e.g. DC_EnDeCoding.c). */
-#if defined(_MSC_VER)
+#if defined(_WIN32)
 static __declspec(thread) StructCodingPara *_bpe_current_ctx = NULL;
 #else
 static __thread StructCodingPara *_bpe_current_ctx = NULL;

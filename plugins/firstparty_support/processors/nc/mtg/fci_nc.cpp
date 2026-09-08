@@ -7,6 +7,7 @@
 #include "projection/standard/proj_json.h"
 #include <H5Cpp.h>
 #include <H5LTpublic.h>
+#include "common/utils.h"
 
 #if defined(_WIN32)
 #include <time.h>
