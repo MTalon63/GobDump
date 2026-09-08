@@ -131,6 +131,7 @@ _Those libraries above are included directly as they are either header-only, not
 - Scott Tilley (VE7TIL)
 - Tomi HA6NAB
 - Thomas Douwes
+- BI4LOJ
 
 ### Special Thanks to
 

@@ -10,6 +10,8 @@ static char ag_LogTag[] = "GobDump";
 #endif
 #if defined(_WIN32)
 #include <windows.h>
+
+#include <wincon.h>
 #endif
 
 #include "init.h"

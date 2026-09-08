@@ -1576,6 +1576,322 @@ msgstr "Sieťový Zdroj"
 #~ msgid "Despeckle"
 #~ msgstr "Despeckle"
 
+#: src-core/explorer/explorer.cpp:165
+msgid "Root"
+msgstr "Koreň"
+
+#: src-core/explorer/explorer.cpp:205
+msgid "Others"
+msgstr "Iné"
+
+#: src-core/explorer/explorer.cpp:219
+msgid "Handlers will appear here..."
+msgstr "Spravovače sa objavia tu..."
+
+#: src-core/explorer/explorer.cpp:243
+msgid "No file selected"
+msgstr "Není vybraný žiadny súbor"
+
+#: src-core/explorer/explorer.cpp:252
+msgid "Open File"
+msgstr "Otvoriť súbor"
+
+#: src-core/explorer/explorer.cpp:254
+msgid "Quick Open"
+msgstr "Rýchle otvorenie"
+
+#: src-core/explorer/explorer.cpp:259
+msgid "Go##loadfromhttpgo"
+msgstr "Ísť##loadfromhttpgo"
+
+#: src-core/explorer/explorer.cpp:265
+msgid "Paste & Load"
+msgstr "Prilepiť a načítať"
+
+#: src-core/explorer/explorer.cpp:284 plugins/wip_tracking_app/main.cpp:23
+#: plugins/bitview_app/main.cpp:40 plugins/tools_app/main.cpp:26
+#: plugins/wip_settings_editor_app/main.cpp:19
+msgid "Tools"
+msgstr "Nástroje"
+
+#. TODOREWORK?
+#: src-core/explorer/explorer.cpp:286
+msgid "DSP Flowgraph"
+msgstr "Prietokový diagram DSP"
+
+#: src-core/explorer/explorer.cpp:291
+#: plugins/experimental_devices_support/main.cpp:23
+msgid "Experimental"
+msgstr "Experimentálne"
+
+#: src-core/explorer/explorer.cpp:313
+msgid "JSON To Clipboard"
+msgstr "JSON do schránky"
+
+#: src-core/explorer/explorer.cpp:316
+msgid "Copied to clipboard!"
+msgstr "Skopírované do schránky!"
+
+#: src-core/explorer/explorer.cpp:318
+msgid "JSON From Clipboard"
+msgstr "JSON zo schránky"
+
+#: src-core/explorer/explorer.cpp:321
+msgid "Copied from clipboard!"
+msgstr "Skopírované zo schránky!"
+
+#.
+#.
+#: src-core/explorer/explorer.cpp:362
+msgid "Welcome to SatDump!"
+msgstr "Vitajte v SatDump!"
+
+#: src-core/explorer/explorer.cpp:428 src-core/explorer/explorer.cpp:430
+msgid "Add Recorder"
+msgstr "Pridať nahrávač"
+
+#: src-core/explorer/explorer.h:84
+msgid "Recorders"
+msgstr "Nahrávače"
+
+#: src-core/explorer/explorer.h:85
+msgid "Products"
+msgstr "Produkty"
+
+#: plugins/wip_tracking_app/main.cpp:25
+msgid "WIP Tracking"
+msgstr "WIP Sledovanie"
+
+#: plugins/bitview_app/bitview.cpp:52
+msgid "Display"
+msgstr "Zobrazenie"
+
+#: plugins/bitview_app/bitview.cpp:57
+msgid "Period (Bits)"
+msgstr "Perióda (Bity)"
+
+#: plugins/bitview_app/bitview.cpp:82
+msgid "Bits"
+msgstr "Bity"
+
+#: plugins/bitview_app/bitview.cpp:92
+msgid "Bytes"
+msgstr "Bajty"
+
+#: plugins/bitview_app/bitview.cpp:102
+msgid "Custom"
+msgstr "Vlastné"
+
+#: plugins/bitview_app/bitview.cpp:110
+msgid "ASCII"
+msgstr "ASCII"
+
+#: plugins/bitview_app/bitview.cpp:119
+msgid "Bit Depth"
+msgstr "Bitová hĺbka"
+
+#: plugins/bitview_app/bitview.cpp:131
+msgid "Reload"
+msgstr "Obnoviť"
+
+#: plugins/bitview_app/main.cpp:42
+msgid "BitView"
+msgstr "BitView"
+
+#: plugins/bitview_app/main.cpp:42
+msgid "Open binary file"
+msgstr "Otvoriť binárny súbor"
+
+# 'udajov' is data, meaning the source should be 'first party data', but it makes it much clearer what is meant - first party is not a common term in Slovak
+#: plugins/firstparty_support/main_loader.cpp:35
+msgid "First-Party Support"
+msgstr "Podpora údajov prvej ruky"
+
+#: plugins/firstparty_support/main_loader.cpp:59
+msgid "EUMETSAT User «Consumer Key»"
+msgstr "EUMETSAT Použivateľ (Kľúč spotrebiteľa)"
+
+#: plugins/firstparty_support/main_loader.cpp:63
+msgid "EUMETSAT User «Consumer Secret»"
+msgstr "EUMETSAT použivateľ (Tajomstvo spotrebiteľa)"
+
+#: plugins/firstparty_support/main_loader.cpp:81
+msgid "Load First-Party"
+msgstr "Načítať údaje prvej ruky"
+
+#: plugins/firstparty_support/loader/archive_loader.cpp:20
+msgid "Archive Loader"
+msgstr "Zavádzač archívov"
+
+#: plugins/firstparty_support/loader/archive_loader.cpp:24
+msgid "NOAA AWS"
+msgstr "NOAA AWS"
+
+#: plugins/firstparty_support/loader/archive_loader.cpp:29
+msgid "EUMETSAT"
+msgstr "EUMETSAT"
+
+#: plugins/firstparty_support/loader/archive_loader.cpp:47
+msgid "Decode To:"
+msgstr "Dekódovať do:"
+
+#: plugins/firstparty_support/loader/archive_loader.cpp:49
+msgid "Temporary"
+msgstr "Dočasné"
+
+#: plugins/firstparty_support/loader/archive_loader.cpp:51
+msgid "Selected Folder:"
+msgstr "Vybratý adresár:"
+
+#: plugins/firstparty_support/loader/aws.cpp:252
+#: plugins/firstparty_support/loader/eumetsat.cpp:201
+msgid "Refresh##archiveloader_refresh"
+msgstr "Obnoviť##archiveloader_refresh"
+
+# should probably be 'Now' in English as well tbh
+#: plugins/firstparty_support/loader/aws.cpp:259
+#: plugins/firstparty_support/loader/eumetsat.cpp:208
+msgid "Current##archiveloader_setcurrenttime"
+msgstr "Teraz##archiveloader_setcurrenttime"
+
+#: plugins/firstparty_support/loader/aws.cpp:277
+#: plugins/firstparty_support/loader/eumetsat.cpp:225
+msgid "Load##archiveloadertablebutton_"
+msgstr "Načítať##archiveloadertablebutton_"
+
+#: plugins/firstparty_support/loader/aws.cpp:306
+#, c-format
+msgid "Failed downloading file from AWS! %s"
+msgstr "Sťahovanie súboru z AWS zlyhalo! %s"
+
+#: plugins/firstparty_support/loader/eumetsat.cpp:170
+#, c-format
+msgid "Error updating product list! %s"
+msgstr "Chyba pri aktualizovaní zoznamu produktov! %s"
+
+#: plugins/firstparty_support/loader/eumetsat.cpp:204
+msgid "Date: "
+msgstr "Dátum: "
+
+#: plugins/firstparty_support/loader/downloader.cpp:21
+#, c-format
+msgid "Downloading : %s"
+msgstr "Sťahuje sa : %s"
+
+#: plugins/firstparty_support/loader/downloader.cpp:24
+#: plugins/firstparty_support/loader/downloader.cpp:31
+msgid "Abort"
+msgstr "Zrušiť"
+
+# experimental
+#: plugins/experimental_devices_support/main.cpp:25
+msgid "SatDump Downconverter UI"
+msgstr "UI SatDump prevodníka"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:34
+msgid "LUT"
+msgstr "Vyhľadávacia tabuľka"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:46
+#, c-format
+msgid "Size : %d\n"
+msgstr "Veľkosť: %d\n"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:56
+msgid "Mode:"
+msgstr "Režim:"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:58
+msgid "Fill"
+msgstr "Vyplniť"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:61
+msgid "Interpolate"
+msgstr "Interpolovať"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:65
+msgid "Color"
+msgstr "Farba"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:73
+msgid "Pick"
+msgstr "Vybrať"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:79
+msgid "Undo"
+msgstr "Vrátiť späť"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:95
+msgid "Use Range"
+msgstr "Použiť rozsah"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:99
+msgid "Replicate"
+msgstr "Replikovať"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:112
+msgid "Interpolate##interpolatebutton"
+msgstr "Interpolovať##interpolatebutton"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:121
+#: plugins/tools_app/lutgen/lut_generator.cpp:210
+msgid "Preview Image"
+msgstr "Náhľad obrazu"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:124
+msgid "Refresh Preview"
+msgstr "Obnoviť náhľad"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:131
+msgid "Select Image"
+msgstr "Vybrať obraz"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:243
+msgid "Invalid image for a LUT!"
+msgstr "Neplatný obraz pre vyhľadávaciu tabuľku!"
+
+#: plugins/tools_app/lutgen/lut_generator.cpp:284
+#: plugins/tools_app/lutgen/lut_generator.cpp:293
+msgid ""
+"Please use Linux and install grabc!  (or remind us maybe we should support "
+"Windows too?)"
+msgstr ""
+"Prosím použijte Linux a nainštalujte 'grabc'! (alebo nás pripomeňte podporiť "
+"Windows?)"
+
+#: plugins/tools_app/main.cpp:28
+msgid "LUT Generator"
+msgstr "Generátor vyhľadávacích tabuliek"
+
+#: plugins/wip_settings_editor_app/main.cpp:21
+msgid "Instrument Config Editor"
+msgstr "Upravovač prístrojovej konfigurácie"
+
+#: plugins/sdr_sources/net_source_support/net_source.cpp:134
+msgid "UDP##netsource"
+msgstr "UDP##netsource"
+
+#: plugins/sdr_sources/net_source_support/net_source.cpp:136
+msgid "NNG Sub##netsource"
+msgstr "NNG Sub##netsource"
+
+#: plugins/sdr_sources/net_source_support/net_source.cpp:141
+#: plugins/sdr_sources/net_source_support/net_source.cpp:146
+msgid "Port"
+msgstr "Port"
+
+#: plugins/sdr_sources/net_source_support/net_source.cpp:145
+msgid "Address"
+msgstr "Adresa"
+
+#: plugins/sdr_sources/net_source_support/net_source.cpp:161
+msgid "Network Source"
+msgstr "Sieťový Zdroj"
+
+# This is apparently kept stock in software, since there is no real translation
+#~ msgid "Despeckle"
+#~ msgstr "Despeckle"
+
 #~ msgid "Individual Equalize"
 #~ msgstr "Nezávisle ekvalizovať"
 
