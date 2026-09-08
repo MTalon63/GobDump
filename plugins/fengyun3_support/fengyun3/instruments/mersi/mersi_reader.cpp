@@ -23,7 +23,13 @@ namespace fengyun3
 
         void MERSIReader::process_head()
         {
-            repackBytesTo12bits(&current_frame[calib_byte_offset], current_frame.size() - (calib_byte_offset + 6), repacked_calib);
+            // Guard against a truncated or oversized head frame.
+            if (current_frame.size() <= (size_t)(calib_byte_offset + 6))
+                return;
+
+            // Bound the repack to repacked_calib's capacity to avoid overflow.
+            int calib_bytes = (int)current_frame.size() - (calib_byte_offset + 6);
+            repackBytesTo12bits(&current_frame[calib_byte_offset], calib_bytes, repacked_calib, calib_length * 2);
 
             // for (int i = 0; i < calib_length; i++)
             //     calibration[(segments + 1) * calib_length + i] = repacked_calib[i] << 4;
@@ -81,6 +87,9 @@ namespace fengyun3
 
         void MERSIReader::process_scan()
         {
+            if (current_frame.size() <= (size_t)imagery_offset_bytes)
+                return;
+
             int marker = (current_frame[0]) << 2 | current_frame[1] >> 6;
 
             if (marker == 0)
@@ -97,10 +106,19 @@ namespace fengyun3
                 int channel = marker / 40;
                 int line = marker % 40;
 
-                repackBytesTo12bits(current_frame.data(), (ch250_width * 12) / 8, repacked_mersi_line);
+                // Bound the repack to the fixed destination buffer's capacity.
+                repackBytesTo12bits(current_frame.data(), (ch250_width * 12) / 8, repacked_mersi_line, ch250_width);
 
-                for (int i = 0; i < ch250_width; i++)
-                    channels_250m[channel][(segments * 40 + line) * ch250_width + i] = repacked_mersi_line[i] << 4;
+                if (channel >= 0 && channel < ch_cnt_250)
+                {
+                    int required = ch250_width * (segments * 40 + line + 40);
+                    if ((int)channels_250m[channel].size() < required)
+                        channels_250m[channel].resize(required);
+
+                    int base = (segments * 40 + line) * ch250_width;
+                    for (int i = 0; i < ch250_width; i++)
+                        channels_250m[channel][base + i] = repacked_mersi_line[i] << 4;
+                }
             }
             else if (marker < counter_max) // 1000m/px channels
             {
@@ -108,16 +126,27 @@ namespace fengyun3
                 int channel = marker / 10;
                 int line = marker % 10;
 
-                repackBytesTo12bits(current_frame.data(), (ch1000_width * 12) / 8, repacked_mersi_line);
+                repackBytesTo12bits(current_frame.data(), (ch1000_width * 12) / 8, repacked_mersi_line, ch1000_width);
 
-                for (int i = 0; i < ch1000_width; i++)
-                    channels_1000m[channel][(segments * 10 + line) * ch1000_width + i] = repacked_mersi_line[i] << 4;
+                if (channel >= 0 && channel < ch_cnt_1000)
+                {
+                    int required = ch1000_width * (segments * 10 + line + 10);
+                    if ((int)channels_1000m[channel].size() < required)
+                        channels_1000m[channel].resize(required);
+
+                    int base = (segments * 10 + line) * ch1000_width;
+                    for (int i = 0; i < ch1000_width; i++)
+                        channels_1000m[channel][base + i] = repacked_mersi_line[i] << 4;
+                }
             }
 
+            // Keep headroom for the next segment.
             for (int i = 0; i < ch_cnt_250; i++)
-                channels_250m[i].resize(ch250_width * (segments + 2) * 40);
+                if ((int)channels_250m[i].size() < ch250_width * (segments + 2) * 40)
+                    channels_250m[i].resize(ch250_width * (segments + 2) * 40);
             for (int i = 0; i < ch_cnt_1000; i++)
-                channels_1000m[i].resize(ch1000_width * (segments + 2) * 10);
+                if ((int)channels_1000m[i].size() < ch1000_width * (segments + 2) * 10)
+                    channels_1000m[i].resize(ch1000_width * (segments + 2) * 10);
         }
 
         void MERSIReader::process_curr()
@@ -151,7 +180,11 @@ namespace fengyun3
                         bits_wrote_output_frame++;
 
                         if (bits_wrote_output_frame % 8 == 0)
-                            current_frame.push_back(defra_byte_shifter);
+                        {
+                            // Cap growth to the expected frame size to avoid unbounded allocation.
+                            if (current_frame_size < 0 || (int)current_frame.size() < current_frame_size)
+                                current_frame.push_back(defra_byte_shifter);
+                        }
 
                         if (bits_wrote_output_frame == current_frame_size)
                         {

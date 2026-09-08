@@ -26,7 +26,7 @@ namespace satdump
 
     void Soft2HardTool::setProcessed() { should_process = false; }
 
-    void Soft2HardTool::process(std::shared_ptr<BitContainer> &container, float &process_progress)
+    void Soft2HardTool::process(std::shared_ptr<BitContainer> container, float &process_progress)
     {
         uint8_t *ptr = container->get_ptr();
         size_t size = container->get_ptr_size();

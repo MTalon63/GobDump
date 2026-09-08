@@ -581,8 +581,8 @@
                     "constellation": "qpsk",
                     "symbolrate": 225e6,
                     "rrc_alpha": 0.35,
-                    "pll_bw": 0.006,
-                    "costas_max_offset": 1e6
+                    "pll_bw": 0.002
+                    //"costas_max_offset": 1e6
                 }
             },
             "cadu": {
@@ -590,9 +590,19 @@
                 "parameters": {
                     "constellation": "qpsk",
                     "ldpc_rate": "7/8",
-                    "ldpc_iterations": 10,
+                    "ldpc_iterations": 30,
+                    "ldpc_max_iterations": 50,
+                    "ldpc_min_iterations": 1,
+                    "ldpc_early_termination": true,
+                    "ldpc_offset_beta": 0,
                     "internal_stream": false,
-                    "internal_cadu_size": 0
+                    "internal_cadu_size": 0,
+                    "ldpc_algorithm": "layered_normalized_min_sum",
+                    "correlator_threshold": 0.5,
+					"correlator_lock_after": 3,
+					"correlator_drop_after": 5,
+                    "llr_scaling": "heuristic"
+					//"correlator_search_window": 64                    
                 }
             },
             "products": {

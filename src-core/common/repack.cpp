@@ -57,10 +57,17 @@ int repackBytesTo10bits(uint8_t *bytes, int byte_length, uint16_t *words, int ma
     return wpos;
 }
 
-int repackBytesTo12bits(uint8_t *bytes, int byte_length, uint16_t *words)
+int repackBytesTo12bits(uint8_t *bytes, int byte_length, uint16_t *words, int max_words)
 {
     int bpos = 0;
     int wpos = 0;
+
+    if (byte_length < 0)
+        return 0;
+
+    // 3 input bytes produce 2 words, so clamp the input to what the output can actually hold.
+    if (max_words >= 0 && byte_length > (max_words / 2) * 3)
+        byte_length = (max_words / 2) * 3;
 
     // Compute how many we can repack using the "fast" way
     int repack_fast = byte_length - (byte_length % 3);

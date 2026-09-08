@@ -42,7 +42,11 @@ namespace satdump
         frame_width_exp = std::to_string(bc->d_bitperiod);
     }
 
-    BitViewHandler::~BitViewHandler() {}
+    BitViewHandler::~BitViewHandler()
+    {
+        if (bc)
+            bc->bitview = nullptr;
+    }
 
     void BitViewHandler::drawMenu()
     {
@@ -162,7 +166,7 @@ namespace satdump
                 if (tool->needToProcess())
                 {
                     tool->setProcessed();
-                    auto func = [this, tool]()
+                    auto func = [this, tool, bc = bc]()
                     {
                         try
                         {
@@ -188,7 +192,7 @@ namespace satdump
 
         if (ImGui::Button("Find Sync"))
         {
-            auto func = [this]()
+            auto func = [this, bc = bc]()
             {
                 auto ptr = bc->get_ptr();
                 auto sz = bc->get_ptr_size();

@@ -35,7 +35,7 @@ namespace satdump
 
     void DeframerTool::setProcessed() { should_process = false; }
 
-    void DeframerTool::process(std::shared_ptr<BitContainer> &container, float &process_progress)
+    void DeframerTool::process(std::shared_ptr<BitContainer> container, float &process_progress)
     {
         uint8_t *ptr = container->get_ptr();
         size_t size = container->get_ptr_size();

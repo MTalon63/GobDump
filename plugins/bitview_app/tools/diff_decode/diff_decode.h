@@ -15,6 +15,6 @@ namespace satdump
         void renderMenu(std::shared_ptr<BitContainer> &container, bool is_busy);
         bool needToProcess();
         void setProcessed();
-        void process(std::shared_ptr<BitContainer> &container, float &process_progress);
+        void process(std::shared_ptr<BitContainer> container, float &process_progress);
     };
 } // namespace satdump

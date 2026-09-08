@@ -23,6 +23,10 @@ namespace codings
                 return LDPC_SELF_CORRECTED_MIN_SUM;
             else if (str == "sum_product" || str == "belief_propagation" || str == "bp")
                 return LDPC_SUM_PRODUCT;
+            else if (str == "layered_min_sum" || str == "lms")
+                return LDPC_LAYERED_MIN_SUM;
+            else if (str == "layered_normalized_min_sum" || str == "lnms" || str == "layered_nms")
+                return LDPC_LAYERED_NORMALIZED_MIN_SUM;
             else
                 throw std::runtime_error("Invalid LDPC algorithm " + str);
         }
@@ -35,6 +39,10 @@ namespace codings
                 return "self_corrected_min_sum";
             else if (a == LDPC_SUM_PRODUCT)
                 return "sum_product";
+            else if (a == LDPC_LAYERED_MIN_SUM)
+                return "layered_min_sum";
+            else if (a == LDPC_LAYERED_NORMALIZED_MIN_SUM)
+                return "layered_normalized_min_sum";
             else
                 return "min_sum";
         }

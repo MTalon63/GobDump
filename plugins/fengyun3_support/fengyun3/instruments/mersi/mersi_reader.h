@@ -48,6 +48,11 @@ namespace fengyun3
                 counter_max = ch_cnt_250 * 40 + ch_cnt_1000 * 10;
                 ch1000_width = ch250_width / 4;
 
+                // Clamp calib_length to the head frame's maximum calibration payload.
+                int calib_max_samples = ((frame_head_size - (calib_byte_offset + 6)) * 8) / 12;
+                if (calib_length < 0 || calib_length > calib_max_samples)
+                    calib_length = calib_max_samples;
+
                 repacked_calib = new uint16_t[calib_length * 2];
 
                 for (int i = 0; i < ch_cnt_250; i++)
@@ -163,7 +168,8 @@ namespace fengyun3
                 imagery_offset_bits = 6;
 
                 calib_byte_offset = 551;
-                calib_length = 13292256;
+                // Same head geometry as MERSI-2; old constant (13292256) was a ~10x typo.
+                calib_length = 110400;
 
                 ms_scale = 1e4;
                 // timestamp3g_mode = true;

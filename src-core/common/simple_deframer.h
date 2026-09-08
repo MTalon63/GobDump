@@ -106,7 +106,12 @@ namespace def
             }
             else
             {
-                for (int byten = 0; byten < size; byten++)
+                // Soft mode stores one soft sample per input byte, so only size bits are available
+                // (size/8 loop iterations, each consuming 8 soft bytes). Hard mode keeps one byte
+                // per iteration, yielding 8 bits each. Bounding byten this way keeps the soft-bit
+                // index (byten*8 + (7-i)) within the size-byte buffer.
+                int n_iterations = d_soft_bits_in ? size / 8 : size;
+                for (int byten = 0; byten < n_iterations; byten++)
                 {
                     for (int i = 7; i >= 0; i--)
                     {
