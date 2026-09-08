@@ -38,7 +38,7 @@ namespace satdump
 
     void CCSDSAPIDDemuxTool::setProcessed() { should_process = false; }
 
-    void CCSDSAPIDDemuxTool::process(std::shared_ptr<BitContainer> &container, float &process_progress)
+    void CCSDSAPIDDemuxTool::process(std::shared_ptr<BitContainer> container, float &process_progress)
     {
         logger->critical("Demux!!!!");
 

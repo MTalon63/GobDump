@@ -7,8 +7,11 @@
 // without a capacity here each of them had to bound it themselves. -1 keeps the old unchecked behaviour.
 int repackBytesTo10bits(uint8_t *bytes, int byte_length, uint16_t *words, int max_words = -1);
 
-// Repack bytes to 12-bits words, returns word count
-int repackBytesTo12bits(uint8_t *bytes, int byte_length, uint16_t *words);
+// Repack bytes to 12-bits words, returns word count.
+// max_words bounds the output (matching repackBytesTo10bits): callers writing into a fixed-size
+// buffer can pass its capacity so a corrupt/oversized input can never overflow it. Negative keeps
+// the old unchecked behaviour (callers that must remain unbounded pass -1).
+int repackBytesTo12bits(uint8_t *bytes, int byte_length, uint16_t *words, int max_words = -1);
 
 // Repack bytes to 13-bits words, returns word count
 int repackBytesTo13bits(uint8_t *bytes, int byte_length, uint16_t *words);

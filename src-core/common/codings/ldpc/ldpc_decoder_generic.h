@@ -47,6 +47,7 @@ namespace codings
             int *d_row_pos_deg;
 
             void generic_cn_kernel(int cn_idx);
+            void layered_cn_kernel(int cn_idx);
 
             /* Sum-product (belief propagation) φ lookup table.
              *

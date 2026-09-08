@@ -54,19 +54,14 @@ namespace codings
 
             void generic_cn_kernel(int cn_idx);
 
-            /* Sum-product (belief propagation) fallback.
-             *
-             * The AVX2 kernel implements the min-sum family only. A correct per-lane
-             * sum-product check node would require a per-lane φ gather (16-bit lanes
-             * have no direct AVX2 gather), which is risky to get right without a build
-             * to validate. Instead, when LDPC_SUM_PRODUCT is selected we fall back to
-             * the generic (scalar) decoder, which implements the true BP check node.
-             * The 16 interleaved frames are decoded one at a time by the generic
-             * decoder and the results are written back to the same output layout, so
-             * the rest of the pipeline is unaffected. This is a documented limitation:
-             * sum-product runs on the generic path, not the AVX kernel. */
+            /* Scalar fallback for algorithms not implemented as AVX kernels
+             * (sum-product and row-layered); frames are decoded one at a time. */
             Sparse_matrix d_pcm;
             LDPCDecoderGeneric *d_generic_fallback = nullptr;
+
+            /* Per-lane early-termination mask: 0xFFFF = still active, 0x0000 = converged.
+             * Converged lanes are frozen while stragglers continue. */
+            __m256i d_lane_active_mask;
 
             // Used by generic_cn_kernel
             __m256i sign;

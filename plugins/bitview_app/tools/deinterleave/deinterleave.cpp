@@ -30,7 +30,7 @@ namespace satdump
 
     void DeinterleaveTool::setProcessed() { should_process = false; }
 
-    void DeinterleaveTool::process(std::shared_ptr<BitContainer> &container, float &process_progress)
+    void DeinterleaveTool::process(std::shared_ptr<BitContainer> container, float &process_progress)
     {
         uint8_t *ptr = container->get_ptr();
         size_t size = container->get_ptr_size();

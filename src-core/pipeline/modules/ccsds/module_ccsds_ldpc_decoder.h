@@ -38,10 +38,19 @@ namespace satdump
                 std::string d_ldpc_rate_str;            // LDPC Rate string
                 codings::ldpc::ldpc_rate_t d_ldpc_rate; // LDPC Rate
                 int d_ldpc_block_size;                  // LDPC Block size (for AR4JA only)
-                int d_ldpc_iterations;                  // LDPC Iterations
+                int d_ldpc_iterations;                  // LDPC Iterations (required param, legacy cap)
+                int d_ldpc_cap_iterations;              // Effective iteration cap (max_iterations override, else ldpc_iterations)
 
                 codings::ldpc::ldpc_algorithm_t d_ldpc_algorithm = codings::ldpc::LDPC_MIN_SUM;
-                int16_t d_ldpc_nms_alpha_q8 = 205; // ~0.8, only used by normalized min-sum
+                int16_t d_ldpc_nms_alpha_q8 = 205; // ~0.8, only used by (layered) normalized min-sum
+                int16_t d_ldpc_offset_beta_q8 = 0; // 0 = offset min-sum off (Q8); used by (layered) min-sum
+
+                // Iteration / early-termination controls.
+                int d_ldpc_max_iterations = 50; // Cap used when ldpc_max_iterations is given
+                int d_ldpc_min_iterations = 1;  // Minimum iterations before early termination
+                bool d_ldpc_early_termination = true;
+                // LLR output clamp applied to the decoded soft hard decisions.
+                int d_ldpc_llr_clamp = 127;
 
                 const bool d_internal_stream; // Does this have an internal CADU stream?
                 const int d_cadu_size;        // CADU Size in bits, including ASM
@@ -93,6 +102,9 @@ namespace satdump
                 int ldpc_iterations_used = 0;
                 float ldpc_iter_history[200];
 
+                // Whether the last batch satisfied the syndrome (H*ch == 0); only set when exposed.
+                bool ldpc_last_converged = false;
+
                 static constexpr int SNR_ESTIMATOR_SAMPLES = 4096;
                 EVMSNREstimator snr_estimator{4};
 
@@ -107,7 +119,7 @@ namespace satdump
                 float llr_scale = 1.0f;
                 float llr_sigma2 = 0;   // Noise variance of int8 soft samples (calibrated mode only)
                 float llr_scale_history[200];
-                // LLR scaling mode. true  = calibrated 2/sigma^2 (default),
+                // LLR scaling mode. true = calibrated 0.5*sqrt(sig/noi) (default),
                 // false = legacy heuristic 1/npwr (for A/B comparison).
                 bool d_llr_calibrated = true;
 

@@ -61,7 +61,18 @@ namespace codings
             // Normalized Min-Sum alpha, Q8 fixed-point (256 == 1.0).
             void set_nms_alpha(int16_t a_q8) { ldpc_decoder->set_nms_alpha(a_q8); }
 
+            // Offset Min-Sum beta, Q8 fixed-point (256 == 1.0). 0 disables the offset.
+            void set_ldpc_offset_beta(int16_t b_q8) { ldpc_decoder->set_ldpc_offset_beta(b_q8); }
+
+            // Early-termination controls: minimum iterations before checking the
+            // syndrome, and whether to stop once the codeword has converged.
+            void set_min_iterations(int m) { ldpc_decoder->set_min_iterations(m); }
+            void set_early_termination(bool e) { ldpc_decoder->set_early_termination(e); }
+
             void set_algorithm(ldpc_algorithm_t a) { ldpc_decoder->set_algorithm(a); }
+
+            // Whether the last decode() call satisfied the parity-check syndrome.
+            bool converged() const { return ldpc_decoder->converged(); }
         };
     }
 }

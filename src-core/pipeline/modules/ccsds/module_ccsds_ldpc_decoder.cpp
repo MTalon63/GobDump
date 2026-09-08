@@ -156,11 +156,32 @@ namespace satdump
                     d_ldpc_nms_alpha_q8 = (int16_t)lroundf(a * 256.0f);
                 }
 
+                // Offset-beta (Q8); default 0 (disabled) only applies to (layered) min-sum.
+                if (d_parameters.contains("ldpc_offset_beta"))
+                {
+                    float b = d_parameters["ldpc_offset_beta"].get<float>();
+                    if (b < 0.0f || b > 1.0f)
+                        throw satdump_exception("CCSDS LDPC Decoder : ldpc_offset_beta must be in [0, 1]!");
+                    d_ldpc_offset_beta_q8 = (int16_t)lroundf(b * 256.0f);
+                }
+
+                // Effective iteration cap; ldpc_max_iterations overrides the legacy cap.
+                d_ldpc_cap_iterations = d_ldpc_iterations;
+                if (d_parameters.contains("ldpc_max_iterations"))
+                    d_ldpc_cap_iterations = d_parameters["ldpc_max_iterations"].get<int>();
+
+                d_ldpc_min_iterations = d_parameters.count("ldpc_min_iterations") > 0 ? d_parameters["ldpc_min_iterations"].get<int>() : 1;
+                d_ldpc_early_termination = d_parameters.count("ldpc_early_termination") > 0 ? d_parameters["ldpc_early_termination"].get<bool>() : true;
+                d_ldpc_llr_clamp = d_parameters.count("ldpc_llr_clamp") > 0 ? d_parameters["ldpc_llr_clamp"].get<int>() : 127;
+
                 ldpc_dec->set_nms_alpha(d_ldpc_nms_alpha_q8);
+                ldpc_dec->set_ldpc_offset_beta(d_ldpc_offset_beta_q8);
+                ldpc_dec->set_min_iterations(d_ldpc_min_iterations);
+                ldpc_dec->set_early_termination(d_ldpc_early_termination);
                 ldpc_dec->set_algorithm(d_ldpc_algorithm);
 
-                logger->info("LDPC algorithm: %s (alpha %.3f), %d iterations", codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm).c_str(),
-                             d_ldpc_nms_alpha_q8 / 256.0f, d_ldpc_iterations);
+                logger->info("LDPC algorithm: %s (alpha %.3f, offset-beta %.3f), %d iterations", codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm).c_str(),
+                             d_ldpc_nms_alpha_q8 / 256.0f, d_ldpc_offset_beta_q8 / 256.0f, d_ldpc_cap_iterations);
 
                 is_started = true;
 
@@ -322,40 +343,20 @@ namespace satdump
 
                             if (d_llr_calibrated)
                             {
-                                // Calibrated LLR: for a BPSK/QPSK symbol, each soft
-                                // sample is v = A*s + n (A = signal amplitude, n ~
-                                // N(0, sigma^2)), and the LLR is
-                                //      LLR = 2 * A * v / sigma^2.
-                                // So the scale applied to the raw int8 sample v is
-                                // 2*A/sigma^2. NOTE: omitting the amplitude A makes
-                                // the scale ~1/100 too small, which quantizes every
-                                // soft sample to 0 in the int8 LUT and breaks decoding.
-                                //
-                                // The estimator is fed samples v/127.0. signal() and
-                                // noise() return 10*log10 of the TOTAL signal/noise
-                                // power summed over the components in these normalized
-                                // units. Convert to per-component amplitude and
-                                // variance, then to int8 units:
-                                //   amp_norm = sqrt(sig_pow/ncomp)          (per comp)
-                                //   var_norm = noi_pow/ncomp             (per comp)
-                                //   scale = 2*A_int8/sigma2_int8
-                                //         = 2*(amp_norm*127) / (var_norm*127^2)
-                                //         = 2*amp_norm / (var_norm*127).
+                                // Gain-invariant scale = 0.5*sqrt(sig_pow/noi_pow) = 0.5*A/sigma,
+                                // independent of the AGC gain and int8 normalization.
                                 int ncomp = d_constellation == dsp::BPSK ? 1 : 2;
                                 float sig_pow = powf(10.0f, snr_estimator.signal() / 10.0f);
                                 float noi_pow = powf(10.0f, snr_estimator.noise() / 10.0f);
 
-                                float amp_norm = std::sqrt(std::max(sig_pow / ncomp, 1e-6f));
+                                // Per-component noise variance for reporting llr_sigma2 below.
                                 float var_norm = std::max(noi_pow / ncomp, 1e-6f);
 
-                                float scale = (2.0f * amp_norm) / (var_norm * 127.0f);
+                                float scale = 0.5f * std::sqrt(sig_pow / (noi_pow + 1e-6f));
 
-                                // Report the per-component int8^2 noise variance.
                                 llr_sigma2 = var_norm * 127.0f * 127.0f;
 
-                                // Clamp to a range where the int8 LUT keeps usable
-                                // dynamic range: too small zeroes the samples, too
-                                // large saturates them all identically.
+                                // Clamp so the int8 LUT keeps usable dynamic range.
                                 llr_scale = std::clamp(scale, 0.25f, 8.0f);
                             }
                             else
@@ -368,8 +369,10 @@ namespace satdump
 
                             // Scaling is a function of the int8 input only, so resolve it
                             // once per batch into a 256-entry table instead of per sample.
+                            // The output magnitude is clamped to ldpc_llr_clamp (default 127).
+                            float llr_clamp_f = (float)d_ldpc_llr_clamp;
                             for (int v = -128; v < 128; v++)
-                                llr_scale_lut[v + 128] = (int8_t)std::clamp(v * llr_scale, -127.0f, 127.0f);
+                                llr_scale_lut[v + 128] = (int8_t)std::clamp(v * llr_scale, -llr_clamp_f, llr_clamp_f);
 
                             for (int i = 0; i < total_soft; i++)
                                 ldpc_input_buffer[i] = llr_scale_lut[ldpc_input_buffer[i] + 128];
@@ -413,13 +416,16 @@ namespace satdump
                         else
                         {
 #if 1 // For debug if necessary
-                            ldpc_corr = ldpc_dec->decode(ldpc_input_buffer, ldpc_output_buffer, d_ldpc_iterations);
+                            ldpc_corr = ldpc_dec->decode(ldpc_input_buffer, ldpc_output_buffer, d_ldpc_cap_iterations);
 
                             // Track how many iterations this batch actually used (with
                             // early termination) and push it into the history buffer.
                             ldpc_iterations_used = ldpc_dec->last_iterations();
                             std::memmove(&ldpc_iter_history[0], &ldpc_iter_history[1], (200 - 1) * sizeof(float));
                             ldpc_iter_history[200 - 1] = (float)ldpc_iterations_used;
+
+                            // Per-batch syndrome convergence (H*ch == 0), when provided.
+                            ldpc_last_converged = ldpc_dec->converged();
 #else
                             for (int i = 0; i < d_ldpc_simd * d_ldpc_codeword_size; i++)
                                 ldpc_output_buffer[i] = ldpc_input_buffer[i] > 0;
@@ -483,6 +489,8 @@ namespace satdump
                 v["ldpc_iterations"] = ldpc_iterations_used;
                 v["ldpc_algorithm"] = codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm);
                 v["ldpc_nms_alpha"] = d_ldpc_nms_alpha_q8 / 256.0f;
+                v["ldpc_offset_beta"] = d_ldpc_offset_beta_q8 / 256.0f;
+                v["ldpc_converged"] = ldpc_last_converged;
                 v["llr_snr"] = llr_snr;
                 v["llr_scale"] = llr_scale;
                 v["llr_sigma2"] = llr_sigma2;
@@ -515,6 +523,14 @@ namespace satdump
                     algo = "SCMS";
                 else if (d_ldpc_algorithm == codings::ldpc::LDPC_SUM_PRODUCT)
                     algo = "Sum-Product";
+                else if (d_ldpc_algorithm == codings::ldpc::LDPC_LAYERED_MIN_SUM)
+                    algo = "Layered MS";
+                else if (d_ldpc_algorithm == codings::ldpc::LDPC_LAYERED_NORMALIZED_MIN_SUM)
+                {
+                    char buf[32];
+                    snprintf(buf, sizeof(buf), "%.2f", d_ldpc_nms_alpha_q8 / 256.0f);
+                    algo = "Layered NMS a=" + std::string(buf);
+                }
                 else
                     algo = "Min-Sum";
                 std::string window_title = "CCSDS LDPC Decoder (" + algo + ")";
@@ -593,11 +609,15 @@ namespace satdump
                     {
                         ImGui::Text("Iter  : ");
                         ImGui::SameLine();
-                        ImGui::TextColored(ldpc_iterations_used >= d_ldpc_iterations ? style::theme.orange : style::theme.green, "%d / %d", ldpc_iterations_used, d_ldpc_iterations);
+                        ImGui::TextColored(ldpc_iterations_used >= d_ldpc_cap_iterations ? style::theme.orange : style::theme.green, "%d / %d", ldpc_iterations_used, d_ldpc_cap_iterations);
 
                         ImGui::Text("Diff  : ");
                         ImGui::SameLine();
                         ImGui::TextColored(ldpc_corr > 10 ? style::theme.orange : style::theme.green, UITO_C_STR(ldpc_corr));
+
+                        ImGui::Text("Sync  : ");
+                        ImGui::SameLine();
+                        ImGui::TextColored(ldpc_last_converged ? style::theme.green : style::theme.orange, ldpc_last_converged ? "Converged" : "Not conv");
                     }
 
                     if (d_internal_stream)

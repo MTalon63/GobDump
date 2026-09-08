@@ -81,12 +81,13 @@ namespace codings
                 d_sc_msgs = new __m256i[d_pcm_max_cn_degree];
             }
 
-            /* Sum-product is not implemented in the AVX kernel; run it on the generic
-             * decoder instead (see header for the rationale). */
-            if (a == LDPC_SUM_PRODUCT && d_generic_fallback == nullptr)
+            /* Sum-product and the layered algorithms are not implemented in the AVX
+             * kernel; run them on the generic decoder instead (see header for the
+             * rationale). */
+            if ((a == LDPC_SUM_PRODUCT || a == LDPC_LAYERED_MIN_SUM || a == LDPC_LAYERED_NORMALIZED_MIN_SUM) && d_generic_fallback == nullptr)
             {
                 d_generic_fallback = new LDPCDecoderGeneric(d_pcm);
-                d_generic_fallback->set_algorithm(LDPC_SUM_PRODUCT);
+                d_generic_fallback->set_algorithm(a);
             }
         }
 
@@ -94,22 +95,34 @@ namespace codings
         {
             int corrections = 0;
 
-            /* Sum-product fallback: decode the 16 interleaved frames one at a time on
-             * the generic (scalar) BP decoder. The input is laid out as 16 frames
-             * concatenated (frame z at in[z*d_pcm_num_vn]), matching the generic
-             * decoder's single-frame interface. */
-            if (d_algorithm == LDPC_SUM_PRODUCT)
+            /* Scalar fallback: decode sum-product/layered frames one at a time on the
+             * generic decoder, writing back to the same output layout. */
+            if (d_algorithm == LDPC_SUM_PRODUCT ||
+                d_algorithm == LDPC_LAYERED_MIN_SUM ||
+                d_algorithm == LDPC_LAYERED_NORMALIZED_MIN_SUM)
             {
-                /* Defensive: set_algorithm normally creates the fallback, but guard
-                 * against a decode() call without a prior set_algorithm(). */
+                // Guard against a decode() call without a prior set_algorithm().
                 if (d_generic_fallback == nullptr)
                 {
                     d_generic_fallback = new LDPCDecoderGeneric(d_pcm);
-                    d_generic_fallback->set_algorithm(LDPC_SUM_PRODUCT);
+                    d_generic_fallback->set_algorithm(d_algorithm);
                 }
+
+                // Propagate the decoder-wide settings to the fallback.
+                d_generic_fallback->set_algorithm(d_algorithm);
+                d_generic_fallback->set_nms_alpha(d_nms_alpha_q8);
+                d_generic_fallback->set_ldpc_offset_beta(d_offset_beta_q8);
+                d_generic_fallback->set_min_iterations(d_min_iterations);
+                d_generic_fallback->set_early_termination(d_early_termination);
+
+                long conv = 0;
                 for (int z = 0; z < 16; z++)
+                {
                     corrections += d_generic_fallback->decode(&out[z * d_pcm_num_vn], &in[z * d_pcm_num_vn], it);
+                    conv += d_generic_fallback->converged() ? 1 : 0;
+                }
                 d_last_iterations = d_generic_fallback->last_iterations();
+                d_converged = (conv == 16); // whole batch converged
                 return corrections;
             }
 
@@ -140,8 +153,9 @@ namespace codings
                 for (int i = 0; i < d_pcm_num_cn * d_pcm_max_cn_degree; i++)
                     d_prev_vn_to_cn_msgs[i] = _mm256_set1_epi16(0);
 
-            /* Decode step */
+            /* Decode step. */
             int it_used = 0;
+            d_lane_active_mask = _mm256_set1_epi16(-1); // all 16 lanes active
             while (it--)
             {
                 for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
@@ -150,11 +164,7 @@ namespace codings
                 }
                 it_used++;
 
-                /* Early termination: per-lane syndrome check. The 16 lanes are
-                 * interleaved inside each __m256i (lane z of VN i lives at
-                 * ptrVar[16*i + z]). For every check node we XOR the hard decisions
-                 * (sign >= 0 => 1, else 0) of its connected VNs, per lane. We stop
-                 * early only when ALL 16 lanes satisfy every parity check. */
+                /* Per-lane syndrome over all check nodes. */
                 __m256i all_parity = _mm256_setzero_si256();
                 for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
                 {
@@ -173,11 +183,27 @@ namespace codings
                     all_parity = _mm256_or_si256(all_parity, parity);
                 }
 
-                if (_mm256_testz_si256(all_parity, all_parity))
+                bool done = false;
+                /* Freeze/terminate lanes only once the minimum is reached AND enabled,
+                 * otherwise all lanes run the full count (bit-identical to before). */
+                if (d_early_termination && it_used >= d_min_iterations)
+                {
+                    // Freeze converged lanes (parity == 0); stop when none remain active.
+                    __m256i conv = _mm256_cmpeq_epi16(all_parity, _mm256_setzero_si256());
+                    d_lane_active_mask = _mm256_andnot_si256(conv, d_lane_active_mask);
+
+                    if (_mm256_testz_si256(d_lane_active_mask, d_lane_active_mask))
+                        done = true;
+                }
+
+                if (done)
                     break;
             }
 
             d_last_iterations = it_used;
+
+            /* Batch converged iff no lane is still active (stragglers keep their mask bit). */
+            d_converged = _mm256_testz_si256(d_lane_active_mask, d_lane_active_mask) != 0;
 
             /* Hard decision & Deinterleave */
             for (int i = 0; i < d_pcm_num_vn; i++)
@@ -304,9 +330,16 @@ namespace codings
                 /* Add error correction value */
                 to_vn = _mm256_add_epi16(new_msg, d_vns_to_cn_msgs[vn_idx]);
 
-                /* Save new soft bit value and CN to VN message */
-                d_cn_to_vn_msgs[cn_offset + vn_idx] = new_msg;
-                *d_vn_addr[cn_row_base + vn_idx] = to_vn;
+                /* Freeze converged (inactive) lanes so later iterations can't corrupt
+                 * their already-valid hard decision. */
+                __m256i old_vn = *d_vn_addr[cn_row_base + vn_idx];
+                __m256i old_cn = d_cn_to_vn_msgs[cn_offset + vn_idx];
+
+                __m256i new_vn = _mm256_blendv_epi8(old_vn, to_vn, d_lane_active_mask);
+                __m256i new_cn = _mm256_blendv_epi8(old_cn, new_msg, d_lane_active_mask);
+
+                d_cn_to_vn_msgs[cn_offset + vn_idx] = new_cn;
+                *d_vn_addr[cn_row_base + vn_idx] = new_vn;
             }
         }
     }

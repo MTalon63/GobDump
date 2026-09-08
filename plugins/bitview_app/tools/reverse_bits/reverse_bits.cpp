@@ -29,7 +29,7 @@ namespace satdump
 
     void ReverseBitsTool::setProcessed() { should_process = false; }
 
-    void ReverseBitsTool::process(std::shared_ptr<BitContainer> &container, float &process_progress)
+    void ReverseBitsTool::process(std::shared_ptr<BitContainer> container, float &process_progress)
     {
         uint8_t *ptr = container->get_ptr();
         size_t size = container->get_ptr_size();

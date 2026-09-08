@@ -17,6 +17,8 @@ namespace codings
             LDPC_NORMALIZED_MIN_SUM,     // Min-sum scaled by alpha
             LDPC_SELF_CORRECTED_MIN_SUM, // Min-sum, erasing sign-flipping VN->CN messages
             LDPC_SUM_PRODUCT,            // True sum-product (belief propagation) check node
+            LDPC_LAYERED_MIN_SUM,                 // Row-layered scheduling, plain min-sum
+            LDPC_LAYERED_NORMALIZED_MIN_SUM,      // Row-layered scheduling, min-sum scaled by alpha
         };
 
         ldpc_algorithm_t ldpc_algorithm_from_string(std::string str);
@@ -30,8 +32,15 @@ namespace codings
             virtual int decode(uint8_t *out, const int8_t *in, int it) = 0;
             virtual int simd() = 0;
 
-            // Alpha is Q8 fixed-point (256 == 1.0). Only used by LDPC_NORMALIZED_MIN_SUM.
+            // Alpha is Q8 fixed-point (256 == 1.0). Only used by (layered) normalized min-sum.
             void set_nms_alpha(int16_t a_q8) { d_nms_alpha_q8 = a_q8; }
+
+            // Offset beta in Q8 (256 == 1.0); 0 disables the offset.
+            void set_ldpc_offset_beta(int16_t b_q8) { d_offset_beta_q8 = b_q8; }
+
+            // Early-termination controls (defaults match the historical flooding behaviour).
+            void set_min_iterations(int m) { d_min_iterations = m; }
+            void set_early_termination(bool e) { d_early_termination = e; }
 
             virtual void set_algorithm(ldpc_algorithm_t a) { d_algorithm = a; }
 
@@ -40,10 +49,17 @@ namespace codings
             // the requested count. For SIMD decoders this is the count for the whole batch.
             virtual int last_iterations() const { return d_last_iterations; }
 
+            // Whether the last decode() call satisfied the parity-check syndrome (H*ch == 0).
+            virtual bool converged() const { return d_converged; }
+
         protected:
             int16_t d_nms_alpha_q8 = 205; // ~0.8
+            int16_t d_offset_beta_q8 = 0; // 0 = offset min-sum off
             ldpc_algorithm_t d_algorithm = LDPC_MIN_SUM;
             int d_last_iterations = 0;
+            bool d_converged = false;
+            int d_min_iterations = 1;
+            bool d_early_termination = true;
         };
 
         struct GetLDPCDecodersEvent

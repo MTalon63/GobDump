@@ -135,20 +135,24 @@ namespace codings
                 for (int i = 0; i < d_pcm_num_cn * d_pcm_max_cn_degree; i++)
                     d_prev_vn_to_cn_msgs[i] = 0;
 
-            /* Decode step */
+            /* Decode step. Row-layered scheduling (see layered_cn_kernel) converges
+             * ~2x faster than flooding and lowers the error floor of high-rate codes. */
+            const bool layered = d_algorithm == LDPC_LAYERED_MIN_SUM || d_algorithm == LDPC_LAYERED_NORMALIZED_MIN_SUM;
             int it_used = 0;
             while (it--)
             {
                 for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
                 {
-                    generic_cn_kernel(cn_idx);
+                    if (layered)
+                        layered_cn_kernel(cn_idx);
+                    else
+                        generic_cn_kernel(cn_idx);
                 }
                 it_used++;
 
-                /* Early termination: compute the syndrome (parity) of every check node
-                 * from the current hard decisions (sign >= 0 => 1, else 0). If every
-                 * check node has even parity the codeword has converged, so stop. */
-                bool converged = true;
+                /* Early termination: stop once every check node has even parity, but
+                 * only after the minimum iteration count and if enabled. */
+                d_converged = true;
                 for (int cn_idx = 0; cn_idx < d_pcm_num_cn; cn_idx++)
                 {
                     int row_base = d_row_pos_deg[cn_idx * 2];
@@ -158,14 +162,17 @@ namespace codings
                         parity ^= (int16_t)(*d_vn_addr[row_base + vn_idx] >= 0 ? 1 : 0);
                     if (parity != 0)
                     {
-                        converged = false;
+                        d_converged = false;
                         break;
                     }
                 }
 
-                if (converged)
+                if (d_converged && d_early_termination && it_used >= d_min_iterations)
                     break;
             }
+
+            if (it_used == 0)
+                d_converged = false;
 
             d_last_iterations = it_used;
 
@@ -211,7 +218,9 @@ namespace codings
                     int16_t prev_m = d_prev_vn_to_cn_msgs[cn_offset + vn_idx];
 
                     if (prev_m != 0 && ((prev_m ^ new_m) < 0)) // Signs differ
+                    {
                         new_m = 0;
+                    }
 
                     d_prev_vn_to_cn_msgs[cn_offset + vn_idx] = new_m;
                     d_sc_msgs[vn_idx] = new_m;
@@ -349,6 +358,73 @@ namespace codings
                 to_vn = new_msg + d_vns_to_cn_msgs[vn_idx];
 
                 /* Save new soft bit value and CN to VN message */
+                d_cn_to_vn_msgs[cn_offset + vn_idx] = new_msg;
+                *d_vn_addr[cn_row_base + vn_idx] = to_vn;
+            }
+        }
+
+        void LDPCDecoderGeneric::layered_cn_kernel(int cn_idx)
+        {
+            /* Row-layered (horizontal) check node: updates posteriors in place as each
+             * row is processed, so the next check node sees the correction immediately. */
+
+            cn_row_base = d_row_pos_deg[cn_idx * 2];
+            cn_deg = d_row_pos_deg[cn_idx * 2 + 1];
+            cn_offset = d_pcm_max_cn_degree * cn_idx;
+
+            const bool normalized = d_algorithm == LDPC_LAYERED_NORMALIZED_MIN_SUM;
+            const bool offset = d_offset_beta_q8 > 0;
+
+            /* Gather the extrinsic (posterior minus the old CN->VN message). */
+            for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+                d_vns_to_cn_msgs[vn_idx] = *d_vn_addr[cn_row_base + vn_idx] - d_cn_to_vn_msgs[cn_offset + vn_idx];
+
+            parity = 0;
+            min1 = UINT8_MAX;
+            min2 = UINT8_MAX;
+
+            if (cn_deg & 0x1)
+                parity = ~parity;
+
+            /* First and second minimums, plus the overall parity of the row. */
+            for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+            {
+                msg = d_vns_to_cn_msgs[vn_idx];
+                parity ^= msg;
+
+                abs_msg = abs(msg);
+
+                min2 = min2 > abs_msg ? (min1 > abs_msg ? min1 : abs_msg) : min2;
+                min1 = min1 > abs_msg ? abs_msg : min1;
+
+                d_abs_msgs[vn_idx] = abs_msg;
+            }
+
+            /* Regenerate a new estimation for each VN and apply it locally. */
+            for (int vn_idx = 0; vn_idx < cn_deg; vn_idx++)
+            {
+                equ_min1 = (~(uint16_t(d_abs_msgs[vn_idx] == min1))) + 1; // 0 or -1
+                min = (min1 & ~equ_min1) | (min2 & equ_min1);
+
+                /* Normalized min-sum: scale magnitude by alpha (Q8). */
+                if (normalized)
+                    min = (uint16_t)(((uint32_t)min * (uint32_t)d_nms_alpha_q8) >> 8);
+
+                /* Offset min-sum: subtract beta after normalization, floor at 0. */
+                if (offset)
+                {
+                    int32_t b = (int32_t)d_offset_beta_q8;
+                    int32_t m = (int32_t)min;
+                    min = (uint16_t)((m > b) ? (m - b) : 0);
+                }
+
+                sign = (parity ^ d_vns_to_cn_msgs[vn_idx]);
+                sign = (sign >> (sizeof(sign) * 8 - 1));
+                new_msg = (int16_t)((min + sign) ^ sign);
+
+                /* Layered difference: update the CN->VN message and posterior immediately. */
+                to_vn = d_vns_to_cn_msgs[vn_idx] + new_msg;
+
                 d_cn_to_vn_msgs[cn_offset + vn_idx] = new_msg;
                 *d_vn_addr[cn_row_base + vn_idx] = to_vn;
             }
