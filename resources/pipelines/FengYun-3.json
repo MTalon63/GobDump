@@ -597,12 +597,12 @@
                     "ldpc_offset_beta": 0,
                     "internal_stream": false,
                     "internal_cadu_size": 0,
-                    "ldpc_algorithm": "layered_normalized_min_sum",
+                    "ldpc_algorithm": "normalized_min_sum",
                     "correlator_threshold": 0.5,
 					"correlator_lock_after": 3,
 					"correlator_drop_after": 5,
                     "llr_scaling": "heuristic"
-					//"correlator_search_window": 64                    
+					//"correlator_search_window": 64
                 }
             },
             "products": {

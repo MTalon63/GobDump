@@ -5,7 +5,7 @@
 #include <string>
 
 
-#if defined(_WIN32)
+#if defined(_MSC_VER) && !defined(__MINGW32__)
 #include <time.h>
 
 inline time_t timegm(struct tm *const t) { return _mkgmtime(t); }
