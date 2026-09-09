@@ -5,7 +5,12 @@
 #include "dsp/block.h"
 #include "dsp/device/dev.h"
 #include "dynload.h"
+
+#ifdef _WIN32
+#include <Windows.h>
+#else
 #include <unistd.h>
+#endif
 
 #ifdef __ANDROID__
 #include "airspy.h"

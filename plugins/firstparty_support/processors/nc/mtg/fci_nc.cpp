@@ -9,12 +9,6 @@
 #include <H5LTpublic.h>
 #include "common/utils.h"
 
-#if defined(_MSC_VER) && !defined(__MINGW32__)
-#include <time.h>
-
-inline time_t timegm(struct tm *const t) { return _mkgmtime(t); }
-#endif
-
 extern "C"
 {
     void register_MTG_FILTER();

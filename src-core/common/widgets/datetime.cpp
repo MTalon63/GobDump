@@ -1,14 +1,9 @@
 #include "datetime.h"
+#include "common/utils.h"
 #include "core/style.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_stdlib.h"
 #include <cmath>
-
-#if defined(_MSC_VER) && !defined(__MINGW32__)
-#include <time.h>
-
-inline time_t timegm(struct tm *const t) { return _mkgmtime(t); }
-#endif
 
 namespace satdump
 {
