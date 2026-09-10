@@ -33,10 +33,10 @@ function Parse-DumpBin($binary_path)
 
 #Copy all files into the Release folder
 cd $BuildPath
-rm -r -fo Release\plugins | Out-Null
+rm -r -fo Release\plugins -ErrorAction SilentlyContinue | Out-Null
 mkdir Release\plugins | Out-Null
 cp plugins\Release\*.dll Release\plugins
-rm -r -fo Release\resources | Out-Null
+rm -r -fo Release\resources -ErrorAction SilentlyContinue | Out-Null
 cp -r $SourcePath\resources Release
 cp $SourcePath\gobdump_cfg.json Release
 cd Release
