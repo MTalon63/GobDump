@@ -430,6 +430,24 @@ jobs:
                   name: GobDump-Ubuntu-22.04
                   path: ${{runner.workspace}}/build/*.deb
 
+            # AppImage packaging (folded back in from upstream/master)
+            - name: Setup pkg2appimage
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              # Execute the build.  You can specify a specific target with "--target <NAME>"
+              run:  wget https://raw.githubusercontent.com/probonopd/AppImages/master/pkg2appimage && chmod +x pkg2appimage && sudo apt install -y imagemagick desktop-file-utils libfuse2
+
+            - name: Make AppImage
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              run: cp *.deb gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && mkdir -p GobDump && mv gobdump.deb GobDump/ && ./pkg2appimage SatDump.yml
+
+            - name: Upload AppImage
+              uses: actions/upload-artifact@v4
+              with:
+                  name: GobDump-AppImage
+                  path: ${{runner.workspace}}/build/out/*.AppImage
+
     build_ubuntu_2404:
         # The CMake configure and build commands are platform agnostic and should work equally
         # well on Windows or Mac.  You can convert this to a matrix build if you need
@@ -688,7 +706,7 @@ jobs:
               run: sudo apt install -y unzip
 
             - name: Copy files
-              run: mkdir gobdump_out && cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb && cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb && cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/GobDump-macOS-Intel.dmg && cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/GobDump-macOS-Silicon.dmg && (cd GobDump-Windows_x64_Portable && zip -r ../gobdump_out/GobDump-Windows_x64_Portable.zip *) && cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe && cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb && (cd GobDump-Windows_arm64_Portable && zip -r ../gobdump_out/GobDump-Windows_arm64_Portable.zip *) && cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe && cp GobDump-release.apk/app-release-signed.apk gobdump_out/GobDump-Android.apk
+              run: mkdir gobdump_out && cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb && cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb && cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/GobDump-macOS-Intel.dmg && cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/GobDump-macOS-Silicon.dmg && (cd GobDump-Windows_x64_Portable && zip -r ../gobdump_out/GobDump-Windows_x64_Portable.zip *) && cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe && cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb && (cd GobDump-Windows_arm64_Portable && zip -r ../gobdump_out/GobDump-Windows_arm64_Portable.zip *) && cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe && cp GobDump-release.apk/app-release-signed.apk gobdump_out/GobDump-Android.apk && cp GobDump-AppImage/*.AppImage gobdump_out/GobDump.AppImage
 
             - name: Update Nightly
               run: gh release upload nightly gobdump_out/* -R ${{github.repository}} --clobber

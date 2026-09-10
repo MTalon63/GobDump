@@ -2,12 +2,7 @@
 #include "../../hdf_utils.h"
 #include <H5Cpp.h>
 #include <H5LTpublic.h>
-
-#if defined(_WIN32)
-#include <time.h>
-
-inline time_t timegm(struct tm *const t) { return _mkgmtime(t); }
-#endif
+#include "common/utils.h"
 
 namespace satdump
 {

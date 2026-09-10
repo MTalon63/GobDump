@@ -1,8 +1,12 @@
 #define SATDUMP_DLL_EXPORT 1
+
+#include "core/style.h"
+
 #include "db/kepler/kepler_handler.h"
 #include "i18n.h"
 #include <cstdlib>
 #include "init.h"
+
 #include "core/config.h"
 #include "core/plugin.h"
 #include "core/resources.h"
@@ -33,6 +37,10 @@ static inline void gob_unsetenv(const char *name) { _putenv_s(name, ""); }
 
 #include "products/product.h"
 
+#if defined(_WIN32)
+#include <Windows.h>
+#endif
+
 // TODOREWORK?
 extern "C"
 {
@@ -55,16 +63,40 @@ namespace satdump
 #if ENABLE_I18N
     void initLanguage(std::string lang)
     {
+#if defined(_WIN32)
+        SetEnvironmentVariable("LC_NUMERIC", "C");
+#else
+        setenv("LC_NUMERIC", "C", true);
+#endif
+
         if (lang.size())
+#if defined(_WIN32)
+            SetEnvironmentVariable("LANGUAGE", lang.c_str());
+#else
             setenv("LANGUAGE", lang.c_str(), true);
+#endif
         else
+#if defined(_WIN32)
+            SetEnvironmentVariable("LANGUAGE", ""); // TODOREWORK check
+#else
             unsetenv("LANGUAGE");
+#endif
 
 #if !defined(_WIN32) && !defined(__ANDROID__) && !defined(__APPLE__)
         setlocale(LC_ALL, "");
 #endif
         bindtextdomain("gobdump", resources::getResourcePath("i18n").c_str());
         textdomain("gobdump");
+
+        std::string old_val = style::i18n_extraFont;
+        std::string i18n_lang_extra_font(_("i18n_lang_extra_font"));
+        if (i18n_lang_extra_font != "i18n_lang_extra_font")
+            style::i18n_extraFont = i18n_lang_extra_font;
+        else
+            style::i18n_extraFont = "";
+
+        if (style::i18n_extraFont != old_val)
+            eventBus->fire_event<StyleOrUINeedUpdateEvent>({});
 
         current_language = lang;
     }

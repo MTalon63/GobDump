@@ -1,8 +1,10 @@
+#define SATDUMP_DLL_EXPORT2 1
+
 #include "i18n.h"
+#include "init.h"
 #include "libs/base64/base64.h"
 #include "utils/time.h"
 #include <string>
-#define SATDUMP_DLL_EXPORT2 1
 
 #include "explorer/explorer.h"
 
@@ -74,6 +76,8 @@ namespace satdump
                     });
             });
         eventBus->register_handler<TryOpenFileInMainExplorerEvent>([](TryOpenFileInMainExplorerEvent e) { explorer_app->tryOpenFileInExplorer(e.path); });
+
+        eventBus->register_handler<StyleOrUINeedUpdateEvent>([&](auto e) { update_ui = true; });
 
         // Load credits MD
         std::ifstream ifs(resources::getResourcePath("credits.md"));
@@ -262,7 +266,8 @@ namespace satdump
                 if (widgets::BeginMenuTooltip("?", _("Help")))
                 {
                     if (ImGui::MenuItem(_("Documentation")))
-                        ;
+                    {
+                    }
                     if (ImGui::MenuItem(_("About")))
                         about_en = true;
                     ImGui::EndMenu();
