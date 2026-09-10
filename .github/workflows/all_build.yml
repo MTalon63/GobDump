@@ -440,8 +440,7 @@ jobs:
             - name: Make AppImage
               working-directory: ${{runner.workspace}}/build
               shell: bash
-              # Execute the build.  You can specify a specific target with "--target <NAME>"
-              run: cp *.deb gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && ./pkg2appimage SatDump.yml
+              run: cp *.deb gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && mkdir -p GobDump && mv gobdump.deb GobDump/ && ./pkg2appimage SatDump.yml
 
             - name: Upload AppImage
               uses: actions/upload-artifact@v4
