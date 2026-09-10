@@ -76,7 +76,7 @@ if($env:PROCESSOR_ARCHITECTURE -ne $arch)
 #Setup vcpkg
 Write-Output "Configuring vcpkg..."
 cd "$(Split-Path -Parent $MyInvocation.MyCommand.Path)\.."
-git clone https://github.com/microsoft/vcpkg -b 2026.06.24
+git clone https://github.com/microsoft/vcpkg -b 2026.07.29
 cd vcpkg
 .\bootstrap-vcpkg.bat
 
@@ -101,7 +101,7 @@ vcpkg_cmake_configure(
 
 # Core packages. libxml2 is for libiio
 # hdf5: [core,cpp,zlib] explicitly excludes the szip default feature, which pulls in libaec from gitlab.dkrz.de
-.\vcpkg install --triplet $platform pthreads libjpeg-turbo tiff libpng glfw3 libusb fftw3 libxml2 portaudio nng zstd opencl curl hdf5[core,cpp,zlib] sqlite3 armadillo protobuf grpc
+.\vcpkg install --triplet $platform pthreads libjpeg-turbo tiff libpng glfw3 libusb fftw3 libxml2 portaudio nng zstd opencl curl[ssl] hdf5[core,cpp,zlib] sqlite3 armadillo protobuf grpc
 
 if ($LASTEXITCODE -ne 0) {
     throw "Core packages installation failed with exit code $LASTEXITCODE"

@@ -14,10 +14,10 @@ else()
     set(LIBRARIES_PATH "${CMAKE_INSTALL_FULL_LIBDIR}/gobdump/")
 endif()
 
-configure_file(${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx ${CMAKE_CURRENT_BINARY_DIR}/satdump_varst.cpp @ONLY)
+configure_file(${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx ${PROJECT_BINARY_DIR}/satdump_varst.cpp @ONLY)
 
 file(GLOB_RECURSE GobDump_core_CPPS *.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/satdump_varst.cpp
+    ${PROJECT_BINARY_DIR}/satdump_varst.cpp
     libs/aec/*.c
     libs/predict/*.c
     libs/bzlib/*.c
@@ -37,6 +37,9 @@ file(GLOB_RECURSE GobDump_core_CPPS *.cpp
     libs/bpe/*.c
     libs/mqttc/*.c
 )
+
+list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cpp)
+list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_BINARY_DIR}/src-core/satdump_varst.cpp)
 
 ################################################################
 ####### AngelScript START

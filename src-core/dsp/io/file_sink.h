@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/utils.h"
+#include "core/exception.h"
 #include "dsp/block.h"
 #include "logger.h"
 #include <fstream>

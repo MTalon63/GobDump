@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>eu.mrtalon.gobdump</id>
+
+  <name>GobDump</name>
+  <summary>GobDump is a general-purpose satellite data processing application, forked from SatDump.</summary>
+
+  <developer id="eu.mrtalon.gobdump">MTalon63</developer>
+  <developer_name>MTalon63</developer_name>
+  <url type="homepage">https://github.com/MrTalon63/GobDump</url>
+  <url type="bugtracker">https://github.com/MrTalon63/GobDump/issues</url>
+  <url type="vcs-browser">https://github.com/MrTalon63/GobDump</url>
+
+  <metadata_license>GPL-3.0-or-later</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <description>
+    <p>
+      GobDump is a one-stop-shop satellite data processing application that provides all the necessary stages to get from a wide variety of satellite transmissions to data and scientific products.
+    </p>
+    <p>
+      Thanks to software-defined radio (SDR) technology and GobDump's wide support for most common SDR devices, there is no need to own a specific receiver for a particular satellite downlink: one SDR device can work for many different downlinks.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">gobdump.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/MrTalon63/GobDump/ports/gui_recording.png</image>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MrTalon63/GobDump/ports/gui-menu.png</image>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MrTalon63/GobDump/ports/gui-live-source.png</image>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MrTalon63/GobDump/ports/gui-processing.png</image>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MrTalon63/GobDump/ports/cli_example.png</image>
+    </screenshot>
+  </screenshots>
+
+  <content_rating type="oars-1.1" />
+</component>

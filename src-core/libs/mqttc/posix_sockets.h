@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <unistd.h>
 #else
 #include <ws2tcpip.h>
 #endif
@@ -44,10 +45,10 @@ int open_nb_socket(const char* addr, const char* port) {
         /* connect to server */
         rv = connect(sockfd, p->ai_addr, (int)p->ai_addrlen);
         if(rv == -1) {
-#if !defined(WIN32)
-          close(sockfd);
-#else
+#if defined(_WIN32)
           closesocket(sockfd);
+#else
+          close(sockfd);
 #endif
           sockfd = -1;
           continue;

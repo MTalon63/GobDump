@@ -2,6 +2,8 @@ app: GobDump
 binpatch: false
 
 ingredients:
+    debs:
+        - gobdump.deb
     packages:
         - libfftw3-3
         - libvolk2.5
