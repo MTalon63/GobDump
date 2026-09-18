@@ -2,6 +2,7 @@
 #include "init.h"
 #include "logger.h"
 #include "common/utils.h"
+#include "core/config.h"
 #include "utils/time.h"
 
 AutoTrackApp::AutoTrackApp(nlohmann::json settings, nlohmann::json parameters, std::string output_folder)
@@ -87,23 +88,24 @@ AutoTrackApp::AutoTrackApp(nlohmann::json settings, nlohmann::json parameters, s
     splitter->add_output("record");
     splitter->add_output("live");
 
-    // Optional FFT
-    if (parameters.contains("fft_enable") && parameters["fft_enable"])
+    // FFT resolution precedence: per-run parameters, then global "web_fft" config, then hardcoded defaults
+    satdump::config::WebFFTSettings web_fft_cfg = satdump::satdump_cfg.getValueFromWebFFT();
+    // Store the resolved flag on the member so the web layer gates on the SAME value as the constructor
+    fft_enabled = parameters.contains("fft_enable") ? parameters["fft_enable"].get<bool>() : web_fft_cfg.enable;
+    if (fft_enabled)
     {
-        if (parameters.contains("fft_size"))
-            fft_size = parameters["fft_size"].get<int>();
-        if (parameters.contains("fft_rate"))
-            fft_rate = parameters["fft_rate"].get<int>();
-        if (parameters.contains("fft_min"))
-            fft_min = parameters["fft_min"].get<int>();
-        if (parameters.contains("fft_max"))
-            fft_max = parameters["fft_max"].get<int>();
+        fft_size = parameters.contains("fft_size") ? parameters["fft_size"].get<int>() : web_fft_cfg.size;
+        if (fft_size <= 0)
+            fft_size = web_fft_cfg.size;
+        fft_rate = parameters.contains("fft_rate") ? parameters["fft_rate"].get<int>() : web_fft_cfg.rate;
+        fft_min = parameters.contains("fft_min") ? parameters["fft_min"].get<float>() : web_fft_cfg.scale_min;
+        fft_max = parameters.contains("fft_max") ? parameters["fft_max"].get<float>() : web_fft_cfg.scale_max;
+        fft_avg = parameters.contains("fft_avgn") ? parameters["fft_avgn"].get<float>() : web_fft_cfg.avg;
 
         splitter->add_output("fft");
         fft = std::make_unique<dsp::FFTPanBlock>(splitter->get_output("fft"));
         fft->set_fft_settings(fft_size, samplerate, fft_rate);
-        if (parameters.contains("fft_avgn"))
-            fft->avg_num = parameters["fft_avgn"].get<float>();
+        fft->avg_num = fft_avg;
 
         fft_plot = std::make_unique<satdump::widgets::FFTPlot>(fft->output_stream->writeBuf, fft_size, fft_min, fft_max, 40);
         logger->critical("FFT GOOD!");
