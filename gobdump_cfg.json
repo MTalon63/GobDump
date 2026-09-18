@@ -110,6 +110,15 @@
 			"description": "Defines the time when should the user be warned about not enough disk space.\nSet to 0 to disable"
 		}
 	},
+	// Web FFT settings (used when streaming FFT over the web server)
+	"web_fft": {
+		"enable": true,
+		"size": 8192,
+		"rate": 30,
+		"avg": 10.0,
+		"scale_min": -110.0,
+		"scale_max": 0.0
+	},
 	// More generic SatDump settings
 	"satdump_general": {
 		"log_level": {

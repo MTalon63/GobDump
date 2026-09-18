@@ -1,9 +1,11 @@
 #include "../webserver.h"
 #include "autotrack.h"
+#include "core/config.h"
 #include "image/jpeg_utils.h"
 #include "logger.h"
 #include "utils/format.h"
 #include "utils/time.h"
+#include <algorithm>
 
 void AutoTrackApp::setup_webserver()
 {
@@ -64,7 +66,8 @@ void AutoTrackApp::setup_webserver()
             return vec;
         };
 
-        if (d_parameters.contains("fft_enable") && d_parameters["fft_enable"])
+        // Gate the endpoint on the SAME resolved flag as the constructor, and on the runtime object state
+        if (fft_enabled && fft && fft_plot)
             webserver::handle_callback_fft = [this]() -> std::vector<uint8_t>
             {
                 if (!web_fft_is_enabled)
@@ -74,7 +77,8 @@ void AutoTrackApp::setup_webserver()
                     logger->trace("Enabling FFT");
                 }
                 web_last_fft_access = time(nullptr);
-                auto img = fft_plot->drawImg(512, 512);
+                int img_size = std::min(fft_size, 512);
+                auto img = fft_plot->drawImg(img_size, img_size);
                 std::vector<uint8_t> vec = image::save_jpeg_mem(img);
                 return vec;
             };
@@ -121,7 +125,7 @@ void AutoTrackApp::setup_webserver()
                     aos_in = "";
                 }
 
-                if (d_parameters.contains("fft_enable") && d_parameters["fft_enable"])
+                if (fft_enabled && this->fft && this->fft_plot)
                     fft = (std::string) "<h2>FFT</h2><img src=\"fft.jpeg?r=" + std::to_string(cache_buster) + "\" class=\"resp-img\" height=\"600\" width=\"600\" />";
 
                 std::string schedule = (std::string) "<h2>Schedule</h2><img src=\"schedule.jpeg?r=" + std::to_string(cache_buster) + "\" class=\"resp-img\" height=\"80\" width=\"600\" />";

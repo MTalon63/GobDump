@@ -4,6 +4,7 @@
 #include "common/dsp/path/splitter.h"
 #include "common/dsp/resamp/smart_resampler.h"
 #include "common/dsp_source_sink/dsp_sample_source.h"
+#include "core/config.h"
 #include "init.h"
 #include "live.h"
 #include "logger.h"
@@ -131,14 +132,16 @@ int main_record(int argc, char *argv[])
         logger->info("Setting up resampler...");
     }
 
-    // Optional FFT
     std::shared_ptr<dsp::stream<complex_t>> final_stream = decimation > 1 ? decim->output_stream : source_ptr->output_stream;
 
     int fft_size = 0;
-    if (parameters.contains("fft_enable"))
+    // Resolve with precedence: per-run parameters, then global "web_fft" config, then hardcoded defaults
+    satdump::config::WebFFTSettings web_fft_cfg = satdump::satdump_cfg.getValueFromWebFFT();
+    bool fft_enabled = parameters.contains("fft_enable") ? parameters["fft_enable"].get<bool>() : web_fft_cfg.enable;
+    if (fft_enabled)
     {
-        fft_size = parameters.contains("fft_size") ? parameters["fft_size"].get<int>() : 512;
-        int fft_rate = parameters.contains("fft_rate") ? parameters["fft_rate"].get<int>() : 30;
+        fft_size = parameters.contains("fft_size") ? parameters["fft_size"].get<int>() : web_fft_cfg.size;
+        int fft_rate = parameters.contains("fft_rate") ? parameters["fft_rate"].get<int>() : web_fft_cfg.rate;
 
         splitter = std::make_unique<dsp::SplitterBlock>(source_ptr->output_stream);
         splitter->add_output("fft");
@@ -146,8 +149,7 @@ int main_record(int argc, char *argv[])
         final_stream = splitter->output_stream;
         fft = std::make_unique<dsp::FFTPanBlock>(splitter->get_output("fft"));
         fft->set_fft_settings(fft_size, samplerate / decimation, fft_rate);
-        if (parameters.contains("fft_avgn"))
-            fft->avg_num = parameters["fft_avgn"].get<float>();
+        fft->avg_num = parameters.contains("fft_avgn") ? parameters["fft_avgn"].get<float>() : web_fft_cfg.avg;
         splitter->start();
         fft->start();
     }
@@ -155,7 +157,7 @@ int main_record(int argc, char *argv[])
     // Setup file sink
     std::shared_ptr<dsp::FileSinkBlock> file_sink = std::make_shared<dsp::FileSinkBlock>(final_stream);
 
-    if (parameters.contains("fft_enable"))
+    if (fft)
     {
         webserver::handle_callback = [&file_sink, &fft, fft_size]()
         {
@@ -247,7 +249,7 @@ int main_record(int argc, char *argv[])
 
     // Stop cleanly
     source_ptr->stop();
-    if (parameters.contains("fft_enable"))
+    if (fft)
     {
         splitter->stop();
         fft->stop();
