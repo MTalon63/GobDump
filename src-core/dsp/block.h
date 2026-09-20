@@ -105,6 +105,11 @@ namespace satdump
         public:
             const std::string d_id;
 
+            //! @brief Set by a block's init() to describe why it cannot start
+            //! (e.g. a source/sink file that could not be opened). Cleared on a
+            //! successful init. Read by the flowgraph to surface start failures.
+            std::string init_error = "";
+
         protected:
             std::vector<BlockIO> inputs;
             std::vector<BlockIO> outputs;

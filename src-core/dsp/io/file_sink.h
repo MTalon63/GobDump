@@ -30,14 +30,19 @@ namespace satdump
             {
                 file_writer = std::ofstream(p_file, std::ios::binary);
                 d_write_error_logged = false;
+                init_error = "";
                 if (!file_writer.good())
-                    logger->error("Could not open file sink for writing : " + p_file);
+                {
+                    init_error = "Could not open file sink for writing : " + p_file;
+                    logger->error("%s", init_error.c_str());
+                }
             }
 
             nlohmann::ordered_json get_cfg_list()
             {
                 nlohmann::ordered_json p;
                 add_param_simple(p, "file", "string");
+                p["file"]["picker"] = true;
                 p["file"]["disable"] = is_work_running();
                 return p;
             }

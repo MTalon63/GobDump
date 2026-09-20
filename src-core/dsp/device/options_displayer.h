@@ -13,6 +13,7 @@
 
 #include "common/widgets/double_list.h"
 #include "common/widgets/frequency_input.h"
+#include "core/backend.h"
 
 #include "logger.h"
 #include "nlohmann/json_utils.h"
@@ -40,6 +41,10 @@ namespace satdump
                 bool is_freq = false;
                 bool is_samplerate = false;
                 bool is_stat = false;
+
+                // If true, a string option is a file path and should show a
+                // "browse" button opening a file picker.
+                bool is_filepicker = false;
 
                 //                bool is_sub = false;
 
@@ -124,6 +129,10 @@ namespace satdump
                     h.is_freq = vv["type"] == "freq";
                     h.is_samplerate = vv["type"] == "samplerate";
                     h.is_stat = vv["type"] == "stat";
+
+                    // A string option can opt into a file-picker browse button.
+                    if (h.is_string && vv.contains("picker") && vv["picker"].get<bool>())
+                        h.is_filepicker = true;
 
                     h.is_list = vv.contains("list");
                     if (h.is_list)
@@ -248,6 +257,28 @@ namespace satdump
                     {
                         ImGui::InputText(id.c_str(), &v._string);
                         u |= ImGui::IsItemDeactivatedAfterEdit();
+
+                        if (v.is_filepicker)
+                        {
+                            ImGui::SameLine();
+                            id_n += "browse";
+                            if (ImGui::Button(id_n.c_str()))
+                            {
+                                // Prefer the native file picker when the backend
+                                // has been bound (GUI), otherwise fall back to the
+                                // text field. The dialog may not be available in
+                                // headless builds.
+                                if (backend::selectFileDialog)
+                                {
+                                    std::string picked = backend::selectFileDialog({}, v._string);
+                                    if (!picked.empty())
+                                    {
+                                        v._string = picked;
+                                        u = true;
+                                    }
+                                }
+                            }
+                        }
                     }
                     else if (v.is_range && v.is_int)
                     {

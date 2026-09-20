@@ -17,6 +17,12 @@ namespace satdump
             {
                 is_running = true;
 
+                // Clear any error from the previous run
+                {
+                    std::lock_guard<std::mutex> lgl(last_error_mtx);
+                    last_error = "";
+                }
+
                 try
                 {
                     // Update variables
@@ -179,10 +185,18 @@ namespace satdump
                         }
                     }
 
-                    // Start them all
+                    // Start them all. If any block could not initialize (eg. an
+                    // invalid/missing file source or sink), surface that instead
+                    // of silently running and instantly stopping.
                     for (auto &n : nodes)
-                        if (!n->disabled)
-                            n->internal->blk->start();
+                    {
+                        if (n->disabled)
+                            continue;
+
+                        n->internal->blk->start();
+                        if (!n->internal->blk->init_error.empty())
+                            throw satdump_exception("Block (" + n->title + ") : " + n->internal->blk->init_error);
+                    }
                     for (auto &b : additional_blocks)
                         b->start();
                     for (auto &n : nodes)
@@ -209,9 +223,26 @@ namespace satdump
                 catch (std::exception &e)
                 {
                     logger->error("Error running flowgraph : %s", e.what());
+
+                    {
+                        std::lock_guard<std::mutex> lgl(last_error_mtx);
+                        last_error = e.what();
+                    }
                 }
 
                 is_running = false;
+            }
+
+            std::string Flowgraph::getLastError()
+            {
+                std::lock_guard<std::mutex> lgl(last_error_mtx);
+                return last_error;
+            }
+
+            bool Flowgraph::hasError()
+            {
+                std::lock_guard<std::mutex> lgl(last_error_mtx);
+                return last_error.size() > 0;
             }
 
             void Flowgraph::stop()
