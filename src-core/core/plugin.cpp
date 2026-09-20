@@ -38,11 +38,13 @@ std::shared_ptr<satdump::Plugin> loadPlugin(std::string plugin)
     if (dlsym_error != NULL)
     {
         logger->error("Error loading ABI symbol from plugin! : %s", dlsym_error);
+        dlclose(dynlib);
         return nullptr;
     }
     else if (*((int *)abi) != PLUGIN_ABI_VERSION)
     {
         logger->warn("Plugin ABI mismatch!");
+        dlclose(dynlib);
         return nullptr;
     }
 
