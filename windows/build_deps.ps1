@@ -70,6 +70,14 @@ cd ../..
 # source plus the local patch, keeping both arches deterministic at the same tag.
 # Pin core.autocrlf=false so the checked-out files are LF: this patch is LF and
 # a CRLF working tree would make `git apply` fail on hunk context mismatch.
+$py = Get-Command python -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if ($null -ne $py) {
+    & $py.Source -c "import mako" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Invoke-CheckedNative "python" @("-m", "pip", "install", "mako")
+    }
+}
 git clone -c core.autocrlf=false https://github.com/gnuradio/volk --depth 1 -b v3.3.0 volk
 cd volk
 # Init submodules from the volk repo ROOT, before entering build/.
