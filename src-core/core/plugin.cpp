@@ -20,8 +20,8 @@ std::shared_ptr<satdump::Plugin> loadPlugin(std::string plugin)
     if (!dynlib)
         throw satdump_exception("Error loading " + plugin + "! Error : " + std::string(dlerror()));
 
-    // Check ABI compatibility
-    void *abi = dlsym(dynlib, "SATDUMP_ABI_VERSION");
+    // Load the entrypoint first so the null-check below is valid
+    void *create = dlsym(dynlib, "loader");
     const char *dlsym_error = dlerror();
 
     // On Windows that directory also holds ordinary DLLs; calling through the null pointer jumps to 0
@@ -32,6 +32,9 @@ std::shared_ptr<satdump::Plugin> loadPlugin(std::string plugin)
         throw satdump_exception("Not a valid plugin: " + plugin + " (" + err + ")");
     }
 
+    // Check ABI compatibility
+    void *abi = dlsym(dynlib, "SATDUMP_ABI_VERSION");
+    dlsym_error = dlerror();
     if (dlsym_error != NULL)
     {
         logger->error("Error loading ABI symbol from plugin! : %s", dlsym_error);
@@ -40,15 +43,6 @@ std::shared_ptr<satdump::Plugin> loadPlugin(std::string plugin)
     else if (*((int *)abi) != PLUGIN_ABI_VERSION)
     {
         logger->warn("Plugin ABI mismatch!");
-        return nullptr;
-    }
-
-    // Load it, for real
-    void *create = dlsym(dynlib, "loader");
-    dlsym_error = dlerror();
-    if (dlsym_error != NULL)
-    {
-        logger->warn("Possible error loading symbols from plugin! : %s", dlsym_error);
         return nullptr;
     }
 
