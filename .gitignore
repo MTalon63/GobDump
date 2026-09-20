@@ -32,3 +32,5 @@ tools/ldpc_ber_test/
 config/
 
 src-core/satdump_varst.cpp
+
+PLANS/

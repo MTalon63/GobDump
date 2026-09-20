@@ -312,4 +312,51 @@ namespace satdump
 
         return new_registry;
     }
+
+    std::vector<KeplerData> tryFetchOMMsForNorads(const std::vector<int> &norads,
+                                                  const std::string &batch_url_template)
+    {
+        std::vector<KeplerData> new_registry;
+        if (norads.empty())
+            return new_registry;
+
+        std::string url_str = batch_url_template;
+        if (url_str.find("%NORADS%") == std::string::npos)
+        {
+            logger->warn("url_batch_template has no %%NORADS%% placeholder; skipping batch fetch");
+            return new_registry;
+        }
+
+        std::string norad_list;
+        for (size_t i = 0; i < norads.size(); i++)
+        {
+            if (i > 0)
+                norad_list += ",";
+            norad_list += std::to_string(norads[i]);
+        }
+        while (url_str.find("%NORADS%") != std::string::npos)
+            url_str.replace(url_str.find("%NORADS%"), 8, norad_list);
+
+        logger->info(url_str);
+        std::string result;
+        int http_res = 1, trials = 0;
+        while (http_res == 1 && trials < 3)
+        {
+            if ((http_res = perform_http_request(url_str, result)) != 1)
+            {
+                new_registry = parseCcsdsOmmFile(result);
+            }
+            trials++;
+            if (new_registry.empty())
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                logger->info("Failed getting batched OMMs. Retrying...");
+            }
+        }
+
+        if (new_registry.empty())
+            logger->warn("Failed to get batched OMMs for %d NORAD(s) from %s", (int)norads.size(), url_str.c_str());
+
+        return new_registry;
+    }
 } // namespace satdump
