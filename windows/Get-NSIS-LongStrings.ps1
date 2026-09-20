@@ -4,7 +4,7 @@
     return 1
 }
 
-cd "$(Split-Path -Parent $MyInvocation.MyCommand.Path)\..\vcpkg"
+cd "$(Split-Path -Parent $MyInvocation.MyCommand.Path)"
 rm -force nsis-3.10-strlen_8192.zip -erroraction silentlycontinue
 rm -recurse -force nsis-3.10-strlen_8192 -erroraction silentlycontinue
 Invoke-WebRequest https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10-strlen_8192.zip -OutFile nsis-3.10-strlen_8192.zip -UserAgent "Wget/1.21.1" | Out-Null
