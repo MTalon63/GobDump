@@ -9,8 +9,8 @@ if (Test-Path -path portable) {
 mkdir portable
 
 # Core
-cp satdump.exe portable
-cp satdump-ui.exe portable
+cp gobdump.exe portable
+cp gobdump-ui.exe portable
 cp *.dll portable
 
 # Plugins
@@ -19,7 +19,7 @@ cp plugins/*.dll portable/plugins
 
 # Resources
 cp -r $source_path/resources portable
-cp $source_path/satdump_cfg.json portable
+cp $source_path/gobdump_cfg.json portable
 
 # Add DLLs
 function Parse-DumpBin($binary_path)
@@ -79,7 +79,7 @@ $dlls_to_copy = @()
 foreach($available_dll in $available_dlls)
 {
     Write-Output $available_dll.FullName 
-    if($dll_array.Contains($available_dll.Name))
+    if($dll_array -contains $available_dll.Name)
     {
         $dlls_to_copy += $available_dll
     }
@@ -95,7 +95,7 @@ while($last_count -ne $dlls_to_copy.Count)
         $potential_dlls = Parse-DumpBin $dll_to_copy.FullName
         foreach($available_dll in $available_dlls)
         {
-            if($potential_dlls.Contains($available_dll.Name) -and -not $dlls_to_copy.Name.Contains($available_dll.Name))
+            if($potential_dlls.Contains($available_dll.Name) -and ($dlls_to_copy.Name -notcontains $available_dll.Name))
             {
                 $dlls_to_copy += $available_dll
             }
