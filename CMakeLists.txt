@@ -23,10 +23,6 @@ else()
     endif()
 endif()
 
-if(MSVC OR BUILD_MSVC)
-    set(VCPKG_APPLOCAL_DEPS CACHE BOOL FALSE)
-endif()
-
 project(GobDump)
 
 if(NOT MSVC)
@@ -171,8 +167,10 @@ if(MSVC OR BUILD_MSVC)
     set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} /ignore:4286,4217")
 
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    include_directories(vcpkg/installed/${VCPKG_TARGET_TRIPLET}/include)
-    link_directories(vcpkg/installed/${VCPKG_TARGET_TRIPLET}/lib)
+    # Dependencies are built by windows/build_deps.ps1 into windows/deps/output.
+    # Paths are relative to CMAKE_CURRENT_SOURCE_DIR (the repo root).
+    include_directories(windows/deps/output/include)
+    link_directories(windows/deps/output/lib)
 endif()
 
 if(MINGW)
@@ -467,7 +465,7 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
             set(CPACK_PACKAGE_EXECUTABLES ${CPACK_PACKAGE_EXECUTABLES} "satdump_sdr_server" "GobDump SDR Server")
         endif()
 
-        # vcpkg-specific: MinGW deploys its DLLs via cmake/MinGWCopyRuntime.cmake instead
+        # MSVC deploys its DLLs via RUNTIME_DEPENDENCY_SET; MinGW uses cmake/MinGWCopyRuntime.cmake instead
         if(MSVC OR BUILD_MSVC)
             install(RUNTIME_DEPENDENCY_SET gobdump_deps
                 PRE_EXCLUDE_REGEXES
@@ -483,7 +481,7 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
                 POST_EXCLUDE_REGEXES
                 ".*system32/.*\\.dll"
                 DIRECTORIES
-                "${PROJECT_SOURCE_DIR}/vcpkg/installed/${VCPKG_TARGET_TRIPLET}/bin"
+                "${PROJECT_SOURCE_DIR}/windows/deps/output/bin"
             )
         endif()
     else()
