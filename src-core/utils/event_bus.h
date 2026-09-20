@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <typeinfo>
 #include <vector>
@@ -37,6 +38,7 @@ namespace satdump
 
         std::vector<HandlerEntry> all_handlers;
         uint64_t next_id = 1;
+        std::mutex handlers_mtx;
 
     public:
         /**
@@ -49,6 +51,7 @@ namespace satdump
         template <typename T>
         uint64_t register_handler(std::function<void(T)> handler_fun)
         {
+            std::scoped_lock l(handlers_mtx);
             uint64_t id = next_id++;
             all_handlers.push_back({id, std::string(typeid(T).name()), [handler_fun](void *raw)
                                     {
@@ -60,13 +63,14 @@ namespace satdump
 
         /**
          * @brief Unregister a previously registered handler.
-         * Must not be called while the bus is being fired
-         * from another thread.
+         * Safe to call from any thread; see fire_event() for
+         * the copy-on-fire guarantee.
          *
          * @param id ID returned by register_handler()
          */
         void unregister_handler(uint64_t id)
         {
+            std::scoped_lock l(handlers_mtx);
             for (auto it = all_handlers.begin(); it != all_handlers.end(); ++it)
                 if (it->id == id)
                 {
@@ -84,7 +88,10 @@ namespace satdump
         template <typename T>
         void fire_event(T evt)
         {
-            for (HandlerEntry &h : all_handlers)                          // Iterate through all registered functions
+            handlers_mtx.lock();
+            auto lcopy = all_handlers; // Local copy so handlers can re-register without deadlock
+            handlers_mtx.unlock();
+            for (HandlerEntry &h : lcopy)                                 // Iterate through all registered functions
                 if (std::string(typeid(T).name()) == h.type_name)         // Check struct type is the same
                     h.fun((void *)&evt);                                  // Fire handler up
         }
@@ -99,9 +106,12 @@ namespace satdump
          */
         void fire_event(void *evt, std::string evt_name)
         {
-            for (HandlerEntry &h : all_handlers) // Iterate through all registered functions
-                if (evt_name == h.type_name)     // Check struct type is the same
-                    h.fun(evt);                  // Fire handler up
+            handlers_mtx.lock();
+            auto lcopy = all_handlers; // Local copy so handlers can re-register without deadlock
+            handlers_mtx.unlock();
+            for (HandlerEntry &h : lcopy) // Iterate through all registered functions
+                if (evt_name == h.type_name) // Check struct type is the same
+                    h.fun(evt);              // Fire handler up
         }
     };
 } // namespace satdump

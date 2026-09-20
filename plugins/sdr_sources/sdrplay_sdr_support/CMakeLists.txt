@@ -13,7 +13,9 @@ if(SDRPLAY_LIBRARY OR MSVC)
     message("Building with SDRPlay support")
     file(GLOB_RECURSE sdrplay_sdr_support_CPPS *.cpp)
     add_library(sdrplay_sdr_support SHARED ${sdrplay_sdr_support_CPPS})
-    target_include_directories(sdrplay_sdr_support PUBLIC src)
+    # Require the plugin dir as an include root so the bundled
+    # "sdrplay/sdrplay_api.h" (upstream commit) resolves correctly.
+    target_include_directories(sdrplay_sdr_support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(sdrplay_sdr_support PUBLIC gobdump_core)
 
     if(MSVC)
