@@ -56,20 +56,26 @@ cmake $cmake_params .. -DHTTP_ONLY=ON -DBUILD_STATIC_LIBS=OFF -DCURL_USE_SCHANNE
 ninja install
 cd ../..
 
-if($is_arm) {
-    # GobDump previously used this fork under vcpkg for ARM64. It is stock
-    # volk v3.1.2 plus a Windows ARM64/MSVC NEON-enable patch (API/ABI
-    # identical). Pin to an exact commit so the clone is deterministic
-    # instead of tracking the moving win-arm64 branch.
-    git clone https://github.com/JVital2013/volk volk
-    git -C volk checkout 51c251846ba591453a92480a95a27a3ffe901d4b
-} else {
-    git clone https://github.com/gnuradio/volk --depth 1 -b v3.1.2 volk
-}
+# VOLK v3.3.0. The MSVC-ARM64 / NEON enablement (not yet upstreamed in
+# gnuradio/volk) is re-applied locally from windows/patches/volk-3.3.0-msvc-arm64.patch,
+# ported from JVital2013/volk commit 51c251846ba591453a92480a95a27a3ffe901d4b
+# ("Windows: ARM64/NEON Support"). Apply it unconditionally for both arches: the
+# changes are MSVC/NEON-guarded and are a no-op (or benign) on x64. This replaces
+# the old two-branch scheme (stock v3.1.2 on x64, fork on arm64) with one 3.3.0
+# source plus the local patch, keeping both arches deterministic at the same tag.
+# Pin core.autocrlf=false so the checked-out files are LF: this patch is LF and
+# a CRLF working tree would make `git apply` fail on hunk context mismatch.
+git clone -c core.autocrlf=false https://github.com/gnuradio/volk --depth 1 -b v3.3.0 volk
 cd volk
+# Init submodules from the volk repo ROOT, before entering build/.
+Invoke-CheckedNative "git" @("submodule", "update", "--init")
+# $PSScriptRoot is windows/ (where this script lives). Apply -p1 from the repo
+# root so the patch's a/b paths (e.g. kernels/...) resolve under the volk tree.
+# native `git apply` returns non-zero without throwing (EAP=Stop does not cover
+# native exit codes), so route it through Invoke-CheckedNative to fail loudly.
+Invoke-CheckedNative "git" @("apply", "-p1", "$($PSScriptRoot)/patches/volk-3.3.0-msvc-arm64.patch")
 mkdir build
 cd build
-git submodule update --init
 cmake $cmake_params .. -DENABLE_TESTING=OFF -DENABLE_MODTOOL=OFF -DENABLE_STATIC_LIBS=OFF
 ninja install
 cd ../..
