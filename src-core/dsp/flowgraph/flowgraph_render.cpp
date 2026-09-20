@@ -21,7 +21,7 @@ namespace satdump
                     if (ImGui::MenuItem(cats[pos].c_str()))
                     {
                         auto mpos = ImGui::GetMousePos();
-                        auto ptr = addNode(opt.first, opt.second.func(this));
+                        auto ptr = addNode(opt.first, opt.second.inst(this));
                         ptr->pos_was_set = true;
                         ImNodes::SetNodeScreenSpacePos(ptr->id, mpos);
                     }
@@ -58,13 +58,17 @@ namespace satdump
                     if (ImGui::TreeNodeEx(name.c_str(), ImGuiTreeNodeFlags_Leaf))
                         ImGui::TreePop();
                     if (ImGui::IsItemClicked())
-                        addNode(c.first, c.second.func(this));
+                        addNode(c.first, c.second.inst(this));
                 }
             }
 
             void Flowgraph::renderAddMenuList(std::string search)
             {
                 std::lock_guard<std::mutex> lg(flow_mtx);
+
+                bool is_run = is_running;
+                if (is_run)
+                    style::beginDisabled();
 
                 // Extract categories
                 std::vector<std::pair<std::string, NodeInternalReg>> regs;
@@ -103,6 +107,9 @@ namespace satdump
 
                 // Render
                 renderCatT(cats, search.size());
+
+                if (is_run)
+                    style::endDisabled();
             }
 
             void Flowgraph::render()

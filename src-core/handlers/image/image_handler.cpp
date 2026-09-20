@@ -404,15 +404,11 @@ namespace satdump
                         ImGui::BeginTooltip();
 
                         for (int i = 0; i < img.channels(); i++)
-                            ImGui::Text(_("Raw %d : %d F %f"), i + 1, img.get(0, x, y), img.getf(0, x, y));
+                            ImGui::Text(_("Raw %d : %d F %f"), i + 1, img.get(i, x, y), img.getf(i, x, y));
 
-                        if (image_calib_valid && image.channels() == 1)
+                        if (image_calib_valid && image.channels() == 1 && x >= 0 && y >= 0 && x < img.width() && y < img.height())
                         {
-                            int xc = x; // Correction only needs to be undone for calib
-                            if (correct_fwd_lut.size() > 0 && x > 0 && x < correct_fwd_lut.size())
-                                xc = correct_fwd_lut[x];
-
-                            double val = image_calib.getVal(img.getf(0, xc, y));
+                            double val = image_calib.getVal(img.getf(0, x, y));
                             ImGui::Text(_("Unit : %f %s"), val, image_calib.unit.c_str());
                         }
 
@@ -435,6 +431,17 @@ namespace satdump
                                 auto x1 = (img.height() - 1) - y;
                                 y = x;
                                 x = x1;
+                            }
+                        }
+
+                        if (correct_fwd_lut.size() > 0)
+                        {
+                            if (x >= 0 && x < correct_fwd_lut.size())
+                                x = correct_fwd_lut[x];
+                            else
+                            {
+                                ImGui::Text(_("Error in geo-correction!"));
+                                return;
                             }
                         }
 

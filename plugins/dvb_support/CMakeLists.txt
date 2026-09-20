@@ -29,7 +29,7 @@ if(SSE41_FOUND)
     # MINGW matched neither branch, so the SSE4.1 path compiled without SSE4.1 enabled
     if(UNIX OR ANDROID OR MINGW)
         set(FINAL_FLAGS_SSE41 "-msse4.1")
-    elseif(MSVC OR BUILD_MSVC)
+    elseif(MSVC)
         set(FINAL_FLAGS_SSE41 "${SSE41_C_FLAGS}")
     endif()
 
