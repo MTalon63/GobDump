@@ -4,9 +4,11 @@
 #include "core/plugin.h"
 #include "dll_export.h"
 #include "nlohmann/json.hpp"
+#include "utils/http_ratelimit.h"
 #include "logger.h"
 #include <exception>
 #include <functional>
+#include <unordered_map>
 
 namespace satdump
 {
@@ -136,6 +138,45 @@ namespace satdump
             {
                 logger->warn("web_fft[size] is %d, using default %d", out.size, 8192);
                 out.size = 8192;
+            }
+            return out;
+        }
+
+        // Reads top-level "http_rate_limits" per host; malformed entries fall back to defaults.
+        inline std::unordered_map<std::string, satdump::HostRateLimit> getHttpRateLimits()
+        {
+            std::unordered_map<std::string, satdump::HostRateLimit> out;
+            auto &rate_limits = main_cfg["http_rate_limits"];
+            if (rate_limits.is_null() || !rate_limits.is_object())
+                return out;
+
+            for (auto it = rate_limits.begin(); it != rate_limits.end(); ++it)
+            {
+                std::string host = it.key();
+                auto &entry = it.value();
+
+                HostRateLimit limit;
+                auto read_field = [&](const std::string &field, int &target)
+                {
+                    if (entry.contains(field) && !entry[field].is_null())
+                    {
+                        try
+                        {
+                            target = entry[field].get<int>();
+                        }
+                        catch (std::exception &e)
+                        {
+                            logger->warn("http_rate_limits[%s][%s] invalid, using default: %s", host.c_str(), field.c_str(), e.what());
+                        }
+                    }
+                };
+
+                read_field("per_minute", limit.per_minute);
+                read_field("per_hour", limit.per_hour);
+                read_field("max_retry_after_seconds", limit.max_retry_after_seconds);
+                read_field("min_spacing_ms", limit.min_spacing_ms);
+
+                out[host] = limit;
             }
             return out;
         }

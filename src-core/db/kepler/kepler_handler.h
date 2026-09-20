@@ -36,6 +36,11 @@ namespace satdump
     std::vector<KeplerData> tryFetchOMMFileFromURL(std::string url_str);
     std::vector<KeplerData> tryFetchSingleOMMwithNorad(int norad);
 
+    // Fetch OMM elements for many NORADs in one request. The URL template must contain a
+    // %NORADS% placeholder, replaced with a comma-delimited NORAD list; absent => skipped.
+    std::vector<KeplerData> tryFetchOMMsForNorads(const std::vector<int> &norads,
+                                                  const std::string &batch_url_template);
+
     class KeplerDBHandler : public DBHandlerBase
     {
     private:

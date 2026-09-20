@@ -7,6 +7,7 @@
 #include "utils/format.h"
 #include "utils/string.h"
 #include "utils/time.h"
+#include <algorithm>
 #include <string>
 #include <thread>
 
@@ -105,8 +106,35 @@ namespace satdump
             h->tr_end();
         }
 
+        // Optional single-request fetch of all NORADs when a batch template is configured.
+        std::string batch_tmpl;
+        if (satdump_cfg.main_cfg["kepler_settings"].contains("url_batch_template") &&
+            !satdump_cfg.main_cfg["kepler_settings"]["url_batch_template"].is_null())
+        {
+            try { batch_tmpl = satdump_cfg.main_cfg["kepler_settings"]["url_batch_template"].get<std::string>(); }
+            catch (std::exception &e) { logger->warn("kepler_settings[url_batch_template] invalid: %s", e.what()); }
+        }
+
+        std::vector<int> covered_norads;
+        if (!batch_tmpl.empty() && !norads_to_fetch.empty())
+        {
+            auto batch_keps = tryFetchOMMsForNorads(norads_to_fetch, batch_tmpl);
+
+            h->tr_begin();
+            for (auto &t : batch_keps)
+            {
+                putKepler(t);
+                covered_norads.push_back(t.satellite_number);
+            }
+            h->tr_end();
+        }
+
+        // Per-NORAD fallback for any NORAD not covered by the batch request.
         for (int norad : norads_to_fetch)
         {
+            if (std::find(covered_norads.begin(), covered_norads.end(), norad) != covered_norads.end())
+                continue;
+
             auto tles = tryFetchSingleOMMwithNorad(norad);
             if (tles.size() == 1)
                 putKepler(tles[0]);

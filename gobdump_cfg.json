@@ -354,6 +354,9 @@
 			"https://retlector.eu/active/csv" // Most sats, use ReTLEctor because why not.
 		],
 		"url_template": "http://celestrak.org/NORAD/elements/gp.php?CATNR=%NORAD%&FORMAT=omm",
+		// Optional: fetch all NORADs in a single request by substituting a comma-delimited
+		// list into %NORADS%. Empty by default (per-NORAD requests via url_template, throttled).
+		"url_batch_template": "",
 		"norads_to_fetch": [
 			63251, // UVSQSat-NG
 			6235, // NOAA-2
@@ -449,6 +452,31 @@
 			// 59051 // M2-4
 			65159 // MetOp-SG A1
 		]
+	},
+	// Per-host HTTP rate limits. Keys are normalized host names (lowercase, no www./port).
+	// per_minute / per_hour of 0 means unlimited. An HTTP 429 Retry-After is honored, capped
+	// at max_retry_after_seconds. Unknown hosts match "default" (fail-open when 0).
+	"http_rate_limits": {
+		"default": {
+			"per_minute": 0,
+			"per_hour": 0,
+			"max_retry_after_seconds": 120
+		},
+		"space-track.org": {
+			"per_minute": 30,
+			"per_hour": 300,
+			"max_retry_after_seconds": 300
+		},
+		"celestrak.org": {
+			"per_minute": 15,
+			"per_hour": 60,
+			"max_retry_after_seconds": 120
+		},
+		"retlector.eu": {
+			"per_minute": 60,
+			"per_hour": 600,
+			"max_retry_after_seconds": 30
+		}
 	},
 	// Advanced user settings
 	// Should NOT be touched by the average user
