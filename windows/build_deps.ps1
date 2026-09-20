@@ -3,6 +3,17 @@ param(
     [bool]$is_arm=0
 )
 
+$ErrorActionPreference = "Stop"
+
+function Invoke-CheckedNative {
+    param([string]$Exe, [string[]]$Arguments)
+    & $Exe @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command '$Exe $($Arguments -join ' ')' failed with exit code $LASTEXITCODE"
+    }
+}
+function ninja { Invoke-CheckedNative "ninja" $args }
+
 # if(!!(Get-Command 'tf' -ErrorAction SilentlyContinue) -eq $false)
 # {
 #     Write-Error "You must run this script within Developer Powershell for Visual Studio"
@@ -45,8 +56,16 @@ cmake $cmake_params .. -DHTTP_ONLY=ON -DBUILD_STATIC_LIBS=OFF -DCURL_USE_SCHANNE
 ninja install
 cd ../..
 
-# Volk
-git clone https://github.com/gnuradio/volk --depth 1 -b v3.1.2
+if($is_arm) {
+    # GobDump previously used this fork under vcpkg for ARM64. It is stock
+    # volk v3.1.2 plus a Windows ARM64/MSVC NEON-enable patch (API/ABI
+    # identical). Pin to an exact commit so the clone is deterministic
+    # instead of tracking the moving win-arm64 branch.
+    git clone https://github.com/JVital2013/volk volk
+    git -C volk checkout 51c251846ba591453a92480a95a27a3ffe901d4b
+} else {
+    git clone https://github.com/gnuradio/volk --depth 1 -b v3.1.2 volk
+}
 cd volk
 mkdir build
 cd build
