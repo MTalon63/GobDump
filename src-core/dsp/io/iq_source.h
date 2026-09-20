@@ -45,8 +45,12 @@ namespace satdump
 
                 baseband_reader.set_file(p_file, p_type);
 
+                init_error = "";
                 if (!std::filesystem::exists(p_file))
-                    logger->error("Invalid file " + p_file);
+                {
+                    init_error = "Invalid file " + p_file;
+                    logger->error("%s", init_error.c_str());
+                }
 
                 d_filesize = baseband_reader.filesize;
                 d_progress = 0;
@@ -57,6 +61,7 @@ namespace satdump
             {
                 nlohmann::ordered_json p;
                 add_param_simple(p, "file", "string");
+                p["file"]["picker"] = true;
                 p["file"]["disable"] = is_work_running();
                 add_param_simple(p, "type", "string");
                 p["type"]["disable"] = is_work_running();

@@ -39,8 +39,12 @@ namespace satdump
                 d_buffer_size = p_buffer_size;
 
                 file_reader = std::ifstream(p_file, std::ios::binary);
+                init_error = "";
                 if (!file_reader.good())
-                    logger->error("Invalid file " + p_file);
+                {
+                    init_error = "Invalid file " + p_file;
+                    logger->error("%s", init_error.c_str());
+                }
 
                 d_filesize = getFilesize(p_file);
                 d_progress = 0;
@@ -51,6 +55,7 @@ namespace satdump
             {
                 nlohmann::ordered_json p;
                 add_param_simple(p, "file", "string");
+                p["file"]["picker"] = true;
                 p["file"]["disable"] = is_work_running();
                 add_param_simple(p, "buffer_size", "int");
                 p["buffer_size"]["disable"] = is_work_running();
