@@ -7,7 +7,12 @@ $ErrorActionPreference = "Stop"
 
 function Invoke-CheckedNative {
     param([string]$Exe, [string[]]$Arguments)
-    & $Exe @Arguments
+    $app = Get-Command $Exe -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -eq $app) {
+        throw "Executable '$Exe' not found on PATH"
+    }
+    & $app.Source @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Command '$Exe $($Arguments -join ' ')' failed with exit code $LASTEXITCODE"
     }
