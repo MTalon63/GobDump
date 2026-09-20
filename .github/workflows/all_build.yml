@@ -324,6 +324,8 @@ jobs:
 
             - name: Set up Android SDK
               uses: android-actions/setup-android@v3
+              with:
+                  packages: platforms;android-34 build-tools;30.0.3 ndk;25.2.9519653 cmake;3.22.1
 
             - name: Install NDK, platform, and CMake
               shell: bash
@@ -364,6 +366,7 @@ jobs:
                   ./gradlew assembleRelease
 
             - name: Sign APK
+              if: ${{ github.event_name != 'pull_request' }}
               shell: bash
               run: |
                   APK=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-unsigned.apk
@@ -381,7 +384,7 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: GobDump-release.apk
-                  path: ${{github.workspace}}/android/app/build/outputs/apk/release/app-release-signed.apk
+                  path: ${{ github.event_name != 'pull_request' && 'android/app/build/outputs/apk/release/app-release-signed.apk' || 'android/app/build/outputs/apk/release/app-release-unsigned.apk' }}
 
     build_ubuntu_2204:
         # The CMake configure and build commands are platform agnostic and should work equally
