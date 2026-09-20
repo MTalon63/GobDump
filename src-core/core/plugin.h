@@ -8,10 +8,22 @@
 #include "utils/event_bus.h"
 #include "utils/task_scheduler.h"
 
+// Upstream plugin ABI gate. Restored additively alongside GobDump's loader so
+// merged upstream code (loadPlugin's ABI check) and newly-merged plugins work.
+#define PLUGIN_ABI_VERSION 1
+
+#ifdef _MSC_VER
+#define PLUGIN_DLL __declspec(dllexport)
+#else
+#define PLUGIN_DLL
+#endif
+
 #define PLUGIN_LOADER(constructor)                                                                                                                                                                     \
     extern "C"                                                                                                                                                                                         \
     {                                                                                                                                                                                                  \
         satdump::Plugin *loader() { return (satdump::Plugin *)new constructor(); }                                                                                                                     \
+                                                                                                                                                                                                       \
+        PLUGIN_DLL const extern int SATDUMP_ABI_VERSION = PLUGIN_ABI_VERSION;                                                                                                                          \
     }
 
 namespace satdump
