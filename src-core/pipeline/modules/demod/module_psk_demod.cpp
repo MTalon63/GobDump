@@ -2,6 +2,9 @@
 #include "common/dsp/filter/firdes.h"
 #include "imgui/imgui.h"
 #include "logger.h"
+#include <algorithm>
+#include <cmath>
+#include <set>
 
 namespace satdump
 {
@@ -30,6 +33,8 @@ namespace satdump
 
                 if (parameters.count("pll_bw") > 0)
                     d_loop_bw = parameters["pll_bw"].get<float>();
+                else if (parameters.count("costas_bw") > 0)
+                    d_loop_bw = parameters["costas_bw"].get<float>();
                 else
                     throw satdump_exception("PLL BW parameter must be present!");
 
@@ -93,6 +98,22 @@ namespace satdump
 
                 if (parameters.count("snr_estimator") > 0)
                     d_use_evm_snr = (parameters["snr_estimator"].get<std::string>() == "evm");
+
+                // Warn (non-fatally) about parameters this module does not understand, so silently
+                // dropped operator tuning is visible.
+                static const std::set<std::string> known_keys = {
+                    // BaseDemodModule (module_demod_base.cpp + getParams())
+                    "samplerate", "buffer_size", "symbolrate", "agc_rate", "dc_block", "freq_shift", "iq_swap",
+                    "enable_doppler", "doppler_alpha", "dump_intermediate", "baseband_format", "custom_samplerate",
+                    "satellite_frequency", "satellite_norad", "qth_lon", "qth_lat", "qth_alt", "start_timestamp",
+                    "min_sps", "max_sps", "snr_audio_feedback",
+                    // PSKDemodModule
+                    "constellation", "rrc_alpha", "rrc_taps", "pll_bw", "costas_bw", "post_costas_dc", "has_carrier",
+                    "clock_alpha", "clock_gain_omega", "clock_mu", "clock_gain_mu", "clock_omega_relative_limit",
+                    "carrier_pll_bw", "carrier_pll_max_offset", "costas_max_offset", "pll_max_offset", "snr_estimator"};
+                for (auto &kv : parameters.items())
+                    if (known_keys.find(kv.key()) == known_keys.end())
+                        logger->warn("%s", ("PSKDemod : unknown/ignored parameter \"" + kv.key() + "\"").c_str());
             }
 
             void PSKDemodModule::init()
@@ -128,6 +149,8 @@ namespace satdump
                 float costas_max_offset = d_has_carrier ? 0.2 : 1.0; // The offset in frequency should already be resolved on AM subcarriers
                 if (d_parameters.count("costas_max_offset") > 0)
                     costas_max_offset = dsp::hz_to_rad(d_parameters["costas_max_offset"].get<float>(), final_samplerate);
+                else if (d_parameters.count("pll_max_offset") > 0)
+                    costas_max_offset = d_parameters["pll_max_offset"].get<float>();
 
                 if (constellation_type == "bpsk")
                     pll = std::make_shared<dsp::CostasLoopBlock>(d_has_carrier ? carrier_dc->output_stream : rrc->output_stream, d_loop_bw, 2, costas_max_offset);
@@ -210,19 +233,44 @@ namespace satdump
                     // Update freq
                     display_freq = dsp::rad_to_hz(pll->getFreq(), final_samplerate);
 
+                    // Running-RMS normalization
+                    constexpr float k_sym_pow_ema = 0.01f; // ~100-block time constant, smooth, AGC-drift tracking, no inter-block pumping
+                    constexpr float k_sym_pow_eps = 1e-6f; // floor so a near-zero (weak) signal cannot blow up the scale
+
                     if (is_bpsk) // BPSK Only uses the Q branch... So don't output useless data
                     {
+                        float pow_acc = 0.0f;
                         for (int i = 0; i < dat_size; i++)
                         {
-                            sym_buffer[i] = clamp(rec->output_stream->readBuf[i].real * 50);
+                            float v = rec->output_stream->readBuf[i].real;
+                            pow_acc += v * v;
+                        }
+                        pow_acc /= (float)dat_size;
+
+                        float scale = 50.0f / std::max(std::sqrt(d_sym_pow), k_sym_pow_eps);
+                        d_sym_pow += k_sym_pow_ema * (pow_acc - d_sym_pow); // update for the NEXT block
+                        for (int i = 0; i < dat_size; i++)
+                        {
+                            sym_buffer[i] = clamp(rec->output_stream->readBuf[i].real * scale);
                         }
                     }
                     else // Otherwise, for all other consts, we need both
                     {
+                        float pow_acc = 0.0f;
                         for (int i = 0; i < dat_size; i++)
                         {
-                            sym_buffer[i * 2] = clamp(rec->output_stream->readBuf[i].real * 100);
-                            sym_buffer[i * 2 + 1] = clamp(rec->output_stream->readBuf[i].imag * 100);
+                            float re = rec->output_stream->readBuf[i].real;
+                            float im = rec->output_stream->readBuf[i].imag;
+                            pow_acc += re * re + im * im;
+                        }
+                        pow_acc /= (float)dat_size;
+
+                        float scale = 100.0f / std::max(std::sqrt(d_sym_pow), k_sym_pow_eps);
+                        d_sym_pow += k_sym_pow_ema * (pow_acc - d_sym_pow); // update for the NEXT block
+                        for (int i = 0; i < dat_size; i++)
+                        {
+                            sym_buffer[i * 2] = clamp(rec->output_stream->readBuf[i].real * scale);
+                            sym_buffer[i * 2 + 1] = clamp(rec->output_stream->readBuf[i].imag * scale);
                         }
                     }
 

@@ -1,6 +1,7 @@
 #include "clock_recovery_mm.h"
 #include "common/dsp/block.h"
 #include "common/dsp/window/window.h"
+#include <cmath>
 
 #define DO_BRANCH 0
 
@@ -60,6 +61,9 @@ namespace dsp
                 c_1T = c_0T;
             }
 
+            // Last finite phase error, used to hold state instead of re-seeding on a bad sample
+            float prev_phase_error = phase_error;
+
             // Compute output
             int imu = (int)rint(mu * pfb.nfilt);
             if (imu < 0) // If we're out of bounds, clamp
@@ -108,11 +112,15 @@ namespace dsp
                 Block<T, T>::output_stream->writeBuf[ouc++] = p_0T;
             }
 
-            // omega/mu are feedback accumulators, and branched_clip is comparison-based so NaN passes
-            // straight through and sticks forever. mu is then cast to int to index the buffer, and
-            // (int)NaN is UB - measured as INT_MIN. Re-seed the loop instead of indexing with garbage.
+            // omega/mu/phase_error are feedback accumulators, and branched_clip is comparison-based so
+            // NaN passes straight through and sticks forever. mu is then cast to int to index the buffer,
+            // and (int)NaN is UB - measured as INT_MIN. Hold the last good values instead of indexing
+            // with garbage / re-seeding, so a single bad sample does not lose lock.
             if (!std::isfinite(phase_error))
-                phase_error = 0;
+                phase_error = prev_phase_error;
+
+            float prev_omega = omega;
+            float prev_mu = mu;
 
             // Adjust omega
             omega = omega + omega_gain * phase_error;
@@ -122,9 +130,9 @@ namespace dsp
             mu = mu + omega + mu_gain * phase_error;
 
             if (!std::isfinite(omega))
-                omega = omega_mid;
+                omega = prev_omega;
             if (!std::isfinite(mu))
-                mu = 0;
+                mu = prev_mu;
 
             inc += int(floor(mu));
             mu -= floor(mu);

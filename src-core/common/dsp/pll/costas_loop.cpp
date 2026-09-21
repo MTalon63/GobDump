@@ -49,16 +49,19 @@ namespace dsp
             error = branchless_clip(error, 1.0);
 
             // Compute new freq and phase.
+            float prev_freq = freq;
+            float prev_phase = phase;
             freq += beta * error;
             phase += freq + alpha * error;
 
             // freq/phase are feedback accumulators: one NaN sample makes them NaN forever, and neither
             // the wrap nor the clamp can recover since every comparison against NaN is false. Worse,
-            // the wrap loops below would spin forever on an infinity. Reset the loop instead.
+            // the wrap loops below would spin forever on an infinity. Hold the last good values instead
+            // of resetting to zero, so a single bad sample does not lose lock.
             if (!std::isfinite(freq) || !std::isfinite(phase))
             {
-                freq = 0;
-                phase = 0;
+                freq = prev_freq;
+                phase = prev_phase;
             }
 
             // Wrap phase

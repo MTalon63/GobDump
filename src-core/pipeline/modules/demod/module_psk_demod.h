@@ -30,8 +30,10 @@ namespace satdump
                 float d_rrc_alpha;
                 int d_rrc_taps = 31;
                 float d_loop_bw;
-                bool d_post_costas_dc_blocking = false;
+                bool d_post_costas_dc_blocking = true;
                 bool d_has_carrier = false;
+
+                float d_sym_pow = 1.0f;
 
                 float d_clock_gain_omega = pow(8.7e-3, 2) / 4.0;
                 float d_clock_mu = 0.5f;
@@ -59,7 +61,7 @@ namespace satdump
                     v["rrc_alpha"] = 0.35;
                     v["rrc_taps"] = 31;
                     v["pll_bw"] = 0.005;
-                    v["post_costas_dc"] = false;
+                    v["post_costas_dc"] = true;
                     v["has_carrier"] = false;
                     v["clock_alpha"] = 0;
                     v["clock_gain_omega"] = 0;
