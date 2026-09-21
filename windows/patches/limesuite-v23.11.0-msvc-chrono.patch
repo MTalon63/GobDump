@@ -1,0 +1,45 @@
+# Provenance: MSVC compatibility patch for LimeSuite v23.11.0.
+#
+# Derived from: myriadrf/Limesuite commit 4b86e3d16cb75258023b6794cecfbad080f38496
+#   "Fix #414 missing chrono headers include for MSVC" (2025-03-07),
+#   https://github.com/myriadrf/Limesuite/issues/414
+#
+# Upstream target: gnuradio... https://github.com/myriadrf/Limesuite tag v23.11.0
+#   (commit c2d9e87754586304577beff4dc5b16fb9b72c826). v23.11.0 is the latest
+#   upstream release tag and predates the fix, so the fix is re-applied locally.
+#
+# Purpose: with recent MSVC STL (14.4x) the transitive <chrono> pull-in via
+#   <thread> no longer exposes std::chrono::high_resolution_clock, so
+#   MCU_BD.cpp and FPGA_common.cpp fail with:
+#     error C2039: 'high_resolution_clock': is not a member of 'std::chrono'
+#   (plus cascading now()/duration_cast() errors). Both files use std::chrono
+#   for timeout/timing loops but never include <chrono> directly.
+#
+# The pinned v23.11.0 blobs for both files are byte-identical to the pre-image
+# of the upstream fix commit (7ec4250... MCU_BD.cpp, 4e81f33... FPGA_common.cpp),
+# so this patch reproduces that fix verbatim. Apply deterministically via:
+#   git apply -p1 <this file>
+diff --git a/src/FPGA_common/FPGA_common.cpp b/src/FPGA_common/FPGA_common.cpp
+index 4e81f33..31c2d37 100644
+--- a/src/FPGA_common/FPGA_common.cpp
++++ b/src/FPGA_common/FPGA_common.cpp
+@@ -2,6 +2,7 @@
+ #include "IConnection.h"
+ #include "LMS64CProtocol.h"
+ #include <ciso646>
++#include <chrono>
+ #include <vector>
+ #include <map>
+ #include <math.h>
+diff --git a/src/lms7002m_mcu/MCU_BD.cpp b/src/lms7002m_mcu/MCU_BD.cpp
+index 7ec4250..7d730d7 100644
+--- a/src/lms7002m_mcu/MCU_BD.cpp
++++ b/src/lms7002m_mcu/MCU_BD.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "MCU_BD.h"
+ using namespace std;
++#include <chrono>
+ #include <string>
+ #include "MCU_File.h"
+ #include <sstream>
