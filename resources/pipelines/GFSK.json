@@ -1,0 +1,34 @@
+{
+    "gfsk": {
+        "name": "GFSK",
+        "live": [
+            1,
+            2
+        ],
+        "frequencies": [],
+        "parameters": {
+            "samplerate": {
+                "value": 800000
+            }
+        },
+        "work": {
+            "baseband": {},
+            "soft": {
+                "module": "gfsk_demod",
+                "parameters": {
+                    "symbolrate": 32000,
+                    "fsk_deviation": 5000,
+                    "rrc_alpha": 0.35,
+                    "rrc_taps": 31,
+                    "lpf_transition_width": 0,
+                    "zc_sps": 5,
+                    "zc_alpha": 0.1,
+                    "soft_scale": 10
+                }
+            },
+            "hard": {
+                "module": "soft2hard"
+            }
+        }
+    }
+}

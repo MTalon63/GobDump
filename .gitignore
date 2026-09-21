@@ -22,16 +22,11 @@ as.predefined
 deps/
 !android/deps/
 !android/deps/**/
-
 build_p2/
-
 docs/audit/
-
 tools/ldpc_ber_test/
-
 config/
-
 src-core/satdump_varst.cpp
-
 PLANS/
 windows/deps 
+live_output/*

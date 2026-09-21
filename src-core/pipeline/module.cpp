@@ -15,6 +15,7 @@
 #include "modules/demod/module_psk_demod.h"
 #include "modules/demod/module_sdpsk_demod.h"
 #include "modules/demod/module_xfsk_burst_demod.h"
+#include "modules/demod/module_gfsk_demod.h"
 
 #include "modules/network/module_network_client.h"
 #include "modules/network/module_network_server.h"
@@ -98,6 +99,7 @@ namespace satdump
             REGISTER_MODULE(demod::PSKDemodModule);
             REGISTER_MODULE(demod::SDPSKDemodModule);
             REGISTER_MODULE(demod::XFSKBurstDemodModule);
+            REGISTER_MODULE(demod::GFSKDemodModule);
 
             // Network
             REGISTER_MODULE(network::NetworkServerModule);
