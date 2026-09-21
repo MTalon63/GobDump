@@ -133,7 +133,7 @@ namespace dsp
             }
             else if (d_sample_format == CS_32)
             {
-                volk_32f_s32f_convert_32i(buffer_s32, (float*)input_stream->readBuf, 2147483647, nsamples * 2);
+                volk_32f_s32f_convert_32i(buffer_s32, (float*)input_stream->readBuf, 2147483520.0f, nsamples * 2);
                 output_file.write((char*)buffer_s32, nsamples * sizeof(int32_t) * 2);
                 current_size_out += nsamples * sizeof(int32_t) * 2;
             }

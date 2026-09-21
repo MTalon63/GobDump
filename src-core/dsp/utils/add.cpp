@@ -1,4 +1,5 @@
 #include "add.h"
+#include <type_traits>
 
 namespace satdump
 {
@@ -27,9 +28,20 @@ namespace satdump
                 return;
             }
 
-            for (uint32_t i = 0; i < nsamples[0]; i++)
+            if constexpr (std::is_same_v<T, float>)
             {
-                output[0][i] = input[0][i] + input[1][i];
+                volk_32f_x2_add_32f(output[0], input[0], input[1], nsamples[0]);
+            }
+            else
+            {
+#if !defined(VOLK_NO_volk_32fc_x2_add_32fc)
+                volk_32fc_x2_add_32fc((lv_32fc_t *)output[0], (const lv_32fc_t *)input[0], (const lv_32fc_t *)input[1], nsamples[0]);
+#else
+                for (uint32_t i = 0; i < nsamples[0]; i++)
+                {
+                    output[0][i] = input[0][i] + input[1][i];
+                }
+#endif
             }
 
             nsamples_out[0] = nsamples[0];

@@ -1,4 +1,5 @@
 #include "multiply_const.h"
+#include <type_traits>
 
 namespace satdump
 {
@@ -21,9 +22,14 @@ namespace satdump
         template <typename T>
         uint32_t MultiplyConstBlock<T>::process(T *input, uint32_t nsamples, T *output)
         {
-
-            for (uint32_t i = 0; i < nsamples; i++)
-                output[i] = input[i] * mult_const;
+            if constexpr (std::is_same_v<T, float>)
+            {
+                volk_32f_s32f_multiply_32f(output, input, mult_const, nsamples);
+            }
+            else
+            {
+                volk_32fc_s32fc_multiply_32fc((lv_32fc_t *)output, (const lv_32fc_t *)input, complex_t(mult_const, 0.0f), nsamples);
+            }
 
             return nsamples;
         }

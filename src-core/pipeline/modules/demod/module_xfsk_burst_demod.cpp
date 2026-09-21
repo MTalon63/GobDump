@@ -141,7 +141,8 @@ namespace satdump
                         continue;
                     }
 
-                    volk_32f_s32f_convert_16i(output_wav_buffer, (float *)agc2->output_stream->readBuf, 65535 * 0.2, dat_size); // TODO - 65535 is incorrect; use 32767 and fix percent appropriately
+                    // agc2 normalizes to a target magnitude of 5.0 (see init()), so 32767 * (1/5) maps it to full-scale int16
+                    volk_32f_s32f_convert_16i(output_wav_buffer, (float *)agc2->output_stream->readBuf, 32767 * (1.0f / 5.0f), dat_size);
 
                     audio_sink->push_samples(output_wav_buffer, dat_size);
 

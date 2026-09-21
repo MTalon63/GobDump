@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/dsp/complex.h"
+#include <vector>
 
 /* From GNU Radio, adapted */
 
@@ -26,6 +27,7 @@ private:
     double d_y1, d_y2; // widened: 4th moment loses precision fast in float
     double d_alpha, d_beta;
     double d_signal, d_noise;
+    std::vector<float> d_mag2; // scratch for VOLK magnitude^2
 
 public:
     /*! Constructor
@@ -63,6 +65,7 @@ private:
     double d_pwr_re, d_pwr_im; // EMA of per-component power
     double d_alpha, d_beta;
     double d_signal, d_noise;
+    std::vector<float> d_re, d_im; // scratch I/Q after deinterleave
 
 public:
     EVMSNREstimator(int order = 4, float alpha = 0.001);
