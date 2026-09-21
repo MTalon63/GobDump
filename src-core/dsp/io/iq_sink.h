@@ -45,6 +45,7 @@ namespace satdump
             {
                 nlohmann::ordered_json p;
                 add_param_simple(p, "file", "string");
+                p["file"]["picker"] = true;
                 p["file"]["disable"] = is_work_running();
                 add_param_simple(p, "type", "string");
                 p["type"]["disable"] = is_work_running();

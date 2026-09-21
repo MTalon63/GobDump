@@ -134,13 +134,19 @@ namespace satdump
 
                 for (auto &n : j["nodes"].items())
                 {
+                    // Sparse node IDs are serialized as null entries when the
+                    // JSON is an array (see getJSON()). Skip them instead of
+                    // emitting spurious "Node is missing int_id!" errors.
+                    if (n.value().is_null())
+                        continue;
+
                     if (n.value().contains("int_id"))
                     {
                         if (node_internal_registry.count(n.value()["int_id"]))
                         {
                             try
                             {
-                                auto i = node_internal_registry[n.value()["int_id"]].func(this);
+                                auto i = node_internal_registry[n.value()["int_id"]].inst(this);
                                 auto nn = std::make_shared<Node>(this, n.value(), i);
                                 nodes.push_back(nn);
                             }

@@ -45,7 +45,7 @@ namespace satdump
                 struct NodeInternalReg
                 {
                     std::string menuname;
-                    std::function<std::shared_ptr<NodeInternal>(const Flowgraph *f)> func;
+                    std::function<std::shared_ptr<NodeInternal>(const Flowgraph *f)> inst;
                 };
 
                 //! @brief Node registry
@@ -334,6 +334,12 @@ namespace satdump
                 // meant the UI could observe a stale value indefinitely.
                 std::atomic<bool> is_running{false};
 
+                //! @brief Human-readable error from the most recent run attempt, if any.
+                //! Cleared when a run starts and set when it fails. Read by the UI to surface
+                //! why a flowgraph could not start (rather than it silently stopping).
+                std::mutex last_error_mtx;
+                std::string last_error = "";
+
             public:
                 /**
                  * @brief Start the flowgraph (or rather, attempt to).
@@ -352,6 +358,18 @@ namespace satdump
                  * @return true if running
                  */
                 bool isRunning() { return is_running; }
+
+                /**
+                 * @brief Get the error message from the last run attempt
+                 * (empty string if the last run ended cleanly).
+                 * @return the error message
+                 */
+                std::string getLastError();
+
+                /**
+                 * @brief Returns true if the last run attempt ended in error.
+                 */
+                bool hasError();
             };
         } // namespace flowgraph
     } // namespace ndsp

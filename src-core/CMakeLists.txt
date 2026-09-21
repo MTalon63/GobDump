@@ -194,7 +194,7 @@ if(MSVC)
     target_link_libraries(gobdump_core PUBLIC fftw3f.dll)
     target_link_libraries(gobdump_core PUBLIC nng.dll)
     target_link_libraries(gobdump_core PUBLIC tiff.dll)
-    target_link_libraries(gobdump_core PUBLIC libcurl.dll)
+    target_link_libraries(gobdump_core PUBLIC libcurl_imp.dll)
     target_link_libraries(gobdump_core PUBLIC sqlite3.dll)
 
     if(BUILD_ZIQ)

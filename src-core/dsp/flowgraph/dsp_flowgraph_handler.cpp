@@ -110,6 +110,23 @@ namespace satdump
                 }
             }
 
+            // Surface why a flowgraph could not start/stay running, so a failed
+            // start (e.g. missing file source) is not silent.
+            if (!running && flowgraph.hasError())
+            {
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImVec4(1.0f, 0.3f, 0.3f, 1.0f)));
+                ImGui::TextUnformatted("Flowgraph error : ");
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                if (ImGui::BeginItemTooltip())
+                {
+                    ImGui::TextUnformatted(flowgraph.getLastError().c_str());
+                    ImGui::EndTooltip();
+                }
+                ImGui::TextUnformatted(flowgraph.getLastError().c_str());
+            }
+
             bool is_save_as = false;
             if (widgets::MenuItemTooltip(u8"\ueb4b", "Save file", NULL, false, current_file != "") || //
                 (is_save_as = widgets::MenuItemTooltip(u8"\ueb4a", "Save file as")) ||                //

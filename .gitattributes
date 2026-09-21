@@ -1,0 +1,3 @@
+# Keep patch files ASCII LF so `git apply` works identically on all platforms
+# (CRLF can corrupt patch parsing/application).
+windows/patches/*.patch text eol=lf

@@ -1,0 +1,103 @@
+# Provenance: MSVC compatibility patch for LimeSuite v23.11.0.
+#
+# Baseline (pinned): myriadrf/Limesuite tag v23.11.0
+#   commit c2d9e87754586304577beff4dc5b16fb9b72c826.
+#
+# Primary upstream source: myriadrf/Limesuite commit
+#   4b86e3d16cb75258023b6794cecfbad080f38496
+#   "Fix #414 missing chrono headers include for MSVC" (2025-03-07),
+#   https://github.com/myriadrf/Limesuite/issues/414
+#   That upstream commit only adds `#include <chrono>` to TWO files:
+#     - src/FPGA_common/FPGA_common.cpp
+#     - src/lms7002m_mcu/MCU_BD.cpp
+#   and is reproduced verbatim below (identical hunks and index lines).
+#
+# Rationale for the EXTRA files: recent MSVC STL (VS 17.10+/14.4x) no longer
+#   transitively pulls <chrono> in via <thread>/<mutex>/<condition_variable>.
+#   With MSVC 14.44 the build fails with:
+#     error C2039: 'high_resolution_clock': is not a member of 'std::chrono'
+#   (plus cascading now()/duration_cast()/wait_for() errors). A full sweep of
+#   the pinned v23.11.0 tree found every file that uses std::chrono
+#   (high_resolution_clock, steady_clock, duration_cast, now(), sleep_for,
+#   time_point, milliseconds, ...) but does NOT include <chrono> directly.
+#   Upstream's fix missed these, so the MSVC build still failed in:
+#     - src/protocols/fifo.h        (RingFIFO wait_for/high_resolution_clock/
+#                                    now/duration_cast/milliseconds)
+#     - src/protocols/Streamer.cpp  (high_resolution_clock/now/duration_cast/
+#                                    milliseconds)
+#     - src/ConnectionSPI/ConnectionSPI.cpp
+#                                   (Linux-only RPi SPI connection, gated by
+#                                    ENABLE_SPI+HAS_WIRING_HEADER and NOT built
+#                                    by MSVC; included for completeness as it
+#                                    uses chrono::high_resolution_clock/now/
+#                                    duration_cast/sleep_for)
+#   Each such file gets a single, non-duplicated `#include <chrono>`.
+#
+# Files verified NOT to need the include (already `#include <chrono>` directly):
+#   ConnectionFT601.cpp, ConnectionFX3.cpp, ConnectionXillybus.cpp, all
+#   src/examples/*.cpp, limeRFE_cmd.cpp, lms7002_pnlR3.cpp, LMS7002M.cpp,
+#   LMS7002M_RxTxCalibrations.cpp, LMS64CProtocol.cpp, utilities/pll_sweep.cpp.
+#
+# Apply deterministically from the LimeSuite source root (clone with
+# core.autocrlf=false so the LF working tree matches) via:
+#   git apply -p1 <this file>
+diff --git a/src/ConnectionSPI/ConnectionSPI.cpp b/src/ConnectionSPI/ConnectionSPI.cpp
+index b392de26..b5a05884 100644
+--- a/src/ConnectionSPI/ConnectionSPI.cpp
++++ b/src/ConnectionSPI/ConnectionSPI.cpp
+@@ -9,6 +9,7 @@
+ #include <sys/ioctl.h>
+ #include <fcntl.h>
+ #include <fstream>
++#include <chrono>
+ #include <wiringPi.h>
+ 
+ #include "Logger.h"
+diff --git a/src/FPGA_common/FPGA_common.cpp b/src/FPGA_common/FPGA_common.cpp
+index 4e81f33e..31c2d37f 100644
+--- a/src/FPGA_common/FPGA_common.cpp
++++ b/src/FPGA_common/FPGA_common.cpp
+@@ -2,6 +2,7 @@
+ #include "IConnection.h"
+ #include "LMS64CProtocol.h"
+ #include <ciso646>
++#include <chrono>
+ #include <vector>
+ #include <map>
+ #include <math.h>
+diff --git a/src/lms7002m_mcu/MCU_BD.cpp b/src/lms7002m_mcu/MCU_BD.cpp
+index 7ec42509..7d730d76 100644
+--- a/src/lms7002m_mcu/MCU_BD.cpp
++++ b/src/lms7002m_mcu/MCU_BD.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "MCU_BD.h"
+ using namespace std;
++#include <chrono>
+ #include <string>
+ #include "MCU_File.h"
+ #include <sstream>
+diff --git a/src/protocols/Streamer.cpp b/src/protocols/Streamer.cpp
+index 3e0b9714..079f7917 100644
+--- a/src/protocols/Streamer.cpp
++++ b/src/protocols/Streamer.cpp
+@@ -6,6 +6,7 @@
+ #include "Streamer.h"
+ #include "IConnection.h"
+ #include <complex>
++#include <chrono>
+ #include "LMSBoards.h"
+ #include "threadHelper.h"
+ 
+diff --git a/src/protocols/fifo.h b/src/protocols/fifo.h
+index f811558b..de9ae43e 100644
+--- a/src/protocols/fifo.h
++++ b/src/protocols/fifo.h
+@@ -6,6 +6,7 @@
+ #include <atomic>
+ #include <vector>
+ #include <thread>
++#include <chrono>
+ #include <queue>
+ #include "dataTypes.h"
+ #include <cmath>
