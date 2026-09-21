@@ -1,4 +1,5 @@
 #include "subtract.h"
+#include <type_traits>
 
 namespace satdump
 {
@@ -27,9 +28,17 @@ namespace satdump
                 return;
             }
 
-            for (uint32_t i = 0; i < nsamples[0]; i++)
+            if constexpr (std::is_same_v<T, float>)
             {
-                output[0][i] = input[0][i] - input[1][i];
+                volk_32f_x2_subtract_32f(output[0], input[0], input[1], nsamples[0]);
+            }
+            else
+            {
+                // No volk_32fc_x2_subtract_32fc kernel exists in VOLK; complex_t stays scalar.
+                for (uint32_t i = 0; i < nsamples[0]; i++)
+                {
+                    output[0][i] = input[0][i] - input[1][i];
+                }
             }
 
             nsamples_out[0] = nsamples[0];

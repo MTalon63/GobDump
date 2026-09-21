@@ -79,9 +79,10 @@ namespace satdump
 
                         for (int p = 0; p < iblk.size; p++)
                         {
-                            i->sample_index = (i->sample_index + 1) % i->decimation;
-                            if (i->sample_index == 0)
+                            i->sample_index++;
+                            if (i->sample_index >= i->decimation)
                             {
+                                i->sample_index = 0;
                                 obuf[size_out++] = ibuf[p];
                                 //   printf(" %d,%d \n", p, size_out);
                             }

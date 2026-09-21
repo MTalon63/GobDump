@@ -4,6 +4,7 @@
 #include "dsp/block.h"
 #include "dsp/block_simple.h"
 #include <cstdint>
+#include <vector>
 
 namespace satdump
 {
@@ -13,7 +14,9 @@ namespace satdump
         {
         private:
             float gain = 1;
-            float phase = 0;
+            complex_t qd_last = 1;          // one-sample history (unit => first call matches the scalar reference)
+            std::vector<complex_t> qd_in;   // capacity nsamples + 1: [previous, current...]
+            std::vector<complex_t> qd_prod; // capacity nsamples: in[i] * conj(in[i - 1])
 
         public:
             QuadratureDemodBlock();

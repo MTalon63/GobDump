@@ -1,4 +1,5 @@
 #include "rational_resampler.h"
+#include "logger.h"
 #include "common/dsp/block.h"
 #include "common/dsp/filter/firdes.h"
 #include "common/dsp/window/window.h"
@@ -53,16 +54,19 @@ namespace satdump
         template <typename T>
         uint32_t RationalResamplerBlock<T>::process(T *input, uint32_t nsamples, T *output)
         {
-            if (in_buffer + nsamples >= 1e6)
-            {
-                printf("TODOREWORK Error! Was about to overflow internal buffer!\n");
-                return 0;
-            }
-
-            // Automatically grow buffer
+            // Automatically grow buffer, up to a hard ceiling to bound memory
             if (buffer_size < in_buffer + nsamples)
             {
-                buffer.resize((buffer_size + nsamples) * 2);
+                constexpr size_t MAX_BUFFER_SIZE = 64u * 1024u * 1024u; // 64M samples hard ceiling
+                size_t needed = (buffer_size + nsamples) * 2;
+                if (needed > MAX_BUFFER_SIZE)
+                {
+                    logger->error("RationalResampler: internal buffer growth would exceed ceiling "
+                                  "(in_buffer=%u, nsamples=%u, needed=%zu); dropping block, samples lost!",
+                                  in_buffer, nsamples, needed);
+                    return 0;
+                }
+                buffer.resize(needed);
                 buffer_size = buffer.size();
             }
 

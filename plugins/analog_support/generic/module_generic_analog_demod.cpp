@@ -5,6 +5,7 @@
 #include "imgui/imgui.h"
 #include "logger.h"
 #include <volk/volk.h>
+#include <algorithm>
 
 namespace generic_analog
 {
@@ -131,6 +132,10 @@ namespace generic_analog
         dsp::QuadratureDemodBlock quad_demod(nullptr, dsp::hz_to_rad(d_symbolrate / 2, d_symbolrate));
         complex_t *work_buffer_complex = dsp::create_volk_buffer<complex_t>(d_buffer_size);
         float *work_buffer_float = dsp::create_volk_buffer<float>(d_buffer_size);
+        float *clamp_min_buf = dsp::create_volk_buffer<float>(d_buffer_size); // constant -1 buffer
+        float *clamp_max_buf = dsp::create_volk_buffer<float>(d_buffer_size); // constant +1 buffer
+        std::fill(clamp_min_buf, clamp_min_buf + d_buffer_size, -1.0f);
+        std::fill(clamp_max_buf, clamp_max_buf + d_buffer_size, 1.0f);
 
         int dat_size = 0;
         while (demod_should_run())
@@ -168,13 +173,8 @@ namespace generic_analog
             // Into const
             constellation.pushFloatAndGaussian(work_buffer_float, nout);
 
-            for (int i = 0; i < nout; i++)
-            {
-                if (work_buffer_float[i] > 1.0f)
-                    work_buffer_float[i] = 1.0f;
-                if (work_buffer_float[i] < -1.0f)
-                    work_buffer_float[i] = -1.0f;
-            }
+            volk_32f_x2_max_32f(work_buffer_float, work_buffer_float, clamp_min_buf, nout);
+            volk_32f_x2_min_32f(work_buffer_float, work_buffer_float, clamp_max_buf, nout);
 
             volk_32f_s32f_convert_16i(output_wav_buffer, (float *)work_buffer_float, 32767, nout);
 

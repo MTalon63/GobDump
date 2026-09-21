@@ -2,6 +2,8 @@
 #include "dsp/block_simple.h"
 #include "dsp/flowgraph/flowgraph.h"
 #include <complex.h>
+#include <cstring>
+#include <volk/volk.h>
 
 namespace satdump
 {
@@ -13,30 +15,26 @@ namespace satdump
 
         uint32_t QuadratureDemodBlock::process(complex_t *input, uint32_t nsamples, float *output)
         {
-#if 0
-        memcpy(&buffer[1], input, nsamples * sizeof(complex_t));
+            if (nsamples == 0)
+                return 0;
 
-        volk_32fc_x2_multiply_conjugate_32fc((lv_32fc_t *)&buffer_out[0], (lv_32fc_t *)&buffer[1], (lv_32fc_t *)&buffer[0], nsamples);
-
-        memmove(&buffer[nsamples], &buffer[1], 1 * sizeof(complex_t));
-
-        for (int i = 0; i < nsamples; i++)
-            output[i] = gain * fast_atan2f(buffer_out[i].imag, buffer_out[i].real);
-#else
-            for (uint32_t i = 0; i < nsamples; i++)
+            if (qd_in.size() < nsamples + 1u)
             {
-                float p = atan2f(input[i].imag, input[i].real);
-                float phase_diff = p - phase;
-
-                if (phase_diff > M_PI)
-                    phase_diff -= 2.0f * M_PI;
-                else if (phase_diff <= -M_PI)
-                    phase_diff += 2.0f * M_PI;
-
-                output[i] = phase_diff * gain;
-                phase = p;
+                qd_in.resize(nsamples + 1u);
+                qd_prod.resize(nsamples);
             }
-#endif
+
+            // Prepend the one-sample history so prod[i] = in[i] * conj(in[i - 1])
+            qd_in[0] = qd_last;
+            memcpy(&qd_in[1], input, nsamples * sizeof(complex_t));
+
+            volk_32fc_x2_multiply_conjugate_32fc((lv_32fc_t *)qd_prod.data(), (lv_32fc_t *)&qd_in[1], (lv_32fc_t *)&qd_in[0], nsamples);
+
+            // Keep the last sample for the next call
+            qd_last = input[nsamples - 1];
+
+            // VOLK divides by normalizeFactor -> pass 1/gain to get (gain * atan2())
+            volk_32fc_s32f_atan2_32f(output, (lv_32fc_t *)qd_prod.data(), 1.0f / gain, nsamples);
 
             return nsamples;
         }

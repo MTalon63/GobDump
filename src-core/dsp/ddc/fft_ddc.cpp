@@ -148,9 +148,10 @@ namespace satdump
                     int size_out = 0;
                     for (int p = 0; p < d_nsamples; p++)
                     {
-                        i->sample_index = (i->sample_index + 1) % i->decimation;
-                        if (i->sample_index == 0)
+                        i->sample_index++;
+                        if (i->sample_index >= i->decimation)
                         {
+                            i->sample_index = 0;
                             obuf[size_out++] = obuf[p];
                             //    printf(" %d,%d \n", p, size_out);
                         }

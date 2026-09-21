@@ -87,7 +87,8 @@ namespace satdump
             {
                 for (int i = 0; i < to_use; i++)
                 {
-                    if (decim_pos == decimation)
+                    decim_pos++;
+                    if (decim_pos >= decimation)
                     {
                         // Doing it this way instead of the normal :
                         // volk_32f_x2_dot_prod_32f(&output_stream->writeBuf[i], &buffer[i + 1], taps, ntaps);
@@ -96,9 +97,8 @@ namespace satdump
                         const float *ar = (float *)((size_t)&buffer[i + 1] & ~(align - 1));
                         const unsigned al = &buffer[i + 1] - ar;
                         volk_32f_x2_dot_prod_32f_a(&output[nout++], ar, taps[al], ntaps + al);
-                        decim_pos = 1;
+                        decim_pos = 0;
                     }
-                    decim_pos++;
                 }
             }
             if constexpr (std::is_same_v<T, complex_t>)
@@ -107,7 +107,8 @@ namespace satdump
                 {
                     for (int i = 0; i < to_use; i++)
                     {
-                        if (decim_pos == decimation)
+                        decim_pos++;
+                        if (decim_pos >= decimation)
                         {
                             // Doing it this way instead of the normal :
                             // volk_32fc_32f_dot_prod_32fc(&output_stream->writeBuf[i], &buffer[i + 1], taps, ntaps);
@@ -116,16 +117,16 @@ namespace satdump
                             const complex_t *ar = (complex_t *)((size_t)&buffer[i + 1] & ~(align - 1));
                             const unsigned al = &buffer[i + 1] - ar;
                             volk_32fc_32f_dot_prod_32fc_a((lv_32fc_t *)&output[nout++], (lv_32fc_t *)ar, taps[al], ntaps + al);
-                            decim_pos = 1;
+                            decim_pos = 0;
                         }
-                        decim_pos++;
                     }
                 }
                 if constexpr (std::is_same_v<TT, complex_t>)
                 {
                     for (int i = 0; i < to_use; i++)
                     {
-                        if (decim_pos == decimation)
+                        decim_pos++;
+                        if (decim_pos >= decimation)
                         {
                             // Doing it this way instead of the normal :
                             // volk_32fc_32f_dot_prod_32fc(&output_stream->writeBuf[i], &buffer[i + 1], taps, ntaps);
@@ -134,9 +135,8 @@ namespace satdump
                             const complex_t *ar = (complex_t *)((size_t)&buffer[i + 1] & ~(align - 1));
                             const unsigned al = &buffer[i + 1] - ar;
                             volk_32fc_x2_dot_prod_32fc_a((lv_32fc_t *)&output[nout++], (lv_32fc_t *)ar, (lv_32fc_t *)taps[al], ntaps + al);
-                            decim_pos = 1;
+                            decim_pos = 0;
                         }
-                        decim_pos++;
                     }
                 }
             }

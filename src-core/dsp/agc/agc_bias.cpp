@@ -1,5 +1,6 @@
 #include "agc_bias.h"
 #include "common/dsp/complex.h"
+#include <algorithm>
 
 namespace satdump
 {
@@ -22,12 +23,10 @@ namespace satdump
                 float sample = in[i];
                 float gain;
 
-                if (sample == 0)
-                    return 0;
                 sample -= bias;
                 bias = bias * (1 - bias_pole) + sample * bias_pole;
 
-                gain = target / moving_avg;
+                gain = target / std::max(moving_avg, 1e-10f);
                 moving_avg = moving_avg * (1 - gain_pole) + fabsf(sample) * gain_pole;
 
                 sample *= gain;

@@ -72,6 +72,7 @@ namespace satdump
             fftwf_complex *t_out = fftwf_alloc_complex(H * nc);
             fftwf_complex *cps = fftwf_alloc_complex(H * nc); // cross-power spectrum
             float *corr = fftwf_alloc_real(N);
+            float *mag = fftwf_alloc_real(H * nc);
 
             // Plans
             fftwf_plan p_r = fftwf_plan_dft_r2c_2d(H, W, r_in, r_out, FFTW_ESTIMATE);
@@ -94,25 +95,22 @@ namespace satdump
             fftwf_execute(p_t);
 
             // R * conj(T) / abs(R * conj(T))
+            volk_32fc_x2_multiply_conjugate_32fc((lv_32fc_t *)cps, (const lv_32fc_t *)r_out, (const lv_32fc_t *)t_out, H * nc);
+            volk_32fc_magnitude_32f(mag, (const lv_32fc_t *)cps, H * nc);
+
             for (int i = 0; i < H * nc; i++)
             {
-                complex_t *cr_out = (complex_t *)r_out;
-                complex_t *ct_out = (complex_t *)t_out;
-
-                complex_t r_conj_t = cr_out[i] * ct_out[i].conj();
-                float m = sqrt(r_conj_t.real * r_conj_t.real + r_conj_t.imag * r_conj_t.imag);
-                if (m > 0) // Prevent div by zero
-                    ((complex_t *)cps)[i] = (cr_out[i] * ct_out[i].conj()) / m;
+                if (mag[i] > 0) // Prevent div by zero
+                    ((complex_t *)cps)[i] = ((complex_t *)cps)[i] / mag[i];
                 else
-                    ((complex_t *)cps)[i] = 0;
+                    ((complex_t *)cps)[i] = complex_t(0, 0);
             }
 
             // Perform IFFT
             fftwf_execute(p_inv);
 
             // Normalize (Divide by N, since IFFT)
-            for (int i = 0; i < N; i++)
-                corr[i] *= (1.f / N);
+            volk_32f_s32f_multiply_32f(corr, corr, 1.f / N, N);
 
             // Find peak
             uint32_t peakIdx;
@@ -144,6 +142,7 @@ namespace satdump
             fftwf_free(r_out);
             fftwf_free(t_out);
             fftwf_free(cps);
+            fftwf_free(mag);
             fftwf_free(corr);
 
             return false;

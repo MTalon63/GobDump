@@ -1,6 +1,7 @@
 #include "snr_estimator.h"
 #include <algorithm>
 #include <cmath>
+#include <volk/volk.h>
 
 M2M4SNREstimator::M2M4SNREstimator(float alpha)
 {
@@ -14,10 +15,15 @@ M2M4SNREstimator::M2M4SNREstimator(float alpha)
 
 void M2M4SNREstimator::update(complex_t *input, int size)
 {
+    if ((int)d_mag2.size() < size)
+        d_mag2.resize(size);
+
+    // Per-sample magnitude^2 via VOLK
+    volk_32fc_magnitude_squared_32f(d_mag2.data(), (const lv_32fc_t *)input, size);
+
     for (int i = 0; i < size; i++)
     {
-        std::complex<float> c = (std::complex<float>)input[i];
-        double mag2 = (double)c.real() * c.real() + (double)c.imag() * c.imag();
+        double mag2 = (double)d_mag2[i];
 
         double y1 = mag2;
         double y2 = mag2 * mag2;
@@ -74,10 +80,19 @@ void EVMSNREstimator::reset()
 
 void EVMSNREstimator::update(complex_t *input, int size)
 {
+    if ((int)d_re.size() < size)
+    {
+        d_re.resize(size);
+        d_im.resize(size);
+    }
+
+    // Vectorized I/Q split; the decision-directed error and sequential IIR stay scalar.
+    volk_32fc_deinterleave_32f_x2(d_re.data(), d_im.data(), (const lv_32fc_t *)input, size);
+
     for (int i = 0; i < size; i++)
     {
-        double re = input[i].real;
-        double im = input[i].imag;
+        double re = d_re[i];
+        double im = d_im[i];
 
         double pwr = re * re + im * im;
         d_pwr = d_alpha * pwr + d_beta * d_pwr;

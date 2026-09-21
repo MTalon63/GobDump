@@ -84,7 +84,7 @@ namespace satdump
             }
             else if (format == CS32)
             {
-                volk_32f_s32f_convert_32i((int32_t *)buffer_convert, (float *)ibuf, 2147483648 /*-1, but float*/, nsam * 2);
+                volk_32f_s32f_convert_32i((int32_t *)buffer_convert, (float *)ibuf, 2147483520.0f /*-1, but float*/, nsam * 2);
                 write_ptr = buffer_convert;
                 write_sz = nsam * 2 * sizeof(int32_t);
             }

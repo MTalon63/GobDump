@@ -47,7 +47,7 @@ namespace satdump
 
             for (size_t i = 0; i < nsamples; i++)
             {
-                complex_t ns = complex_t(sqrt((noise_imp * noise_snr_linear) / 2)) * complex_t(d_rng.gasdev(), d_rng.gasdev());
+                complex_t ns = noise_target_level * complex_t(d_rng.gasdev(), d_rng.gasdev());
                 out[i] = out[i] + ns;
             }
 
