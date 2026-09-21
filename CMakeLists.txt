@@ -171,6 +171,7 @@ if(MSVC OR BUILD_MSVC)
     # Paths are relative to CMAKE_CURRENT_SOURCE_DIR (the repo root).
     include_directories(windows/deps/output/include)
     link_directories(windows/deps/output/lib)
+    link_directories(windows/deps/output/bin)
 endif()
 
 if(MINGW)

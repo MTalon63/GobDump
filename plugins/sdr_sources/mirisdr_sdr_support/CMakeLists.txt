@@ -16,7 +16,7 @@ if(USB_LIBRARY OR MSVC OR ANDROID)
     target_include_directories(mirisdr_sdr_support PUBLIC src)
 
     if(MSVC)
-        target_link_libraries(mirisdr_sdr_support PUBLIC gobdump_core libusb-1.0.dll)
+        target_link_libraries(mirisdr_sdr_support PUBLIC gobdump_core usb-1.0.dll)
         install(TARGETS mirisdr_sdr_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins RUNTIME_DEPENDENCY_SET gobdump_deps)
     elseif(ANDROID)
         target_link_libraries(mirisdr_sdr_support PUBLIC gobdump_core usb)

@@ -13,7 +13,7 @@ if(USB_LIBRARY OR MSVC) #if(RFNM_LIBRARY) # OR MSVC
     target_include_directories(rfnm_sdr_support PUBLIC src ${RFNM_INCLUDE_DIRS})
 
     if(MSVC)
-        target_link_libraries(rfnm_sdr_support PUBLIC gobdump_core libusb-1.0.dll)
+        target_link_libraries(rfnm_sdr_support PUBLIC gobdump_core usb-1.0.dll)
         install(TARGETS rfnm_sdr_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins RUNTIME_DEPENDENCY_SET gobdump_deps)
    # elseif(ANDROID)
    #     target_link_libraries(rfnm_sdr_support PUBLIC gobdump_core airspy usb)
