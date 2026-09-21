@@ -30,6 +30,7 @@ cd deps
 
 mkdir output
 $output_folder=$(Resolve-Path output)
+$output_folder_fwd=$output_folder -replace '\\', '/'
 $python_interpreter=$($(Get-Command python).Path)
 $cmake_params="-G Ninja", "-DCMAKE_FIND_ROOT_PATH='$output_folder'", "-DCMAKE_INSTALL_PREFIX='$output_folder'", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_SYSTEM_NAME=Windows", "-DPYTHON_EXECUTABLE:FILEPATH=$python_interpreter"
 
@@ -107,7 +108,7 @@ git clone https://github.com/facebook/zstd --depth 1 -b v1.5.6
 cd zstd
 mkdir build2
 cd build2
-cmake $cmake_params ../build/cmake -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_STATIC=ON -DZSTD_BUILD_SHARED=ON -DCMAKE_RC_FLAGS="-I $output_folder/../zstd/lib"
+cmake $cmake_params ../build/cmake -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_STATIC=ON -DZSTD_BUILD_SHARED=ON -DCMAKE_RC_FLAGS="-I $output_folder_fwd/../zstd/lib"
 ninja install
 cd ../..
 
@@ -189,7 +190,7 @@ git clone https://github.com/airspy/airspyone_host libairspy --depth 1 -b v1.0.1
 cd libairspy
 mkdir build
 cd build
-cmake $cmake_params ..  -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder/lib/pthreadVC3.lib"
+cmake $cmake_params ..  -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder_fwd/include/libusb-1.0" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder_fwd/lib/pthreadVC3.lib"
 ninja install
 cd ../..
 
@@ -199,7 +200,7 @@ if(!$is_arm) {
     cd libhydrasdr
     mkdir build
     cd build
-    cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder/lib/usb-1.0.lib" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder/lib/pthreadVC3.lib"
+    cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder_fwd/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder_fwd/lib/usb-1.0.lib" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder_fwd/lib/pthreadVC3.lib"
     ninja install
     cd ../..
 }
@@ -209,7 +210,7 @@ git clone https://github.com/rtlsdrblog/rtl-sdr-blog --depth 1 -b master
 cd rtl-sdr-blog
 mkdir build
 cd build
-cmake $cmake_params .. -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIRS="$output_folder/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder/lib/usb-1.0.lib" -DTHREADS_PTHREADS_LIBRARY="$output_folder/lib/pthreadVC3.lib" -DTHREADS_PTHREADS_INCLUDE_DIR="$output_folder/include/"
+cmake $cmake_params .. -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIRS="$output_folder_fwd/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder_fwd/lib/usb-1.0.lib" -DTHREADS_PTHREADS_LIBRARY="$output_folder_fwd/lib/pthreadVC3.lib" -DTHREADS_PTHREADS_INCLUDE_DIR="$output_folder_fwd/include/"
 ninja install
 cd ../..
 
@@ -266,7 +267,7 @@ git clone https://github.com/analogdevicesinc/libiio --depth 1 -b v0.26
 cd libiio
 mkdir build
 cd build
-cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder/lib/usb-1.0.lib"
+cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON -DLIBUSB_INCLUDE_DIR="$output_folder_fwd/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder_fwd/lib/usb-1.0.lib"
 ninja install
 cd ../..
 
@@ -284,7 +285,7 @@ git clone https://github.com/airspy/airspyhf --depth 1 -b master
 cd airspyhf
 mkdir build
 cd build
-cmake $cmake_params .. -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder/lib/pthreadVC3.lib"
+cmake $cmake_params .. -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder_fwd/include/libusb-1.0" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder_fwd/lib/pthreadVC3.lib"
 ninja install
 cd ../..
 
@@ -325,7 +326,7 @@ git clone https://github.com/greatscottgadgets/hackrf --depth 1 -b v2026.01.3
 cd hackrf
 mkdir build
 cd build
-cmake $cmake_params ../host -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DCMAKE_C_FLAGS="-I$output_folder/include" -DCMAKE_USE_PTHREADS_INIT=ON -DTHREADS_FOUND=TRUE -DCMAKE_THREAD_LIBS_INIT="$output_folder/lib/pthreadVC3.lib"
+cmake $cmake_params ../host -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder_fwd/include/libusb-1.0" -DCMAKE_C_FLAGS="-I$output_folder_fwd/include" -DCMAKE_USE_PTHREADS_INIT=ON -DTHREADS_FOUND=TRUE -DCMAKE_THREAD_LIBS_INIT="$output_folder_fwd/lib/pthreadVC3.lib"
 ninja install
 cd ../..
 
