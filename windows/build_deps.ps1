@@ -194,13 +194,15 @@ ninja install
 cd ../..
 
 # HydraSDR
-git clone https://github.com/hydrasdr/hydrasdr-host libhydrasdr --depth 1 -b v1.1.2
-cd libhydrasdr
-mkdir build
-cd build
-cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder/lib/usb-1.0.lib" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder/lib/pthreadVC3.lib"
-ninja install
-cd ../..
+if(!$is_arm) {
+    git clone https://github.com/hydrasdr/hydrasdr-host libhydrasdr --depth 1 -b v1.1.2
+    cd libhydrasdr
+    mkdir build
+    cd build
+    cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder/lib/usb-1.0.lib" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder/lib/pthreadVC3.lib"
+    ninja install
+    cd ../..
+}
 
 # RTL-SDR
 git clone https://github.com/rtlsdrblog/rtl-sdr-blog --depth 1 -b master
@@ -229,10 +231,11 @@ cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON
 ninja install
 cd ../..
 
-# LimeSuite
+# LimeSuite v23.11.0
 if(!$is_arm) {
-    git clone https://github.com/myriadrf/Limesuite --depth 1 -b v23.11.0
+    git clone -c core.autocrlf=false https://github.com/myriadrf/Limesuite --depth 1 -b v23.11.0
     cd Limesuite
+    Invoke-CheckedNative "git" @("apply", "-p1", "$($PSScriptRoot)/patches/limesuite-v23.11.0-msvc-chrono.patch")
     mkdir build2
     cd build2
     cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5"
