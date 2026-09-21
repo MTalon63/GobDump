@@ -253,11 +253,20 @@ ninja install
 cd ../..
 
 # LIBIIO
+# libiio v0.26 only probes libusb inside `if(PkgConfig_FOUND)`; its
+# find_library/find_path fallback is nested there as well, so on Windows (no
+# pkg-config) LIBUSB_LIBRARIES/LIBUSB_INCLUDE_DIR are never set and configure
+# aborts with "Unable to find libusb-1.0 dependency." libiio does NOT call
+# find_package(libusb), so libusb-cmake's installed package config is no help.
+# Pass the libusb paths explicitly (libusb was built earlier into
+# $output_folder) and disable pkg-config so those cache values are used
+# directly -- mirrors the rtl-sdr/fobos invocations above. Applies to both
+# x64 and ARM64 (the same $output_folder holds the arch-matched usb-1.0.lib).
 git clone https://github.com/analogdevicesinc/libiio --depth 1 -b v0.26
 cd libiio
 mkdir build
 cd build
-cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON
+cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON -DLIBUSB_INCLUDE_DIR="$output_folder/include/libusb-1.0" -DLIBUSB_LIBRARIES="$output_folder/lib/usb-1.0.lib"
 ninja install
 cd ../..
 
