@@ -42,11 +42,6 @@ namespace satdump
                   d_rs_type(parameters.count("rs_type") > 0 ? parameters["rs_type"].get<std::string>() : "none"),
                   d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false)
             {
-                bits_out = new uint8_t[d_buffer_size * 2];
-                soft_buffer = new int8_t[d_buffer_size];
-                qpsk_diff_buffer = new uint8_t[d_cadu_size * 2];
-                frame_buffer = new uint8_t[d_cadu_size * 2]; // Larger by safety
-
                 // Get constellation
                 if (d_constellation_str == "bpsk")
                     d_constellation = dsp::BPSK;
@@ -85,6 +80,10 @@ namespace satdump
                     logger->info("Frames will be padded!");
                 }
 
+                bits_out = new uint8_t[d_buffer_size * 2];
+                soft_buffer = new int8_t[d_buffer_size];
+                qpsk_diff_buffer = new uint8_t[d_cadu_size * 2];
+                frame_buffer = new uint8_t[d_cadu_size * 2]; // Larger by safety
                 if (d_constellation == dsp::QPSK && (d_oqpsk_method_2 || d_oqpsk_method_3))
                     soft_buffer2 = new int8_t[d_buffer_size];
             }

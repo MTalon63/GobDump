@@ -6,6 +6,7 @@
 #include "image/io.h"
 #include "logger.h"
 #include <algorithm>
+#include <atomic>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -27,11 +28,19 @@ namespace elektro_arktika
             std::map<std::string, time_t> ongoing_day_timers;
 
             std::thread bkg_th;
+            std::atomic<bool> should_run{true};
 
             time_t last_72h_processed = 0;
 
         public:
             GGAKIngestor(std::string dir) : directory(dir) { bkg_th = std::thread(&GGAKIngestor::proc_thread, this); }
+
+            ~GGAKIngestor()
+            {
+                should_run = false;
+                if (bkg_th.joinable())
+                    bkg_th.join();
+            }
 
             void work(GGAKFrame *frm)
             {
@@ -56,7 +65,7 @@ namespace elektro_arktika
 
             void proc_thread()
             {
-                while (1)
+                while (should_run)
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
 

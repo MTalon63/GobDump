@@ -270,15 +270,15 @@ namespace satdump
             {
                 return *this;
             }
-            else if (d_depth == 8)
+            else if (d_depth > 0 && d_depth < 16)
             {
                 Image image16(16, d_width, d_height, d_channels);
                 for (size_t i = 0; i < data_size; i++)
-                    image16.set(i, get(i) << 8);
+                    image16.set(i, get(i) << (16 - d_depth));
                 return image16;
             }
 
-            throw satdump_exception("Error in to16bits()"); // This should never happen
+            throw satdump_exception("Error in to16bits() : Depth is " + std::to_string(d_depth));
         }
 
         Image Image::to_depth(int bit_depth)

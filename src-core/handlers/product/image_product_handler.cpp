@@ -294,8 +294,12 @@ namespace satdump
                                     ImGui::SetClipboardText(str.c_str());
                                 }
 
-                                auto alignAffineF = [this, &ch]()
+                                size_t align_ch_idx = (size_t)(&ch - product->images.data());
+                                auto alignAffineF = [this, align_ch_idx]()
                                 {
+                                    if (align_ch_idx >= product->images.size())
+                                        return;
+                                    auto &ch = product->images[align_ch_idx];
                                     auto &ref = product->images[0].image;
                                     auto tgt = ch.image;
                                     double ax = double(ref.width()) / double(tgt.width());
