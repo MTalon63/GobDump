@@ -35,6 +35,7 @@ namespace satdump
             unsigned char *jpeg_decomp[1] = {nullptr};
             jpeg_error_struct_l jerr;
             jpeg_decompress_struct cinfo;
+            memset(&cinfo, 0, sizeof(cinfo));
 
             // Init
             cinfo.err = jpeg_std_error(&jerr.pub);
@@ -44,6 +45,7 @@ namespace satdump
             {
                 // Free memory
                 delete[] jpeg_decomp[0];
+                jpeg_destroy_decompress(&cinfo);
                 fclose(fp);
                 return;
             }
@@ -85,6 +87,7 @@ namespace satdump
             unsigned char *jpeg_decomp[1] = {nullptr};
             jpeg_error_struct_l jerr;
             jpeg_decompress_struct cinfo;
+            memset(&cinfo, 0, sizeof(cinfo));
 
             // Init
             cinfo.err = jpeg_std_error(&jerr.pub);
@@ -94,6 +97,7 @@ namespace satdump
             {
                 // Free memory
                 delete[] jpeg_decomp[0];
+                jpeg_destroy_decompress(&cinfo);
                 return;
             }
 
@@ -147,6 +151,7 @@ namespace satdump
             unsigned char *jpeg_decomp = NULL;
             jpeg_error_struct_l jerr;
             jpeg_compress_struct cinfo;
+            memset(&cinfo, 0, sizeof(cinfo));
 
             // Init
             cinfo.err = jpeg_std_error(&jerr.pub);
@@ -156,6 +161,7 @@ namespace satdump
             {
                 // Free memory
                 delete[] jpeg_decomp;
+                jpeg_destroy_compress(&cinfo);
                 fclose(fp);
                 return;
             }
@@ -257,6 +263,7 @@ namespace satdump
             unsigned char *jpeg_decomp = NULL;
             jpeg_error_struct_l jerr;
             jpeg_compress_struct cinfo;
+            memset(&cinfo, 0, sizeof(cinfo));
 
             // Init
             cinfo.err = jpeg_std_error(&jerr.pub);
@@ -266,6 +273,9 @@ namespace satdump
             {
                 // Free memory
                 delete[] jpeg_decomp;
+                if (cinfo.dest != NULL)
+                    free(cinfo.dest);
+                jpeg_destroy_compress(&cinfo);
                 jpeg_mem_mtex.unlock();
                 return std::vector<uint8_t>();
             }

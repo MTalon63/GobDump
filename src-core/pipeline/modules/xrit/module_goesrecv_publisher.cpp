@@ -48,6 +48,7 @@ namespace satdump
                 }
 
                 nng_listener_close(listener);
+                nng_close(sock);
 
                 cleanup();
             }

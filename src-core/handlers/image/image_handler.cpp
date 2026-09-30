@@ -121,17 +121,26 @@ namespace satdump
                 if (ImGui::RadioButton(_("Rotate 270°"), rotate_image == 270))
                     needs_to_update = 1, rotate_image = 270;
 
-                if (image_proj_valid)
+                bool proj_valid_ui = false, calib_valid_ui = false;
+                image::ImgCalibHandler calib_ui;
+                {
+                    std::lock_guard<std::mutex> l(state_mtx);
+                    proj_valid_ui = image_proj_valid;
+                    calib_valid_ui = image_calib_valid;
+                    calib_ui = image_calib;
+                }
+
+                if (proj_valid_ui)
                     needs_to_update |= ImGui::Checkbox(_("Geo Correct"), &geocorrect_image); // TODOREWORK Disable if it can't be?
 
                 if (needs_to_be_disabled)
                     style::endDisabled();
 
-                if (image_calib_valid)
+                if (calib_valid_ui)
                 {
-                    ImGui::Text(_("Calibration Unit %s"), image_calib.unit.c_str());
-                    ImGui::Text(_("Calibration Min %f"), image_calib.min);
-                    ImGui::Text(_("Calibration Max %f"), image_calib.max);
+                    ImGui::Text(_("Calibration Unit %s"), calib_ui.unit.c_str());
+                    ImGui::Text(_("Calibration Min %f"), calib_ui.min);
+                    ImGui::Text(_("Calibration Max %f"), calib_ui.max);
                 }
 
                 if (needs_to_update)
@@ -326,7 +335,12 @@ namespace satdump
             image_view.autoFitNextFrame |= widgets::MenuItemTooltip(u8"\uF69E", _("Fit"));
             image_view.select_crop_next |= widgets::MenuItemTooltip(u8"\uF69D", _("Crop"), NULL, image_view.select_crop_next);
 
-            if (image_proj_valid)
+            bool proj_valid_menu = false;
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                proj_valid_menu = image_proj_valid;
+            }
+            if (proj_valid_menu)
             {
                 if (rotate_image) // Projs do not work with rotated imagery
                     style::beginDisabled();
@@ -395,7 +409,10 @@ namespace satdump
             {
                 if (imgview_needs_update)
                 {
-                    image_view.update(getImage());
+                    {
+                        std::lock_guard<std::mutex> l(state_mtx);
+                        image_view.update(getImage());
+                    }
                     imgview_needs_update = false;
 
                     image_view.mouseCallback = [this](float x, float y)
@@ -403,13 +420,28 @@ namespace satdump
                         auto &img = getImage();
                         ImGui::BeginTooltip();
 
+                        projection::Projection proj_snap;
+                        image::ImgCalibHandler calib_snap;
+                        std::vector<float> fwd_lut_snap;
+                        bool proj_valid_snap = false, calib_valid_snap = false;
+                        {
+                            std::lock_guard<std::mutex> l(state_mtx);
+                            proj_valid_snap = image_proj_valid;
+                            if (proj_valid_snap)
+                                proj_snap = image_proj;
+                            calib_valid_snap = image_calib_valid;
+                            if (calib_valid_snap)
+                                calib_snap = image_calib;
+                            fwd_lut_snap = correct_fwd_lut;
+                        }
+
                         for (int i = 0; i < img.channels(); i++)
                             ImGui::Text(_("Raw %d : %d F %f"), i + 1, img.get(i, x, y), img.getf(i, x, y));
 
-                        if (image_calib_valid && image.channels() == 1 && x >= 0 && y >= 0 && x < img.width() && y < img.height())
+                        if (calib_valid_snap && image.channels() == 1 && x >= 0 && y >= 0 && x < img.width() && y < img.height())
                         {
-                            double val = image_calib.getVal(img.getf(0, x, y));
-                            ImGui::Text(_("Unit : %f %s"), val, image_calib.unit.c_str());
+                            double val = calib_snap.getVal(img.getf(0, x, y));
+                            ImGui::Text(_("Unit : %f %s"), val, calib_snap.unit.c_str());
                         }
 
                         // Handle rotations
@@ -434,10 +466,10 @@ namespace satdump
                             }
                         }
 
-                        if (correct_fwd_lut.size() > 0)
+                        if (fwd_lut_snap.size() > 0)
                         {
-                            if (x >= 0 && x < correct_fwd_lut.size())
-                                x = correct_fwd_lut[x];
+                            if (x >= 0 && x < fwd_lut_snap.size())
+                                x = fwd_lut_snap[x];
                             else
                             {
                                 ImGui::Text(_("Error in geo-correction!"));
@@ -445,10 +477,10 @@ namespace satdump
                             }
                         }
 
-                        if (image_proj_valid)
+                        if (proj_valid_snap)
                         {
                             geodetic::geodetic_coords_t pos;
-                            if (image_proj.inverse(x, y, pos))
+                            if (proj_snap.inverse(x, y, pos))
                             {
                                 ImGui::Text(_("Lat : Invalid!"));
                                 ImGui::Text(_("Lon : Invalid!"));
@@ -524,8 +556,11 @@ namespace satdump
 
         void ImageHandler::setImage(image::Image &img) // TODOREWORK
         {
-            image::set_metadata(image, {});
-            image = img;
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                image::set_metadata(image, {});
+                image = img;
+            }
             process();
         }
 
@@ -678,19 +713,28 @@ namespace satdump
             has_second_image = image_needs_processing | image_has_overlays;
             imgview_needs_update = true;
 
-            image_proj_valid = false;
+            projection::Projection new_proj;
+            bool new_proj_valid = false;
             if (image::has_metadata_proj_cfg(image))
             {
-                image_proj = image::get_metadata_proj_cfg(image);
-                if (image_proj.init(0, 1))
-                    image_proj_valid = true;
+                new_proj = image::get_metadata_proj_cfg(image);
+                new_proj_valid = new_proj.init(0, 1);
             }
 
-            image_calib_valid = false;
+            image::ImgCalibHandler new_calib;
+            bool new_calib_valid = false;
             if (image::has_metadata_calib_cfg(image))
             {
-                image_calib = image::get_metadata_calib_cfg(image);
-                image_calib_valid = true;
+                new_calib = image::get_metadata_calib_cfg(image);
+                new_calib_valid = true;
+            }
+
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                image_proj = std::move(new_proj);
+                image_proj_valid = new_proj_valid;
+                image_calib = new_calib;
+                image_calib_valid = new_calib_valid;
             }
         }
     } // namespace handlers

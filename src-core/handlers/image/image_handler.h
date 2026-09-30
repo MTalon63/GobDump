@@ -14,6 +14,7 @@
 #include "nlohmann/json.hpp"
 #include "projection/projection.h"
 #include <memory>
+#include <mutex>
 
 namespace satdump
 {
@@ -118,6 +119,7 @@ namespace satdump
             projection::Projection image_proj;
             std::vector<float> correct_fwd_lut; // TODOREWORK handle this better?
             std::vector<float> correct_rev_lut;
+            std::mutex state_mtx;
 
             // TODOREWORK File save
             bool file_save_thread_running = false;

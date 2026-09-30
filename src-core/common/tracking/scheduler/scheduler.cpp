@@ -17,7 +17,7 @@ namespace satdump
             satoptions.push_back(tle.name);
 
         // Updates on registry updates
-        eventBus->register_handler<TLEsUpdatedEvent>(
+        tle_updated_handler_id = eventBus->register_handler<TLEsUpdatedEvent>(
             [this](TLEsUpdatedEvent)
             {
                 upcoming_satellite_passes_mtx.lock();
@@ -36,6 +36,8 @@ namespace satdump
 
     AutoTrackScheduler::~AutoTrackScheduler()
     {
+        eventBus->unregister_handler(tle_updated_handler_id);
+
         if (backend_should_run)
         {
             backend_should_run = false;
@@ -120,7 +122,7 @@ namespace satdump
                     }
                 }
 
-                if (curr_time > upcoming_satellite_passes_sel[0].los_time && upcoming_satellite_passes_sel.size() > 0)
+                if (upcoming_satellite_passes_sel.size() > 0 && curr_time > upcoming_satellite_passes_sel[0].los_time)
                 {
                     if (autotrack_pass_has_started)
                     {

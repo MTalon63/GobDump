@@ -1,4 +1,5 @@
 #include "mqtt_client.h"
+#include "common/net/winsock_init.h"
 #include "core/exception.h"
 #include "libs/mqttc/mqtt.h"
 #include "libs/mqttc/posix_sockets.h"
@@ -28,6 +29,8 @@ namespace satdump
 
     MQTTClient::MQTTClient(std::string addr, std::string port, int bufsize, std::function<void(std::string topic, uint8_t *data, int len)> callback) : callback(callback)
     {
+        net::ensure_winsock_init();
+
         // Open the non-blocking TCP socket (connecting to the broker)
         sockfd = (mqtt_pal_socket_handle)open_nb_socket(addr.c_str(), port.c_str());
 

@@ -29,6 +29,8 @@ namespace satdump
             {
                 logger->add_sink(logger_sink);
 
+                try
+                {
 #if 0 // TODOREWORK Make a process_dataset again?
         satdump::process_dataset(d_input_file);
 #else
@@ -43,6 +45,12 @@ namespace satdump
                     satdump::products::process_product_with_handler(prod, pro_path);
                 }
 #endif
+                }
+                catch (...)
+                {
+                    logger->del_sink(logger_sink);
+                    throw;
+                }
 
                 logger->del_sink(logger_sink);
             }

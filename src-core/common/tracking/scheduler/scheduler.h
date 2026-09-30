@@ -163,6 +163,7 @@ namespace satdump
     private:
         bool has_tle = false;
         std::vector<std::string> satoptions;
+        uint64_t tle_updated_handler_id = 0;
 
     private:
         bool backend_should_run = false;
