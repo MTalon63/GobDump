@@ -765,6 +765,7 @@ static void StringScan(asIScriptGeneric* gen)
 			{
 				AS_STRING_SCAN_IMPL(asTYPEID_BOOL, bool);
 
+				AS_STRING_SCAN_IMPL(asTYPEID_INT8, int8_t);
 				AS_STRING_SCAN_IMPL(asTYPEID_INT16, int16_t);
 			default: // enum
 				AS_STRING_SCAN_IMPL(asTYPEID_INT32, int32_t);

@@ -278,7 +278,7 @@ namespace meteosat
 
                 // Timestamp, somewhat interpolated to have one on all lines,
                 // assuming the scan rate to be right
-                if (scan_chunk_number == 0 && lines + 2 <= timestamps_nrm.size())
+                if (scan_chunk_number == 0 && lines + 3 <= timestamps_nrm.size())
                 {
                     timestamps_nrm[lines + 0] = scan_timestamp + 0.2 * 0;
                     timestamps_nrm[lines + 1] = scan_timestamp + 0.2 * 1;

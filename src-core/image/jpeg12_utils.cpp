@@ -53,13 +53,13 @@ namespace satdump
             jpeg_start_decompress(&cinfo);
 
             // Init output buffer
-            jpeg_decomp = new short[cinfo.image_width * cinfo.image_height];
+            jpeg_decomp = new short[cinfo.image_width * cinfo.image_height * cinfo.output_components];
 
             // Decompress
             while (cinfo.output_scanline < cinfo.output_height)
             {
                 short *buffer_array[1];
-                buffer_array[0] = jpeg_decomp + (cinfo.output_scanline) * cinfo.image_width;
+                buffer_array[0] = jpeg_decomp + (cinfo.output_scanline) * cinfo.image_width * cinfo.output_components;
                 jpeg_read_scanlines(&cinfo, buffer_array, 1);
             }
 

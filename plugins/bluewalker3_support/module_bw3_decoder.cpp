@@ -47,7 +47,10 @@ namespace bluewalker3
                 else if (ptr < d_payload_size)
                 {
                     wip_pkt.insert(wip_pkt.end(), &buffer[21], &buffer[21 + ptr]);
-                    wip_pkt.erase(wip_pkt.begin(), wip_pkt.begin() + 8);
+                    if (wip_pkt.size() >= 8)
+                        wip_pkt.erase(wip_pkt.begin(), wip_pkt.begin() + 8);
+                    else
+                        wip_pkt.clear();
 
                     wip_pictures_stream.insert(wip_pictures_stream.end(), wip_pkt.begin(), wip_pkt.end());
 

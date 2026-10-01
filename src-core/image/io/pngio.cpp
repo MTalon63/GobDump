@@ -158,7 +158,7 @@ namespace satdump
                 if (!disableIndexing)
                 {
                     png_set_palette_to_rgb(png);
-                    d_channels = 3;
+                    d_channels = png_get_valid(png, info, PNG_INFO_tRNS) ? 4 : 3;
                 }
                 else
                     d_channels = 1;
@@ -265,6 +265,8 @@ namespace satdump
             int d_channels = 0;
             if (color_type == PNG_COLOR_TYPE_GRAY)
                 d_channels = 1;
+            else if (color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+                d_channels = 2;
             else if (color_type == PNG_COLOR_TYPE_RGB)
                 d_channels = 3;
             else if (color_type == PNG_COLOR_TYPE_RGBA)
@@ -274,7 +276,7 @@ namespace satdump
                 if (!disableIndexing)
                 {
                     png_set_palette_to_rgb(png);
-                    d_channels = 3;
+                    d_channels = png_get_valid(png, info, PNG_INFO_tRNS) ? 4 : 3;
                 }
                 else
                     d_channels = 1;

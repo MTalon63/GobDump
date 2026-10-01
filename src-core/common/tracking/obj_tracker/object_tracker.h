@@ -37,6 +37,7 @@ namespace satdump
         TrackingMode tracking_mode = TRACKING_NONE;
         bool has_tle = false, is_gui;
         std::mutex general_mutex;
+        uint64_t tle_updated_handler_id = 0;
 
         inline float az_el_to_plot_x(float plot_size, float radius, float az, float el) { return sin(az * DEG_TO_RAD) * plot_size * radius * ((90.0 - el) / 90.0); }
         inline float az_el_to_plot_y(float plot_size, float radius, float az, float el) { return cos(az * DEG_TO_RAD) * plot_size * radius * ((90.0 - el) / 90.0); }
