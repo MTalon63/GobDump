@@ -3,6 +3,7 @@
 #include "handlers/handler.h"
 #include "pipeline/module.h"
 #include "pipeline/pipeline.h"
+#include <mutex>
 #include <thread>
 
 // TODOREWORK, move into plugin? Or Core?
@@ -21,6 +22,7 @@ namespace satdump
             std::thread proc_thread;
 
             std::string pipeline_name = "Pipeline";
+            std::mutex pipeline_name_mtx;
 
         public:
             OffProcessingHandler(pipeline::Pipeline downlink_pipeline, std::string input_level, std::string input_file, std::string output_file, nlohmann::json parameters);
@@ -33,7 +35,11 @@ namespace satdump
             void drawMenu();
             void drawContents(ImVec2 win_size);
 
-            std::string getName() { return pipeline_name; }
+            std::string getName()
+            {
+                std::lock_guard<std::mutex> l(pipeline_name_mtx);
+                return pipeline_name;
+            }
 
             std::string getID() { return "processing_handler"; }
         };

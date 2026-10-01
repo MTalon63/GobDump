@@ -297,7 +297,15 @@ namespace satdump
     {
         is_running = true;
 
-        for (auto &n : nodes)
+        std::vector<std::shared_ptr<Node>> nodes_snapshot;
+        std::vector<Link> links_snapshot;
+        {
+            std::lock_guard<std::mutex> lg(flow_mtx);
+            nodes_snapshot = nodes;
+            links_snapshot = links;
+        }
+
+        for (auto &n : nodes_snapshot)
             n->internal->reset();
 
         try
@@ -309,7 +317,7 @@ namespace satdump
                 should_run_again = false;
 
                 // Iterate through all nodes
-                for (auto &n : nodes)
+                for (auto &n : nodes_snapshot)
                 {
                     // Check if this one can run
                     auto &i = n->internal;
@@ -337,12 +345,12 @@ namespace satdump
                             logger->trace("Output ID for %d is %d", o, o_id);
 
                             // Iterate through links, to asign outputs to applicable inputs
-                            for (auto &l : links)
+                            for (auto &l : links_snapshot)
                             {
                                 if (l.start == o_id)
                                 {
                                     // Iterate through nodes to find valid inputs
-                                    for (auto &n2 : nodes)
+                                    for (auto &n2 : nodes_snapshot)
                                     {
                                         for (int b = 0, b2 = 0; b < n2->node_io.size(); b++)
                                         {
@@ -370,7 +378,7 @@ namespace satdump
                                 if (l.end == o_id)
                                 {
                                     // Iterate through nodes to find valid inputs
-                                    for (auto &n2 : nodes)
+                                    for (auto &n2 : nodes_snapshot)
                                     {
                                         for (int b = 0, b2 = 0; b < n2->node_io.size(); b++)
                                         {
@@ -404,7 +412,7 @@ namespace satdump
             logger->error("Error running flowgraph : %s", e.what());
         }
 
-        for (auto &n : nodes)
+        for (auto &n : nodes_snapshot)
             n->internal->reset();
 
         is_running = false;

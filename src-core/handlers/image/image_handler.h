@@ -14,6 +14,7 @@
 #include "nlohmann/json.hpp"
 #include "projection/projection.h"
 #include <memory>
+#include <atomic>
 #include <mutex>
 
 namespace satdump
@@ -69,8 +70,7 @@ namespace satdump
             std::string image_name = "Unknown Image";
 
             bool imgview_needs_update = false;
-            bool has_second_image = false;
-            image::Image image, curr_image;
+            std::shared_ptr<image::Image> image = std::make_shared<image::Image>(), curr_image;
             ImageViewWidget image_view;
 
         public:
@@ -87,12 +87,15 @@ namespace satdump
              * @param current If true, returns the
              * *processed* image. Raw if false.
              */
-            image::Image &getImage(bool current = true)
+            std::shared_ptr<image::Image> getImage(bool current = true)
             {
                 if (current)
-                    return has_second_image ? curr_image : image;
-                else
-                    return image;
+                {
+                    auto current_img = std::atomic_load(&curr_image);
+                    if (current_img)
+                        return current_img;
+                }
+                return std::atomic_load(&image);
             }
 
             /**
@@ -173,8 +176,8 @@ namespace satdump
                 rotate_image = 0;
                 geocorrect_image = false;
 
-                image.clear();
-                curr_image.clear();
+                std::atomic_store(&image, std::make_shared<image::Image>());
+                std::atomic_store(&curr_image, std::shared_ptr<image::Image>());
                 active_filters.clear();
             }
 
