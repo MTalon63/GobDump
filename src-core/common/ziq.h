@@ -45,17 +45,17 @@ namespace ziq
     private:
         ziq_cfg cfg;
         std::ofstream &stream;
-        int8_t *buffer_i8;
-        int16_t *buffer_i16;
+        int8_t *buffer_i8 = nullptr;
+        int16_t *buffer_i16 = nullptr;
 
     private:
         const int zst_level = 1;
         const int zst_workers = 8;
-        ZSTD_CCtx *zstd_ctx;
+        ZSTD_CCtx *zstd_ctx = nullptr;
         ZSTD_inBuffer zstd_input;
         ZSTD_outBuffer zstd_output;
         int zst_outc;
-        size_t max_buffer_size;
+        size_t max_buffer_size = 0;
         uint8_t *output_compressed;
 
     private:
@@ -74,19 +74,19 @@ namespace ziq
         bool isValid;
         ziq_cfg cfg;
         std::ifstream &stream;
-        int8_t *buffer_i8;
-        int16_t *buffer_i16;
-        uint64_t annotation_size;
+        int8_t *buffer_i8 = nullptr;
+        int16_t *buffer_i16 = nullptr;
+        uint64_t annotation_size = 0;
 
     private:
-        ZSTD_DCtx *zstd_ctx;
+        ZSTD_DCtx *zstd_ctx = nullptr;
         ZSTD_inBuffer zstd_input;
         ZSTD_outBuffer zstd_output;
         int zst_outc;
-        size_t max_buffer_size;
-        uint8_t *compressed_buffer;
-        int decompressed_cnt;
-        uint8_t *output_decompressed;
+        size_t max_buffer_size = 0;
+        uint8_t *compressed_buffer = nullptr;
+        int decompressed_cnt = 0;
+        uint8_t *output_decompressed = nullptr;
 
     private:
         int decompress_at_least(int size);

@@ -17,7 +17,7 @@ namespace satdump
                     {{"out", std::is_same_v<T, complex_t> ? DSP_SAMPLE_TYPE_CF32 : DSP_SAMPLE_TYPE_F32}})
         {
             // Buffer
-            if (buffer == nullptr)
+            if (buffer != nullptr)
                 volk_free(buffer); // TODOREWORK
 
             buffer = dsp::create_volk_buffer<T>(1e6);
@@ -54,7 +54,7 @@ namespace satdump
         template <typename T>
         GardnerClockRecoveryBlock<T>::~GardnerClockRecoveryBlock()
         {
-            if (buffer == nullptr)
+            if (buffer != nullptr)
                 volk_free(buffer);
         }
 

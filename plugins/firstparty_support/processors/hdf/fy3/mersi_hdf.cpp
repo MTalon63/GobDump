@@ -109,7 +109,7 @@ namespace satdump
                     {
                         auto ch3_6 = get_multi_img_from_hdf(file, "Data/EV_1KM_Emissive");
                         for (int i = 2; i < 2 + ch3_6.size(); i++)
-                            mersi_products->images.push_back({i, "MERSILL-" + std::to_string(i + 1), std::to_string(i + 1), ch3_6[i], 16, satdump::ChannelTransform().init_none()});
+                            mersi_products->images.push_back({i, "MERSILL-" + std::to_string(i + 1), std::to_string(i + 1), ch3_6[i - 2], 16, satdump::ChannelTransform().init_none()});
                     }
                     if (file.nameExists("Data/EV_1KM_SWIR"))
                     {

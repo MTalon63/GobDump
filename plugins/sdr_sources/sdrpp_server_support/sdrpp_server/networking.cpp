@@ -45,8 +45,8 @@ namespace net {
         }
 
         // Wait for the theads to terminate
-        if (readWorkerThread.joinable()) { readWorkerThread.join(); }
-        if (writeWorkerThread.joinable()) { writeWorkerThread.join(); }
+        if (readWorkerThread.joinable() && readWorkerThread.get_id() != std::this_thread::get_id()) { readWorkerThread.join(); }
+        if (writeWorkerThread.joinable() && writeWorkerThread.get_id() != std::this_thread::get_id()) { writeWorkerThread.join(); }
 
         {
             std::lock_guard lck(connectionOpenMtx);

@@ -77,7 +77,7 @@ namespace uvsq
                 else if (d_mode == 1)
                 {
                     int width = ((1024 * 16 - 16) / 16);
-                    p.second.p.resize(width * 1083 + 14);
+                    p.second.p.resize(width * 1083 * 2 + 14);
                     img = image::Image(p.second.p.data() + 14, 16, width, 1083, 1);
                 }
 

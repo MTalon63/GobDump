@@ -61,7 +61,7 @@ namespace satdump
 
                     while (input_active.load())
                     {
-                        size_t lpkt_size;
+                        size_t lpkt_size = pkt_size * 10;
                         nng_recv(sock, buffer, &lpkt_size, (int)0);
 
                         if (pkt_size != (int)lpkt_size)

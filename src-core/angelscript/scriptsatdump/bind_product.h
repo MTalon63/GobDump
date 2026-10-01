@@ -40,7 +40,11 @@ namespace satdump
             }
 
         protected:
-            virtual ~CScriptProduct() { j->Release(); }
+            virtual ~CScriptProduct()
+            {
+                if (j)
+                    j->Release();
+            }
 
             mutable int refCount;
 

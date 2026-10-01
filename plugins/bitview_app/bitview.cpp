@@ -209,7 +209,7 @@ namespace satdump
 
                 bc->highlights.clear();
 
-                for (int i = 0; i < (sz / 8) - 4; i++)
+                for (int i = 0; i < (int)(sz / 8) - 4; i++)
                 {
                     if (ptr[i + 0] == 0x1a && ptr[i + 1] == 0xcf && ptr[i + 2] == 0xfc && ptr[i + 3] == 0x1d)
                         bc->highlights.push_back({(size_t)i * 8, 32, 255, 0, 255});

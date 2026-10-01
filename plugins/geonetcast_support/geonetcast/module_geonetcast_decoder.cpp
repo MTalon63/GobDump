@@ -69,6 +69,9 @@ namespace geonetcast
 
                 for (std::vector<uint8_t> &payload : frames)
                 {
+                    if (payload.size() < 40)
+                        continue;
+
                     payload.erase(payload.begin(), payload.begin() + 40); // Extract the Fazzt frame
 
                     std::vector<fazzt::FazztFile> files = fazzt_processor.work(payload);

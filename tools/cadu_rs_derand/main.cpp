@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     initLogger();
     completeLoggerInit();
 
-    if (argc < 3)
+    if (argc < 5)
         return 1;
 
     std::ifstream data_in(argv[1], std::ios::binary);
@@ -18,6 +18,9 @@ int main(int argc, char *argv[])
 
     int frame_size = std::stoi(argv[3]);
     int rs_size = std::stoi(argv[4]);
+
+    if (rs_size < 1 || rs_size > 4 || frame_size < 4 + 255 * rs_size)
+        return 1;
 
     uint8_t *cadu = new uint8_t[frame_size];
 

@@ -39,10 +39,6 @@ namespace satdump
                 if (buffer != nullptr)
                     volk_free(buffer);
 
-                // Init buffer
-                buffer = dsp::create_volk_buffer<float>(p_buffer_size); // TODOREWORK How to handle this from the initial buffer size?
-                buffer_size = p_buffer_size;
-
                 // Init taps
                 auto p_taps = dsp::firdes::hilbert(p_ntaps, dsp::fft::window::WIN_HAMMING, 6.76);
 
@@ -51,6 +47,10 @@ namespace satdump
                 taps = (float *)volk_malloc(p_ntaps * sizeof(float), volk_get_alignment());
                 for (int j = 0; j < p_ntaps; j++)
                     taps[j] = p_taps[(p_ntaps - 1) - j]; // Reverse taps
+
+                // Init buffer, must be large enough for the memcpy at offset p_ntaps in work()
+                buffer = dsp::create_volk_buffer<float>(p_buffer_size + p_ntaps);
+                buffer_size = p_buffer_size;
             }
 
             nlohmann::ordered_json get_cfg_list()

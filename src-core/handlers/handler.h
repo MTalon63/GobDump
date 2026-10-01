@@ -54,7 +54,11 @@ namespace satdump
                 if (subhandlers_marked_for_del.size())
                 {
                     for (auto &h : subhandlers_marked_for_del)
-                        subhandlers.erase(std::find(subhandlers.begin(), subhandlers.end(), h));
+                    {
+                        auto it = std::find(subhandlers.begin(), subhandlers.end(), h);
+                        if (it != subhandlers.end())
+                            subhandlers.erase(it);
+                    }
                     subhandlers_marked_for_del.clear();
                 }
                 subhandlers_mtx.unlock();

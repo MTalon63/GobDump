@@ -10,6 +10,9 @@ namespace diff
     {
         tmp_.insert(tmp_.end(), in, &in[length]);
 
+        if (tmp_.size() < 2)
+            return 0;
+
         uint8_t *input = &tmp_[1]; // ensure that input[-1] is valid
 
         unsigned modulus = d_modulus;
