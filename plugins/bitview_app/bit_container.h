@@ -65,6 +65,8 @@ namespace satdump
         std::vector<FrameDef> frames;
 
     public:
+        static constexpr size_t max_bit_period = 1 << 24;
+
         int d_display_mode = 0;
         size_t d_bitperiod = 256;
         int d_display_bits = 1;

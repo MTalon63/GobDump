@@ -113,7 +113,7 @@ namespace satdump
                 {
                     auto map = colormaps::loadMap(paletteIterator->path().string());
                     waterfall_palettes.push_back(map);
-                    waterfall_palettes_str += map.name + " [" + map.author + "]" + '\0';
+                    waterfall_palettes_str += map.name + '\0';
                 }
 
                 paletteIterator.increment(iteratorError);

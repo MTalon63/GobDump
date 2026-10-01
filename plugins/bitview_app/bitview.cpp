@@ -5,6 +5,7 @@
 #include "imgui/imgui_stdlib.h"
 #include "imgui/implot/implot.h"
 #include "imgui/implot/implot_internal.h"
+#include <cmath>
 #include <exception>
 #include <fcntl.h>
 #include <memory>
@@ -69,8 +70,17 @@ namespace satdump
 
                         if (nout == 1)
                         {
-                            bc->d_bitperiod = *out;
-                            bc->init_display();
+                            double period = *out;
+
+                            if (!std::isfinite(period) || period < 1.0 || period > (double)BitContainer::max_bit_period)
+                            {
+                                logger->error("Invalid bit period! Must be a number between 1 and %d", (int)BitContainer::max_bit_period);
+                            }
+                            else
+                            {
+                                bc->d_bitperiod = (size_t)period;
+                                bc->init_display();
+                            }
                         }
                         else
                         {

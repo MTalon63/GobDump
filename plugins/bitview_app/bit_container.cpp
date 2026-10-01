@@ -85,8 +85,12 @@ namespace satdump
 
     void BitContainer::init_display()
     {
+        if (d_display_bits < 1)
+            d_display_bits = 1;
         if (d_display_mode > 0)
             d_display_bits = 8;
+        if (d_bitperiod < 1 || d_bitperiod > max_bit_period)
+            d_bitperiod = d_bitperiod < 1 ? 1 : max_bit_period;
 
         // Ensure chunk size is a multiple of display depth
         d_chunk_size = 512;
@@ -108,21 +112,16 @@ namespace satdump
         }
         else
         {
-            size_t final_size = 0;
-            img_parts_y = 0;
-            while (final_size < d_file_memory_size * 8)
-            {
-                final_size += d_bitperiod * d_chunk_size;
-                img_parts_y++;
-            }
+            size_t bits_per_part = d_bitperiod * d_chunk_size;
+            size_t total_bits = d_file_memory_size * 8;
 
-            final_size = 0;
-            img_parts_x = 0;
-            while (final_size < d_bitperiod)
-            {
-                final_size += d_chunk_size;
-                img_parts_x++;
-            }
+            img_parts_y = (total_bits + bits_per_part - 1) / bits_per_part;
+            if (img_parts_y < 1)
+                img_parts_y = 1;
+
+            img_parts_x = (d_bitperiod + d_chunk_size - 1) / d_chunk_size;
+            if (img_parts_x < 1)
+                img_parts_x = 1;
         }
 
         image_parts.resize(img_parts_y * img_parts_x);
