@@ -47,7 +47,10 @@ namespace satdump
         {
             eventBus->fire_event<SetIsProcessingEvent>({});
 
-            pipeline_name = downlink_pipeline.name;
+            {
+                std::lock_guard<std::mutex> l(pipeline_name_mtx);
+                pipeline_name = downlink_pipeline.name;
+            }
 
             logger->info("Starting processing pipeline " + downlink_pipeline.id + "...");
             logger->debug("Input file (" + input_level + ") : " + input_file);
@@ -93,7 +96,7 @@ namespace satdump
 
         exit_handler:
             eventBus->fire_event<SetIsDoneProcessingEvent>({});
-            pipeline_name = "PROCESSING_DONE"; // TODOREWORK MASSIVE HACK!
+            { std::lock_guard<std::mutex> l(pipeline_name_mtx); pipeline_name = "PROCESSING_DONE"; } // TODOREWORK MASSIVE HACK!
         }
 
         void OffProcessingHandler::drawMenu() {}

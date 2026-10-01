@@ -345,6 +345,7 @@ namespace satdump
             try
             {
                 image::Image img;
+                auto subhandlers_snapshot = getAllSubHandlers();
 
                 // TODOREWORK
                 auto proj = projui.get_proj();
@@ -363,14 +364,14 @@ namespace satdump
                         bounds.min_lat = 90;
                         bounds.max_lat = -90;
 
-                        for (int i = subhandlers.size() - 1; i >= 0; i--)
+                        for (int i = subhandlers_snapshot.size() - 1; i >= 0; i--)
                         {
-                            auto &h = subhandlers[i];
+                            auto &h = subhandlers_snapshot[i];
                             if (h->getID() == "image_handler")
                             {
                                 ImageHandler *im_h = (ImageHandler *)h.get();
 
-                                auto boundshere = determineProjectionBounds(im_h->getImage());
+                                auto boundshere = determineProjectionBounds(*im_h->getImage());
                                 if (boundshere.valid)
                                 {
                                     if (boundshere.min_lon < bounds.min_lon)
@@ -415,9 +416,9 @@ namespace satdump
                 // TODOREWORK
 
                 std::vector<image::Image> all_imgs;
-                for (int i = subhandlers.size() - 1; i >= 0; i--)
+                for (int i = subhandlers_snapshot.size() - 1; i >= 0; i--)
                 {
-                    auto &h = subhandlers[i];
+                    auto &h = subhandlers_snapshot[i];
                     if (h->getID() == "image_handler")
                     {
                         ImageHandler *im_h = (ImageHandler *)h.get();
@@ -426,7 +427,7 @@ namespace satdump
 
                         // TODOREWORK!!!!
                         logger->trace("Proj : \n%s\n", proj.dump(4).c_str());
-                        auto im = projection::reprojectImage(im_h->getImage(), proj);
+                        auto im = projection::reprojectImage(*im_h->getImage(), proj);
                         all_imgs.push_back(im);
                         logger->critical("DONE REPROJECTING!");
                     }
@@ -444,9 +445,9 @@ namespace satdump
                     img.draw_image_alpha(all_imgs[i]);
                 }
 
-                for (int i = subhandlers.size() - 1; i >= 0; i--)
+                for (int i = subhandlers_snapshot.size() - 1; i >= 0; i--)
                 {
-                    auto &h = subhandlers[i];
+                    auto &h = subhandlers_snapshot[i];
                     if (h->getID() == "shapefile_handler")
                     {
                         ShapefileHandler *sh_h = (ShapefileHandler *)h.get();
@@ -490,7 +491,7 @@ namespace satdump
             {
                 std::shared_ptr<ImageHandler> a = std::make_shared<ImageHandler>();
                 a->setConfig(img_handler.getConfig());
-                a->setImage(img_handler.getImage(false));
+                a->setImage(*img_handler.getImage(false));
                 a->setName(img_handler.getName());
                 eventBus->fire_event<explorer::ExplorerAddHandlerEvent>({a});
             }

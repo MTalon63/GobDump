@@ -152,13 +152,13 @@ namespace satdump
             if (current_mode == MODE_DOTMAP || current_mode == MODE_FILLMAP)
             {
                 // TODOREWORK
-                auto &img = img_handler.getImage();
+                auto img = img_handler.getImage();
                 int autogen_id = 0;
                 while (std::filesystem::exists(directory + "/img_" + std::to_string(autogen_id) + ".png"))
                     autogen_id++;
-                image::save_img_safe(img, directory + "/img_" + std::to_string(autogen_id) + ".png");
+                image::save_img_safe(*img, directory + "/img_" + std::to_string(autogen_id) + ".png");
 
-                return img.size();
+                return img->size();
             }
 
             return false;

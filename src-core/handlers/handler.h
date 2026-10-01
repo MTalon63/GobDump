@@ -32,7 +32,8 @@ namespace satdump
         {
         protected: // TODOREWORK?
             std::vector<std::shared_ptr<Handler>> subhandlers;
-            std::mutex subhandlers_mtx;
+            // Recursive: drawTreeMenu holds this while a drag-drop can call addSubHandler on itself.
+            std::recursive_mutex subhandlers_mtx;
 
         public:
             std::string handler_tree_icon = "N";

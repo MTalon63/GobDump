@@ -484,7 +484,7 @@ namespace satdump
             {
                 std::shared_ptr<ImageHandler> a = std::make_shared<ImageHandler>();
                 a->setConfig(img_handler->getConfig());
-                a->setImage(img_handler->getImage(false));
+                a->setImage(*img_handler->getImage(false));
                 a->setName(img_handler->getName());
                 addSubHandler(a);
             }
