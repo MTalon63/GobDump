@@ -53,21 +53,24 @@ namespace satdump
                 logger->critical("CROPPING %d %d, %d %d, %d %d", x1, y1, x2, y2, img_snap->width(), img_snap->height());
 
                 auto img = img_snap->crop_to(x1, y1, x2, y2);
-                auto proj_cfg = image::get_metadata_proj_cfg(*img_snap);
-                if (proj_cfg.contains("transform2"))
+                if (image::has_metadata_proj_cfg(*img_snap))
                 {
-                    x1 += proj_cfg["transform2"]["bx"].get<double>();
-                    y1 += proj_cfg["transform2"]["by"].get<double>();
-                    proj_cfg["transform2"]["bx"] = x1;
-                    proj_cfg["transform2"]["by"] = y1;
+                    auto proj_cfg = image::get_metadata_proj_cfg(*img_snap);
+                    if (proj_cfg.contains("transform2"))
+                    {
+                        x1 += proj_cfg["transform2"]["bx"].get<double>();
+                        y1 += proj_cfg["transform2"]["by"].get<double>();
+                        proj_cfg["transform2"]["bx"] = x1;
+                        proj_cfg["transform2"]["by"] = y1;
+                    }
+                    else
+                    {
+                        proj_cfg["width"] = img.width();
+                        proj_cfg["height"] = img.height();
+                        proj_cfg["transform2"] = ChannelTransform().init_affine(1, 1, x1, y1);
+                    }
+                    image::set_metadata_proj_cfg(img, proj_cfg);
                 }
-                else
-                {
-                    proj_cfg["width"] = img.width();
-                    proj_cfg["height"] = img.height();
-                    proj_cfg["transform2"] = ChannelTransform().init_affine(1, 1, x1, y1);
-                }
-                image::set_metadata_proj_cfg(img, proj_cfg);
                 geocorrect_image = false;
 
                 auto sh = std::make_shared<ImageHandler>(img);
@@ -561,9 +564,7 @@ namespace satdump
         {
             {
                 std::lock_guard<std::mutex> l(state_mtx);
-                auto new_img = std::make_shared<image::Image>(img);
-                image::set_metadata(*new_img, {});
-                std::atomic_store(&image, new_img);
+                std::atomic_store(&image, std::make_shared<image::Image>(img));
             }
             process();
         }
