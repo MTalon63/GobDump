@@ -105,18 +105,18 @@ namespace satdump
 
             ProjBounds determineProjectionBounds(image::Image &img)
             {
+                if (!image::has_metadata(img))
+                    return {0, 0, 0, 0, false};
+
+                if (!image::get_metadata(img).contains("proj_cfg"))
+                    return {0, 0, 0, 0, false};
+
                 {
                     auto cfg = image::get_metadata_proj_cfg(img);
                     cfg["width"] = img.width();
                     cfg["height"] = img.height();
                     image::set_metadata_proj_cfg(img, cfg);
                 }
-
-                if (!image::has_metadata(img))
-                    return {0, 0, 0, 0, false};
-
-                if (!image::get_metadata(img).contains("proj_cfg"))
-                    return {0, 0, 0, 0, false};
 
                 try
                 {
@@ -436,7 +436,8 @@ namespace satdump
                 if (all_imgs.size() > 0)
                 {
                     img.init(all_imgs[0].depth(), all_imgs[0].width(), all_imgs[0].height(), 4);
-                    image::set_metadata_proj_cfg(img, image::get_metadata_proj_cfg(all_imgs[0]));
+                    if (image::has_metadata_proj_cfg(all_imgs[0]))
+                        image::set_metadata_proj_cfg(img, image::get_metadata_proj_cfg(all_imgs[0]));
                 }
 
                 for (int i = 0; i < all_imgs.size(); i++)

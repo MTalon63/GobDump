@@ -19,10 +19,14 @@ namespace satdump
             op.target_prj_info = proj;
             //            op.target_prj_info["width"] = proj->width;
             //            op.target_prj_info["height"] = proj->height;
-            auto cfg = image::get_metadata_proj_cfg(*op.img);
-            cfg["width"] = input.width();
-            cfg["height"] = input.height();
-            image::set_metadata_proj_cfg(*op.img, cfg);
+            if (image::has_metadata_proj_cfg(input))
+            {
+                auto cfg = image::get_metadata_proj_cfg(*op.img);
+                cfg["width"] = input.width();
+                cfg["height"] = input.height();
+                image::set_metadata_proj_cfg(*op.img, cfg);
+            }
+
             return reproject(op, progress);
         }
     } // namespace proj

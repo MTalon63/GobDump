@@ -25,7 +25,7 @@ namespace satdump
     namespace handlers
     {
         ImageProductHandler::ImageProductHandler(std::shared_ptr<products::Product> p, bool dataset_mode)
-            : ProductHandler(p, dataset_mode, [p](auto &c) { return products::check_expression_product_composite((products::ImageProduct *)p.get(), c["expression"]); })
+            : ProductHandler(p, dataset_mode, [p](auto &c) { return c.contains("expression") && c["expression"].is_string() && products::check_expression_product_composite((products::ImageProduct *)p.get(), c["expression"]); })
         {
             handler_tree_icon = u8"\uf71e";
             preset_reset_by_handler = true;
@@ -350,7 +350,7 @@ namespace satdump
 
         void ImageProductHandler::setConfig(nlohmann::json p)
         {
-            if (p.contains("expression"))
+            if (p.contains("expression") && p["expression"].is_string())
             {
                 expression = p["expression"];
                 channel_selection_curr_id = -1;
@@ -422,7 +422,7 @@ namespace satdump
 
             for (int i = 0; i < product->images.size(); i++)
             {
-                if (channels_calibrated_ranges.count(i) && channels_calibrated_ranges[i].size() > 0)
+                if (channels_calibrated_ranges.count(i) && channels_calibrated_ranges[i].count(product->images[i].calibration_type))
                 {
                     auto &r = p["calibration_ranges"];
                     auto &name = product->images[i].channel_name;
@@ -458,7 +458,8 @@ namespace satdump
                     else
                     { // Normal case
                         img = product->images[channel_selection_curr_id].image;
-                        image::set_metadata_proj_cfg(img, product->get_proj_cfg(product->images[channel_selection_curr_id].abs_index));
+                        if (product->has_proj_cfg())
+                            image::set_metadata_proj_cfg(img, product->get_proj_cfg(product->images[channel_selection_curr_id].abs_index));
                     }
 
                     // Set name again!
