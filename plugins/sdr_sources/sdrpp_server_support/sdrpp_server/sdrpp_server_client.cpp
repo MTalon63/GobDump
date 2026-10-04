@@ -187,6 +187,14 @@ namespace server
             return;
         }
 
+        if (!fitsInStream(_this->r_pkt_hdr->size, _this->output->getBufferSize()))
+        {
+            logger->error("SDR++ Server sent a %d byte packet, larger than the %d byte output buffer, dropping connection",
+                          (int)_this->r_pkt_hdr->size, _this->output->getBufferSize());
+            _this->client->close();
+            return;
+        }
+
         int len = 0;
         int read = 0;
         int goal = _this->r_pkt_hdr->size - sizeof(PacketHeader);

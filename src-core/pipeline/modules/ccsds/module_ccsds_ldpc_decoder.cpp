@@ -135,12 +135,6 @@ namespace satdump
                     }
                 }
 
-                soft_buffer = new int8_t[d_ldpc_frame_size];
-                frames_in_ldpc_buffer = 0;
-                ldpc_input_buffer = new int8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
-                ldpc_output_buffer = new uint8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
-                deframer_buffer = new uint8_t[d_ldpc_frame_size * 64];
-
                 memset(llr_scale_history, 0, sizeof(llr_scale_history));
                 memset(ldpc_iter_history, 0, sizeof(ldpc_iter_history));
 
@@ -182,6 +176,12 @@ namespace satdump
 
                 logger->info("LDPC algorithm: %s (alpha %.3f, offset-beta %.3f), %d iterations", codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm).c_str(),
                              d_ldpc_nms_alpha_q8 / 256.0f, d_ldpc_offset_beta_q8 / 256.0f, d_ldpc_cap_iterations);
+
+                soft_buffer = new int8_t[d_ldpc_frame_size];
+                frames_in_ldpc_buffer = 0;
+                ldpc_input_buffer = new int8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
+                ldpc_output_buffer = new uint8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
+                deframer_buffer = new uint8_t[d_ldpc_frame_size * 64];
 
                 is_started = true;
 

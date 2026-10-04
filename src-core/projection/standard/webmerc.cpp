@@ -35,6 +35,6 @@ namespace proj
         *phi = atan(sinh(y / proj->k0));
         *lam = x / proj->k0;
 
-        return true;
+        return false;
     }
 }

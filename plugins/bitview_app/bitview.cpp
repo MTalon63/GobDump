@@ -207,13 +207,15 @@ namespace satdump
                 auto ptr = bc->get_ptr();
                 auto sz = bc->get_ptr_size();
 
-                bc->highlights.clear();
+                std::vector<BitContainer::HighlightDef> found;
 
                 for (int i = 0; i < (int)(sz / 8) - 4; i++)
                 {
                     if (ptr[i + 0] == 0x1a && ptr[i + 1] == 0xcf && ptr[i + 2] == 0xfc && ptr[i + 3] == 0x1d)
-                        bc->highlights.push_back({(size_t)i * 8, 32, 255, 0, 255});
+                        found.push_back({(size_t)i * 8, 32, 255, 0, 255});
                 }
+
+                bc->setHighlights(std::move(found));
 
                 bc->init_display();
 
@@ -225,7 +227,7 @@ namespace satdump
 
         if (ImGui::Button("Clear Sync"))
         {
-            bc->highlights.clear();
+            bc->clearHighlights();
             bc->init_display();
         }
     }

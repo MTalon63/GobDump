@@ -139,6 +139,25 @@ namespace meteor
             int msumr_serial_number = satdump::most_common(msumr_ids.begin(), msumr_ids.end(), -1);
             msumr_ids.clear();
 
+            if (d_parameters.contains("satellite_number") && d_parameters["satellite_number"].is_string())
+            {
+                std::string override_sat = d_parameters["satellite_number"];
+                std::transform(override_sat.begin(), override_sat.end(), override_sat.begin(), [](unsigned char c) { return std::toupper(c); });
+
+                if (override_sat == "M2")
+                    msumr_serial_number = 0;
+                else if (override_sat == "M2-1")
+                    msumr_serial_number = 1;
+                else if (override_sat == "M2-2")
+                    msumr_serial_number = 2;
+                else if (override_sat == "M2-3")
+                    msumr_serial_number = 3;
+                else if (override_sat == "M2-4")
+                    msumr_serial_number = 4;
+                else if (override_sat != "AUTO")
+                    logger->warn("Invalid METEOR satellite \"%s\" provided. Using transmitted ID!", d_parameters["satellite_number"].get<std::string>().c_str());
+            }
+
             std::string sat_name = "Unknown Meteor";
             if (msumr_serial_number == 0)
                 sat_name = "METEOR-M2";
@@ -235,6 +254,11 @@ namespace meteor
                     msumr_products.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath("projections_settings/meteor_m2-3_msumr.json")), tle, filter_timestamps);
                 else if (msumr_serial_number == 4)
                     msumr_products.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath("projections_settings/meteor_m2-4_msumr.json")), tle, filter_timestamps);
+                else
+                {
+                    logger->warn("No MSU-MR projection settings for this satellite, using M2 defaults!");
+                    msumr_products.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath("projections_settings/meteor_m2_msumr.json")), tle, filter_timestamps);
+                }
 
                 auto msu_cfg = loadJsonFile(resources::getResourcePath("calibration/MSU-MR.json"));
 
@@ -294,6 +318,8 @@ namespace meteor
                     mtvza_products.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath("projections_settings/meteor_m2-3_mtvza.json")), tle, mreader.timestamps);
                 else if (msumr_serial_number == 4)
                     mtvza_products.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath("projections_settings/meteor_m2-4_mtvza.json")), tle, mreader.timestamps);
+                else
+                    logger->warn("No MTVZA projection settings for this satellite, saving without projection info!");
 
                 for (int i = 0; i < 30; i++)
                     mtvza_products.images.push_back({i, "MTVZA-" + std::to_string(i + 1), std::to_string(i + 1), mreader.getChannel(i)});

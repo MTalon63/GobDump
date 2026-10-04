@@ -50,4 +50,11 @@ namespace server {
         uint32_t cmd;
     };
 #pragma pack(pop)
+
+    // The destination stream only holds stream_capacity elements, so a payload larger than
+    // that cannot be delivered - neither by memcpy nor by swap, which trusts the count.
+    inline bool fitsInStream(uint32_t packet_size, int stream_capacity)
+    {
+        return packet_size <= (uint32_t)(stream_capacity + (int)sizeof(PacketHeader));
+    }
 }

@@ -42,8 +42,9 @@ namespace satdump
                   d_rs_type(parameters.count("rs_type") > 0 ? parameters["rs_type"].get<std::string>() : "none"),
                   d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false)
             {
-                soft_buffer = new int8_t[d_buffer_size];
-                frame_buffer = new uint8_t[d_buffer_size * 8]; // Larger by safety
+                if (d_rs_interleaving_depth > 10)
+                    throw satdump_exception("CCSDS Concatenated Decoder : rs_i must be <= 10!");
+
                 d_bpsk_90 = false;
                 d_oqpsk_mode = false;
 
@@ -140,7 +141,6 @@ namespace satdump
                     ViterbiSlot s;
                     s.rate = rate;
                     s.name = sname;
-                    s.out  = new uint8_t[d_buffer_size * 8];
                     // Store params so reinit() can recreate the object with a clean trellis
                     s.ber_threshold = d_viterbi_ber_threasold;
                     s.outsync_after = d_viterbi_outsync_after;
@@ -157,6 +157,7 @@ namespace satdump
                         s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_7_8)
                         s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                    s.out = new uint8_t[d_buffer_size * 8];
                     return s;
                 };
 
@@ -182,6 +183,9 @@ namespace satdump
                     else throw satdump_exception("CCSDS Concatenated Decoder : invalid conv_rate!");
                     d_rate_pool.push_back(makeSlot(rate, rname));
                 }
+
+                soft_buffer = new int8_t[d_buffer_size];
+                frame_buffer = new uint8_t[d_buffer_size * 8]; // Larger by safety
 
                 d_active_rate_idx = 0;
                 viterbi_rate_str  = d_rate_pool[0].name;
