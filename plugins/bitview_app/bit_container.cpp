@@ -83,8 +83,22 @@ namespace satdump
         }
     }
 
+    void BitContainer::setHighlights(std::vector<HighlightDef> h)
+    {
+        std::lock_guard<std::mutex> l(parts_mtx);
+        highlights = std::move(h);
+    }
+
+    void BitContainer::clearHighlights()
+    {
+        std::lock_guard<std::mutex> l(parts_mtx);
+        highlights.clear();
+    }
+
     void BitContainer::init_display()
     {
+        std::lock_guard<std::mutex> l(parts_mtx);
+
         if (d_display_bits < 1)
             d_display_bits = 1;
         if (d_display_mode > 0)
@@ -174,6 +188,8 @@ namespace satdump
 
     void BitContainer::doUpdateTextures()
     {
+        std::lock_guard<std::mutex> l(parts_mtx);
+
         if (force_update_all)
         {
             for (size_t ii = 0; ii < img_parts_y; ii++)
@@ -244,6 +260,18 @@ namespace satdump
 
     void BitContainer::doDrawPlotTextures(ImPlotRect c)
     {
+        // Visibility is both read and written here, so the walk stays under the lock, but the
+        // ImPlot calls are staged and issued after it - no GPU call happens while it is held.
+        struct PlotReq
+        {
+            unsigned int image_id;
+            double x1, y1, x2, y2;
+            int idx;
+        };
+        std::vector<PlotReq> to_draw;
+
+        std::lock_guard<std::mutex> l(parts_mtx);
+
         for (auto &part : image_parts)
         {
             if (part.i == -1)
@@ -262,7 +290,7 @@ namespace satdump
                 //        c.Min().x, c.Min().y, c.Max().x, c.Max().y,
                 //        part.pos1_x, part.pos1_y, part.pos2_x, part.pos2_y,
                 //        part.i);
-                ImPlot::PlotImage("Test", (void *)(intptr_t)part.image_id, {part.pos1_x, part.pos1_y}, {part.pos2_x, part.pos2_y});
+                to_draw.push_back({part.image_id, part.pos1_x, part.pos1_y, part.pos2_x, part.pos2_y, part.i});
 
                 part.visible = true;
             }
@@ -272,6 +300,15 @@ namespace satdump
                 part.need_update = true;
                 update = true;
             }
+        }
+
+        // ImPlot keys items on a hash of the label, so a shared constant makes every part one
+        // item; the "##" form keeps each part's own label out of the legend.
+        char label[32];
+        for (auto &r : to_draw)
+        {
+            snprintf(label, sizeof(label), "##part%d", r.idx);
+            ImPlot::PlotImage(label, (void *)(intptr_t)r.image_id, {r.x1, r.y1}, {r.x2, r.y2});
         }
     }
 } // namespace satdump

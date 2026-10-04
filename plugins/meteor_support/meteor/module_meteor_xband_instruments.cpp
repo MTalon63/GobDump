@@ -32,20 +32,22 @@ namespace meteor
 
             logger->info("Using input frames " + d_input_file);
 
+            std::string sat_number = (d_parameters.contains("satellite_number") && d_parameters["satellite_number"].is_string()) ? d_parameters["satellite_number"].get<std::string>() : "AUTO";
+
             std::string sat_name = "Unknown Meteor";
-            if (d_parameters["satellite_number"].get<std::string>() == "M2-2")
+            if (sat_number == "M2-2")
                 sat_name = "METEOR-M2-2";
-            else if (d_parameters["satellite_number"].get<std::string>() == "M2-3")
+            else if (sat_number == "M2-3")
                 sat_name = "METEOR-M2-3";
-            else if (d_parameters["satellite_number"].get<std::string>() == "M2-4")
+            else if (sat_number == "M2-4")
                 sat_name = "METEOR-M2-4";
 
             int norad = 0;
-            if (d_parameters["satellite_number"].get<std::string>() == "M2-2")
+            if (sat_number == "M2-2")
                 norad = 44387; // M2-2
-            else if (d_parameters["satellite_number"].get<std::string>() == "M2-3")
+            else if (sat_number == "M2-3")
                 norad = 57166; // M2-3
-            else if (d_parameters["satellite_number"].get<std::string>() == "M2-4")
+            else if (sat_number == "M2-4")
                 norad = 59051; // M2-4
 
             if (d_instrument_mode == DUMP_TYPE_MTVZA)
@@ -155,7 +157,21 @@ namespace meteor
 
                     satdump::products::ImageProduct mtvza_products;
                     mtvza_products.instrument_name = "mtvza";
-                    mtvza_products.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath("projections_settings/meteor_m2-3_mtvza_dump.json")),
+
+                    std::string mtvza_proj_sat = "m2-3"; // M2-3 is the only dump geometry available
+                    if (sat_number == "M2-2")
+                        mtvza_proj_sat = "m2-2";
+                    else if (sat_number == "M2-4")
+                        mtvza_proj_sat = "m2-4";
+
+                    std::string mtvza_proj_path = "projections_settings/meteor_" + mtvza_proj_sat + "_mtvza_dump.json";
+                    if (!std::filesystem::exists(resources::getResourcePath(mtvza_proj_path)))
+                    {
+                        logger->warn("No MTVZA dump projection settings for this satellite, using M2-3 defaults!");
+                        mtvza_proj_path = "projections_settings/meteor_m2-3_mtvza_dump.json";
+                    }
+
+                    mtvza_products.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath(mtvza_proj_path)),
                                                                satdump::db_keplers->get_from_norad(norad), timestamps);
 
                     for (int i = 0; i < 46; i++)

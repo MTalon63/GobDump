@@ -2,6 +2,7 @@
 
 #include "imgui/implot/implot.h"
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -48,6 +49,10 @@ namespace satdump
         size_t img_parts_x = 0;
         std::vector<PartImage> image_parts;
 
+        // init_display() rebuilds image_parts and is called both from the UI thread (any display
+        // setting) and from a worker (Find Sync), while the renderer walks it every frame.
+        std::mutex parts_mtx;
+
     private:
         uint32_t *wip_texture_buffer = nullptr;
 
@@ -85,6 +90,11 @@ namespace satdump
         std::string getID() { return std::string(unique_id); }
 
         void init_display();
+
+        // Same lock init_display() takes, so highlight edits cannot race the rebuild that
+        // reads highlights while walking the parts.
+        void setHighlights(std::vector<HighlightDef> h);
+        void clearHighlights();
 
         void doUpdateTextures();
         void doDrawPlotTextures(ImPlotRect c);

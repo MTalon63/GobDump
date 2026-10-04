@@ -46,7 +46,7 @@ namespace dsp
     class stream
     {
     public:
-        stream(int stream_size = STREAM_BUFFER_SIZE)
+        stream(int stream_size = STREAM_BUFFER_SIZE) : buffer_size(stream_size)
         {
             writeBuf = create_volk_buffer<T>(stream_size);
             readBuf = create_volk_buffer<T>(stream_size);
@@ -160,6 +160,7 @@ namespace dsp
         }
         int getDataSize() { return dataSize; }
         bool getReady() { return dataReady; }
+        int getBufferSize() { return buffer_size; }
 
         T *writeBuf;
         T *readBuf;
@@ -176,6 +177,7 @@ namespace dsp
         bool readerStop = false;
         bool writerStop = false;
 
+        const int buffer_size;
         int dataSize = 0;
     };
 

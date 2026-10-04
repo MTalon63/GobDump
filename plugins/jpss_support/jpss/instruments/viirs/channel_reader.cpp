@@ -79,7 +79,7 @@ namespace jpss
                         {
                             VIIRS_Segment &current_segment = get_current_seg();
 
-                            if (detector > channelSettings.zoneHeight)
+                            if (detector >= channelSettings.zoneHeight)
                                 continue;
 
                             // Decompress

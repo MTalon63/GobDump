@@ -73,11 +73,11 @@ namespace satdump
                 }
                 geocorrect_image = false;
 
+                if (removeProjectionInfoFromCrop && image::has_metadata_proj_cfg(img))
+                    image::get_metadata(img).erase("proj_cfg");
+
                 auto sh = std::make_shared<ImageHandler>(img);
                 sh->image_name = image_name + _(" Crop");
-
-                if (removeProjectionInfoFromCrop)
-                    image::set_metadata_proj_cfg(img, {});
 
                 if (sendCropToRoot)
                 {

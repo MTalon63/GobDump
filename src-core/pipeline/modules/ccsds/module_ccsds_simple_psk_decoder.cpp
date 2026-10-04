@@ -42,6 +42,9 @@ namespace satdump
                   d_rs_type(parameters.count("rs_type") > 0 ? parameters["rs_type"].get<std::string>() : "none"),
                   d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false)
             {
+                if (d_rs_interleaving_depth > 10)
+                    throw satdump_exception("CCSDS Simple PSK Decoder : rs_i must be <= 10!");
+
                 // Get constellation
                 if (d_constellation_str == "bpsk")
                     d_constellation = dsp::BPSK;
