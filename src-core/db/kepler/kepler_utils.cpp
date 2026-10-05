@@ -67,6 +67,20 @@ namespace satdump
             throw satdump_exception("Error, value must be below 1!");
     }
 
+    // TLE checksum: digits add their value, '-' adds 1, anything else adds 0
+    static char tleChecksum(const std::string &line)
+    {
+        int sum = 0;
+        for (char c : line)
+        {
+            if (c == '-')
+                sum++;
+            else if (c >= '0' && c <= '9')
+                sum += c - '0';
+        }
+        return (char)('0' + (sum % 10));
+    }
+
     TLE keplerToTle(KeplerData kep)
     {
         TLE tle;
@@ -105,7 +119,7 @@ namespace satdump
             des[5] = ori[8];
         }
         else
-            des.resize(8);
+            des.resize(8, ' ');
 
         tle.line1 = "1 " +                                              // Line Number
                     strL(tle_id, 5) +                                   // Satellite Number
@@ -117,8 +131,8 @@ namespace satdump
                     " " + strLE(kep.second_derivative_mean_motion, 8) + // Second derivative mean motion
                     " " + strLE(kep.bstar_drag_term, 8) +               // Drag term
                     " 0 " +                                             // Ephemeris type
-                    strL(kep.element_number, 4) +                       // Element set number
-                    "C";                                                // Checksum
+                    strL(kep.element_number, 4);                        // Element set number
+        tle.line1 += tleChecksum(tle.line1);                            // Checksum
 
         tle.line2 = "2 " +                                   // Line Number
                     strL(tle_id, 5) +                        // Satellite Number
@@ -128,8 +142,8 @@ namespace satdump
                     " " + strL(kep.argument_of_perigee, 8) + // Arg of perigee
                     " " + strL(kep.mean_anomaly, 8) +        // Mean anomaly
                     " " + strL(kep.mean_motion, 11) +        // Mean motion
-                    strL(kep.revolutions_at_epoch, 5) +      // Revs at epoch
-                    "C";                                     // Checksum
+                    strL(kep.revolutions_at_epoch, 5);       // Revs at epoch
+        tle.line2 += tleChecksum(tle.line2);             // Checksum
 
         return tle;
     }

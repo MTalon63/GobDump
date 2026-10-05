@@ -166,7 +166,8 @@ namespace satdump
 
             // libpng delivers 1/2/4-bit rows PACKED (several pixels per byte), but the unpacking loop
             // below reads one byte per pixel. Expand to 8 so depth, d_maxv and the row layout agree.
-            if (bit_depth < 8)
+            // Palette + disableIndexing must keep packed indices - expanding emits RGB(A) into a 1-channel row
+            if (bit_depth < 8 && !(color_type == PNG_COLOR_TYPE_PALETTE && disableIndexing))
             {
                 png_set_expand_gray_1_2_4_to_8(png);
                 png_read_update_info(png, info);
@@ -260,7 +261,8 @@ namespace satdump
             size_t d_width = png_get_image_width(png, info);
             size_t d_height = png_get_image_height(png, info);
             int color_type = png_get_color_type(png, info);
-            int bit_depth = png_get_bit_depth(png, info) > 8 ? 16 : 8; // TODOIMG check?
+            int orig_bit_depth = png_get_bit_depth(png, info);
+            int bit_depth = orig_bit_depth > 8 ? 16 : 8; // TODOIMG check?
 
             int d_channels = 0;
             if (color_type == PNG_COLOR_TYPE_GRAY)
@@ -280,6 +282,14 @@ namespace satdump
                 }
                 else
                     d_channels = 1;
+            }
+
+            // libpng delivers 1/2/4-bit rows PACKED (several pixels per byte), but the loop below reads
+            // one byte per pixel. Palette + disableIndexing must keep packed indices.
+            if (orig_bit_depth < 8 && !(color_type == PNG_COLOR_TYPE_PALETTE && disableIndexing))
+            {
+                png_set_expand_gray_1_2_4_to_8(png);
+                png_read_update_info(png, info);
             }
 
             img.init(bit_depth, d_width, d_height, d_channels);

@@ -29,7 +29,7 @@ namespace satdump
 
             auto &ch = data[ch_index];
 
-            if (sample_index > ch.data.size())
+            if (sample_index >= ch.data.size())
                 throw satdump_exception("Invalid sample index " + std::to_string(sample_index) + " our of " + std::to_string(ch.data.size()) + "!");
 
             if (ch.positions.size() > 0)

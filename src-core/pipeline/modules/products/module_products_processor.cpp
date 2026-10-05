@@ -37,12 +37,14 @@ namespace satdump
                 satdump::products::DataSet dataset;
                 dataset.load(d_input_file);
 
+                std::string pro_dir = std::filesystem::path(d_input_file).parent_path().string();
+
                 for (auto d : dataset.products_list)
                 {
-                    std::string pro_path = std::filesystem::path(d_input_file).parent_path().string() + "/" + d;
+                    std::string pro_path = pro_dir + "/" + d;
                     logger->warn("Processing product at " + pro_path);
                     auto prod = satdump::products::loadProduct(pro_path);
-                    satdump::products::process_product_with_handler(prod, pro_path);
+                    satdump::products::process_product_with_handler(prod, pro_dir);
                 }
 #endif
                 }
