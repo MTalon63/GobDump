@@ -64,11 +64,12 @@ namespace satdump
 
             // TODOIMG for now can only project 16-bits
             image::Image op_img16;
+            image::Image *src = op.img;
             if (op.img->depth() != 16)
             {
                 op_img16 = op.img->to16bits();
                 image::set_metadata(op_img16, image::get_metadata(*op.img));
-                op.img = &op_img16;
+                src = &op_img16;
             }
 
             image::Image result_img(16, op.output_width, op.output_height, 4);
@@ -98,7 +99,7 @@ namespace satdump
             bool src_proj_err = false;
             try
             {
-                src_proj = image::get_metadata_proj_cfg(*op.img);
+                src_proj = image::get_metadata_proj_cfg(*src);
             }
             catch (std::exception &)
             {
@@ -117,7 +118,7 @@ namespace satdump
                             continue;
                         if (src_proj.forward(pos, x2, y2)) // proj::projection_perform_fwd(&src_proj, lon, lat, &x2, &y2))
                             continue;
-                        transposePixel(*op.img, result_img, x2, y2, x, y);
+                        transposePixel(*src, result_img, x2, y2, x, y);
                     }
                     if (progress != nullptr)
                         *progress = float(x) / float(result_img.width());
@@ -225,15 +226,15 @@ namespace satdump
                 }
                 else
                 {
-                    auto prj_cfg = image::get_metadata_proj_cfg(*op.img);
-                    prj_cfg["width"] = op.img->width();
-                    prj_cfg["height"] = op.img->height();
+                    auto prj_cfg = image::get_metadata_proj_cfg(*src);
+                    prj_cfg["width"] = src->width();
+                    prj_cfg["height"] = src->height();
                     warp::WarpOperation operation;
                     operation.ground_control_points = compute_gcps(prj_cfg);
-                    operation.input_image = op.img;
+                    operation.input_image = src;
                     operation.output_rgba = true;
                     // TODO : CHANGE!!!!!!
-                    int l_width = prj_cfg.contains("f_width") ? prj_cfg["f_width"].get<int>() : std::max<int>(op.img->width(), 512) * 10;
+                    int l_width = prj_cfg.contains("f_width") ? prj_cfg["f_width"].get<int>() : std::max<int>(src->width(), 512) * 10;
                     operation.output_width = l_width;
                     operation.output_height = l_width / 2;
 

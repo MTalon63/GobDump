@@ -451,6 +451,10 @@ namespace satdump
                     if (channel_calibrated)
                     { // Calibrated case
                         std::string &unit = channels_calibrated_curr_unit;
+
+                        if (!channels_calibrated_ranges.count(channel_selection_curr_id) ||
+                            !channels_calibrated_ranges[channel_selection_curr_id].count(unit))
+                            throw satdump_exception("No calibrated range available for unit " + unit);
                         img = products::generate_calibrated_product_channel(product, product->images[channel_selection_curr_id].channel_name,
                                                                             channels_calibrated_ranges[channel_selection_curr_id][unit].min,
                                                                             channels_calibrated_ranges[channel_selection_curr_id][unit].max, unit, &progress);
