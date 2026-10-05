@@ -270,11 +270,9 @@ namespace satdump
             else if (d_type == TYPE_INTERP_XY)
             {
                 double out[2]; // TODOREWORK
-                printf("%f %f REV => ", *x, *y);
                 interp_rev_interpolator->get_point(*x, *y, out);
                 *x = out[0];
                 *y = out[1];
-                printf("%f %f\n ", *x, *y);
             }
             else if (d_type == TYPE_INVALID)
                 throw satdump_exception("Invalid Channel Transform!\n");

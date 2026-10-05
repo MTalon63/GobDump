@@ -9,7 +9,8 @@ namespace satdump
     {
         FFTPanBlock::FFTPanBlock() : Block("fft_pan_cc", {{"in", DSP_SAMPLE_TYPE_CF32}}, {})
         {
-            output_fft_buff = new float[dsp::STREAM_BUFFER_SIZE]; // TODOREWORK
+            // Never reallocated (the flowgraph keeps this pointer), so cover the largest FFT size in get_cfg_list
+            output_fft_buff = new float[dsp::STREAM_BUFFER_SIZE > 131072 ? dsp::STREAM_BUFFER_SIZE : 131072]();
             init();
         }
 
