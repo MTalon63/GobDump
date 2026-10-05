@@ -544,21 +544,20 @@ namespace satdump
                 if (product->has_proj_cfg())
                     image::set_metadata_proj_cfg(out, product->get_proj_cfg(rtkt->ch_idx));
 
+                if (product->contents.contains("lazyload_path"))
+                {
+                    for (auto &img : product->images)
+                    {
+                        logger->trace("Unload " + img.channel_name);
+                        img.image.clear();
+                    }
+                }
+
                 return out;
             }
             catch (mu::ParserError &e)
             {
                 throw satdump_exception(e.GetMsg());
-            }
-
-            // TODOREWORK?
-            if (product->contents.contains("lazyload_path"))
-            {
-                for (auto &img : product->images)
-                {
-                    logger->trace("Unload " + img.channel_name);
-                    img.image.clear();
-                }
             }
         }
 

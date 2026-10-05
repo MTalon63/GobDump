@@ -66,7 +66,7 @@ namespace satdump
                             vfo_mode_norads_vis.insert({pass.norad, pass});
 
                             logger->critical("AOS!!!!!!!!!!!!!! %d", pass.norad);
-                            eventBus->fire_event<events::TrackingSchedulerAOSEvent>({upcoming_satellite_passes_sel[0]});
+                            eventBus->fire_event<events::TrackingSchedulerAOSEvent>({pass});
                             TrackedObject obj;
                             for (auto &v : enabled_satellites)
                                 if (v.norad == pass.norad)
@@ -82,7 +82,7 @@ namespace satdump
                     if (curr_time > p.second.los_time)
                     {
                         logger->critical("LOS!!!!!!!!!!!!!! %d ", p.first);
-                        eventBus->fire_event<events::TrackingSchedulerLOSEvent>({upcoming_satellite_passes_sel[0]});
+                        eventBus->fire_event<events::TrackingSchedulerLOSEvent>({p.second});
                         TrackedObject obj;
                         for (auto &v : enabled_satellites)
                             if (v.norad == p.first)
@@ -98,11 +98,15 @@ namespace satdump
                 if (update)
                 {
                     updateAutotrackPasses(curr_time);
-                    TrackedObject obj;
-                    for (auto &v : enabled_satellites)
-                        if (v.norad == upcoming_satellite_passes_sel[0].norad)
-                            obj = v;
-                    eng_callback(autotrack_cfg, upcoming_satellite_passes_sel[0], obj);
+
+                    if (upcoming_satellite_passes_sel.size() > 0)
+                    {
+                        TrackedObject obj;
+                        for (auto &v : enabled_satellites)
+                            if (v.norad == upcoming_satellite_passes_sel[0].norad)
+                                obj = v;
+                        eng_callback(autotrack_cfg, upcoming_satellite_passes_sel[0], obj);
+                    }
                 }
             }
             else
@@ -137,6 +141,7 @@ namespace satdump
                     autotrack_pass_has_started = false;
                     updateAutotrackPasses(curr_time);
 
+                    if (upcoming_satellite_passes_sel.size() > 0)
                     {
                         TrackedObject obj;
                         for (auto &v : enabled_satellites)

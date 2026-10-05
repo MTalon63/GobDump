@@ -20,6 +20,8 @@ namespace ziq
         stream.write((char *)&string_size, 8);
         stream.write((char *)cfg.annotation.c_str(), string_size);
 
+        max_buffer_size = dsp::STREAM_BUFFER_SIZE; // Abolute max size. Show never be reached
+
         // If compresssed, init compression
         if (cfg.is_compressed)
         {
@@ -29,7 +31,6 @@ namespace ziq
             ZSTD_CCtx_setParameter(zstd_ctx, ZSTD_c_nbWorkers, zst_workers);
 
             // Init buffer
-            max_buffer_size = dsp::STREAM_BUFFER_SIZE; // Abolute max size. Show never be reached
             output_compressed = new uint8_t[max_buffer_size * sizeof(complex_t)];
         }
 
