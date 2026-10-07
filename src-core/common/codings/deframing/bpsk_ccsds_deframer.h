@@ -34,6 +34,11 @@ namespace deframing
         int STATE_SYNCING = 6; // SYNCING state. We found a lock, but can't trust it yet (bit-level search)
         int STATE_SYNCED = 12; // SYNCED state. We found a lock and confirmed it, skipping bit-level search and with high tolerance.
 
+        // Defaults reproduce the old hardcoded behaviour exactly (0 / 11).
+        int SYNC_ACQUIRE_ERRORS = 0; // ASM Hamming distance accepted in NOSYNC (0 = exact)
+        int SYNC_GOOD_FRAMES = 11;   // Good ASMs needed before SYNCING is promoted to SYNCED
+        bool SYNC_CONFIRM = false;   // Hold each frame until the next ASM confirms the lock
+
     private:
         int d_state = STATE_NOSYNC; // Default state
         bool in_frame = false;      // Are we currently outpuing a frame?
@@ -42,6 +47,8 @@ namespace deframing
 
         int bit_of_frame = 0;  // Bit of frame we're at
         uint8_t *frame_buffer; // Current WIP frame buffer
+        uint8_t *pending_buffer;
+        bool have_pending = false;
 
         int d_invalid_asm = 0, d_good_asm = 0; // Lock monitoring
 
@@ -57,6 +64,7 @@ namespace deframing
 
         void write_bit(uint8_t b);
         void reset_frame();
+        void flush_pending(uint8_t *output, int &frame_count);
 
     public:
         BPSK_CCSDS_Deframer(int cadu_size = 8192, uint32_t sync = 0x1ACFFC1D);

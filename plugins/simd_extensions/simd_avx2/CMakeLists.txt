@@ -1,35 +1,27 @@
 cmake_minimum_required(VERSION 3.12)
 project(simd_avx2)
 
-if(NOT ANDROID)
-    include(FindAVX)
-endif()
-
+# FindAVX also defines CXX_HAS_AVX_2, which is the AVX probe, not this one.
 if(ANDROID)
-    set(CXX_HAS_AVX_2 0)
-
-    if(ANDROID_ABI STREQUAL "x86")
-        set(CXX_HAS_AVX_2 1)
+    if(ANDROID_ABI STREQUAL "x86" OR ANDROID_ABI STREQUAL "x86_64")
+        set(SIMD_HAVE_AVX2 1)
+        set(FINAL_FLAGS_AVX2 "-mavx2 -mfma")
+    else()
+        set(SIMD_HAVE_AVX2 0)
     endif()
-
-    if(ANDROID_ABI STREQUAL "x86_64")
-        set(CXX_HAS_AVX_2 1)
-    endif()
+else()
+    include(FindAVX)
+    set(SIMD_HAVE_AVX2 ${CXX_AVX2_FOUND})
+    set(FINAL_FLAGS_AVX2 "${CXX_AVX2_FLAGS}")
 endif()
 
-if(CXX_HAS_AVX_2)
+if(SIMD_HAVE_AVX2)
     message("Found AVX2 features, enabling AVX2 plugin")
 
     file(GLOB_RECURSE simd_avx2_CPPS *.cpp)
     add_library(simd_avx2 SHARED ${simd_avx2_CPPS})
     target_link_libraries(simd_avx2 PUBLIC gobdump_core)
     target_include_directories(simd_avx2 PUBLIC src)
-
-    if(UNIX OR ANDROID OR MINGW)
-        set(FINAL_FLAGS_AVX2 "-mavx2")
-    elseif(MSVC)
-        set(FINAL_FLAGS_AVX2 "${AVX2_C_FLAGS}")
-    endif()
 
     # Enable on all files but main.cpp
     foreach(_file ${simd_avx2_CPPS})

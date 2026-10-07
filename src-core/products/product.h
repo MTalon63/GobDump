@@ -125,6 +125,9 @@ namespace satdump
          */
         std::shared_ptr<Product> loadProduct(std::string path);
 
+        /** @brief Load a product, skipping channel image decoding when load_images is false. */
+        std::shared_ptr<Product> loadProduct(std::string path, bool load_images);
+
         /**
          * @brief Struct holding functions related to products
          * @param loadFromFile function to load a specific product type from the cbor file. Eg, simply calls Product::load()

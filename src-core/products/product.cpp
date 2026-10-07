@@ -77,6 +77,19 @@ namespace satdump
             }
         }
 
+        std::shared_ptr<Product> loadProduct(std::string path, bool load_images)
+        {
+            if (load_images)
+                return loadProduct(path);
+
+            if (std::filesystem::is_directory(path) || (path.find("http") == 0 && path.find(".cbor") == std::string::npos))
+                path = path + "/product.cbor";
+
+            std::shared_ptr<Product> p = std::make_shared<Product>();
+            p->load(path);
+            return p;
+        }
+
         std::map<std::string, RegisteredProduct> product_loaders;
 
         void registerProducts()

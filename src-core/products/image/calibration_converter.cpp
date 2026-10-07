@@ -50,7 +50,9 @@ namespace satdump
 
         UnitConverter::UnitConverter(void *product, std::string channel_name)
         {
-            set_proj(((products::ImageProduct *)product)->get_proj_cfg(((products::ImageProduct *)product)->get_channel_image(channel_name).abs_index));
+            // No projection config => Projection::init throws "Image width must be present".
+            if (((products::ImageProduct *)product)->has_proj_cfg())
+                set_proj(((products::ImageProduct *)product)->get_proj_cfg(((products::ImageProduct *)product)->get_channel_image(channel_name).abs_index));
             set_wavenumber(((products::ImageProduct *)product)->get_channel_image(channel_name).wavenumber);
         }
 

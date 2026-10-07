@@ -118,6 +118,9 @@ namespace satdump
             int get_point(const double Px, const double Py, double *Pvars);
             int solve(void);
 
+            /** @brief solve() case; ONE_DIMENSIONAL means get_point() uses only fitted-line projection. */
+            vizGeorefInterType getType() const { return type; }
+
         private:
             vizGeorefInterType type;
 

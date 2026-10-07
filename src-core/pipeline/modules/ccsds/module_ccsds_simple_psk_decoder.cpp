@@ -72,6 +72,21 @@ namespace satdump
 
                 deframer = std::make_shared<deframing::BPSK_CCSDS_Deframer>(d_cadu_size, asm_sync);
                 deframer_qpsk = std::make_shared<deframing::BPSK_CCSDS_Deframer>(d_cadu_size, asm_sync); // For QPSK without NRZ-M which gets split into 2 BPSK deframers
+                if (parameters.count("asm_acquire_errors") > 0)
+                {
+                    deframer->SYNC_ACQUIRE_ERRORS = parameters["asm_acquire_errors"].get<int>();
+                    deframer_qpsk->SYNC_ACQUIRE_ERRORS = deframer->SYNC_ACQUIRE_ERRORS;
+                }
+                if (parameters.count("asm_good_frames") > 0)
+                {
+                    deframer->SYNC_GOOD_FRAMES = parameters["asm_good_frames"].get<int>();
+                    deframer_qpsk->SYNC_GOOD_FRAMES = deframer->SYNC_GOOD_FRAMES;
+                }
+                if (parameters.count("asm_confirm") > 0)
+                {
+                    deframer->SYNC_CONFIRM = parameters["asm_confirm"].get<bool>();
+                    deframer_qpsk->SYNC_CONFIRM = deframer->SYNC_CONFIRM;
+                }
                 if (d_rs_interleaving_depth != 0)
                     reed_solomon = std::make_shared<reedsolomon::ReedSolomon>(rstype, d_rs_fill_bytes);
 

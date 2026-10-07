@@ -34,6 +34,10 @@ namespace dsp
 
         void work();
 
+        // The symbol loop, with the TED form fixed at compile time so the branch is not in the body.
+        template <bool REAL_TED>
+        void work_loop(int nsamples);
+
         PolyphaseBank pfb;
 
         float phase_error = 0;
@@ -41,7 +45,20 @@ namespace dsp
         int ouc = 0;
         int inc = 0;
 
+        // Predicted interpolation instant: tap arm and sample offset advance by the rate estimate
+        // off a state re-anchored on (mu, inc) every MM_RING symbols (measured arm error ~1.2 RMS).
+        static constexpr int MM_RING = 8;
+        unsigned mm_i = MM_RING;
+        float mm_base = 0.5f;
+        float mm_omega = 1.0f;
+        int mm_inc = 0;
+
     public:
+        // BPSK only: real-form M&M with +/-1 decisions is 4 multiplies instead of two dependent
+        // complex ones, and keeps the complex slicer's imag sign (pure noise here) out of the error.
+        // A field, not a ctor arg, so the mangled name cannot change. Off unless a demod enables it.
+        bool bpsk_real_ted = false;
+
         MMClockRecoveryBlock(std::shared_ptr<dsp::stream<T>> input, float omega, float omegaGain, float mu, float muGain, float omegaLimit, int nfilt = 128, int ntaps = 8);
         ~MMClockRecoveryBlock();
     };

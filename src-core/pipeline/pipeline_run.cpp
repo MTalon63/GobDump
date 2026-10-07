@@ -185,25 +185,39 @@ namespace satdump
                 module->setInputType(DATA_FILE);
                 module->setOutputType(DATA_FILE);
 
-                module->init();
-
-                if (ui)
+                // A product failure must not unwind the pipeline after a successful decode.
+                try
                 {
-                    uiCallListMutex->lock();
-                    uiCallList->push_back(module);
-                    uiCallListMutex->unlock();
+                    module->init();
+
+                    if (ui)
+                    {
+                        uiCallListMutex->lock();
+                        uiCallList->push_back(module);
+                        uiCallListMutex->unlock();
+                    }
+
+                    module->process();
+
+                    if (ui)
+                    {
+                        uiCallListMutex->lock();
+                        uiCallList->clear();
+                        uiCallListMutex->unlock();
+                    }
+
+                    module.reset();
                 }
-
-                module->process();
-
-                if (ui)
+                catch (std::exception &e)
                 {
-                    uiCallListMutex->lock();
-                    uiCallList->clear();
-                    uiCallListMutex->unlock();
+                    logger->error("Error processing products : " + std::string(e.what()));
+                    if (ui)
+                    {
+                        uiCallListMutex->lock();
+                        uiCallList->clear();
+                        uiCallListMutex->unlock();
+                    }
                 }
-
-                module.reset();
             }
 
             eventBus->fire_event<events::PipelineDoneProcessingEvent>({id, output_directory});

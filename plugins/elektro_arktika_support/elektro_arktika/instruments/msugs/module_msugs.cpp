@@ -38,7 +38,6 @@ namespace elektro_arktika
 
         void MSUGSDecoderModule::process()
         {
-
             std::string directory = d_output_file_hint.substr(0, d_output_file_hint.rfind('/')) + "/MSU-GS";
 
             uint8_t cadu[1024];
@@ -168,8 +167,6 @@ namespace elektro_arktika
 
                     if (is++ % 10 == 0)
                         points.push_back({(double)p.first, p.second});
-
-                    printf("%4.4f, %4.4f\n", (double)p.first, p.second);
                 }
 
                 logger->critical(points.size());
@@ -185,24 +182,61 @@ namespace elektro_arktika
 
                 logger->info("Done calculating!");
 
-                for (int x = 0; x < 6004; x++)
+                // Row-major equivalent of the column-major loop in the else branch: same reverse()
+                // call and same pixel written once, but each source row is resampled once and then
+                // stride-copied into every destination column.
+                if (!points.empty() && t.is_reverse_x_separable())
                 {
-                    printf("%d\n", x);
-                    fflush(stdout);
-
-                    for (int y = 0; y < 17200; y++)
+                    const int W = (int)img_o.width(), H = (int)img_o.height();
+                    std::vector<double> src_y(H);
+                    std::vector<char> src_ok(H);
+                    for (int y = 0; y < H; y++)
                     {
                         double xx = 0, yy = y;
-
                         t.reverse(&yy, &xx);
+                        src_y[y] = yy;
+                        src_ok[y] = (xx >= 0.0 && xx < (double)W && yy >= 0.0 && yy < (double)W) ? 1 : 0;
+                    }
 
-                        // printf("%d %d %d %d\n", x, y, (int)xx, (int)yy);
+                    uint16_t *dst = (uint16_t *)img_m.raw_data();
 
-                        if (yy >= 0 && yy < 17200)
-                            img_m.set(0, x, y, img_o.get_pixel_bilinear(0, x, yy));
+#pragma omp parallel
+                    {
+                        std::vector<int> rowbuf(W);
+
+#pragma omp for schedule(dynamic, 16)
+                        for (int y = 0; y < H; y++)
+                        {
+                            if (!src_ok[y])
+                                continue;
+
+                            int y0 = (int)src_y[y];
+                            if (y0 > W - 2 || y0 < 0) // get_pixel_bilinear() returns a for its last row
+                                y0 = W - 2;
+
+                            img_o.get_pixel_bilinear_row(0, (size_t)y0, src_y[y] - (double)y0, rowbuf.data(), (size_t)W);
+
+                            uint16_t *out = dst + y;
+                            for (int x = 0; x < W; x++)
+                                out[(size_t)x * H] = (uint16_t)rowbuf[x];
+                        }
                     }
                 }
+                else
+                {
+                    for (int x = 0; x < 6004; x++)
+                    {
+                        for (int y = 0; y < 17200; y++)
+                        {
+                            double xx = 0, yy = y;
 
+                            t.reverse(&yy, &xx);
+
+                            if (yy >= 0 && yy < 17200)
+                                img_m.set(0, x, y, img_o.get_pixel_bilinear(0, x, yy));
+                        }
+                    }
+                }
             }
 
             // MSUVIS1 TODOREWORK

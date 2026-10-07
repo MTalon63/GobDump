@@ -335,6 +335,12 @@ namespace satdump
              */
             int get_pixel_bilinear(int channel, double x, double y);
 
+            /** @brief Same as get_pixel_bilinear(), with position and fractions passed in, identical results. */
+            int get_pixel_bilinear_xy(int channel, size_t x, double x_diff, size_t y, double y_diff);
+
+            /** @brief Exactly get_pixel_bilinear(cc, x, y) for each x of one row, with row setup hoisted. */
+            void get_pixel_bilinear_row(int channel, size_t y, double y_diff, int *out, size_t n);
+
         public:
             /**
              * @brief Fill image with a single value

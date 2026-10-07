@@ -9,11 +9,13 @@ namespace deframing
                                                                              CADU_SIZE(cadu_size)
     {
         frame_buffer = new uint8_t[CADU_SIZE + CADU_PADDING];
+        pending_buffer = new uint8_t[CADU_SIZE + CADU_PADDING];
     }
 
     BPSK_CCSDS_Deframer::~BPSK_CCSDS_Deframer()
     {
         delete[] frame_buffer;
+        delete[] pending_buffer;
     }
 
     int BPSK_CCSDS_Deframer::getState()
@@ -30,6 +32,7 @@ namespace deframing
         bit_of_frame  = 0;
         d_invalid_asm = 0;
         d_good_asm    = 0;
+        have_pending  = false;
     }
 
     int BPSK_CCSDS_Deframer::work(uint8_t *input, int size, uint8_t *output)
@@ -46,8 +49,16 @@ namespace deframing
 
                 if (bit_of_frame == CADU_SIZE) // Write frame out
                 {
-                    memcpy(&output[frame_count * ((CADU_SIZE + CADU_PADDING) / 8)], frame_buffer, (CADU_SIZE + CADU_PADDING) / 8);
-                    frame_count++;
+                    if (SYNC_CONFIRM)
+                    {
+                        memcpy(pending_buffer, frame_buffer, (CADU_SIZE + CADU_PADDING) / 8);
+                        have_pending = true;
+                    }
+                    else
+                    {
+                        memcpy(&output[frame_count * ((CADU_SIZE + CADU_PADDING) / 8)], frame_buffer, (CADU_SIZE + CADU_PADDING) / 8);
+                        frame_count++;
+                    }
                 }
                 else if (bit_of_frame == CADU_SIZE + CADU_ASM_SIZE - 1) // Skip to the next ASM
                 {
@@ -59,7 +70,7 @@ namespace deframing
 
             if (d_state == STATE_NOSYNC)
             {
-                if (shifter == CADU_ASM) //(compare_32(shifter, CADU_ASM) < d_state)
+                if (compare_32(shifter, CADU_ASM) <= SYNC_ACQUIRE_ERRORS)
                 {
                     bit_inversion = false;
                     reset_frame();
@@ -67,7 +78,7 @@ namespace deframing
                     d_state = STATE_SYNCING;
                     d_good_asm = d_invalid_asm = 0;
                 }
-                else if (shifter == CADU_ASM_INV) //(compare_32(shifter, CADU_ASM_INV) < d_state)
+                else if (compare_32(shifter, CADU_ASM_INV) <= SYNC_ACQUIRE_ERRORS)
                 {
                     bit_inversion = true;
                     reset_frame();
@@ -80,16 +91,18 @@ namespace deframing
             {
                 if (compare_32(shifter, bit_inversion ? CADU_ASM_INV : CADU_ASM) < d_state)
                 {
+                    flush_pending(output, frame_count);
                     reset_frame();
                     in_frame = true;
                     d_invalid_asm = 0;
                     d_good_asm++;
 
-                    if (d_good_asm > 10)
+                    if (d_good_asm >= SYNC_GOOD_FRAMES)
                         d_state = STATE_SYNCED;
                 }
                 else
                 {
+                    have_pending = false;
                     d_invalid_asm++;
                     d_good_asm = 0;
 
@@ -103,11 +116,13 @@ namespace deframing
             {
                 if (compare_32(shifter, bit_inversion ? CADU_ASM_INV : CADU_ASM) < d_state)
                 {
+                    flush_pending(output, frame_count);
                     reset_frame();
                     in_frame = true;
                 }
                 else
                 {
+                    have_pending = false;
                     d_good_asm = d_invalid_asm = 0;
                     d_state = STATE_NOSYNC; // Reset to hard NOSYNC, so we correct for a possible new inversion state
                 }
@@ -121,6 +136,16 @@ namespace deframing
     {
         frame_buffer[bit_of_frame / 8] = frame_buffer[bit_of_frame / 8] << 1 | b;
         bit_of_frame++;
+    }
+
+    void BPSK_CCSDS_Deframer::flush_pending(uint8_t *output, int &frame_count)
+    {
+        if (!have_pending)
+            return;
+
+        memcpy(&output[frame_count * ((CADU_SIZE + CADU_PADDING) / 8)], pending_buffer, (CADU_SIZE + CADU_PADDING) / 8);
+        frame_count++;
+        have_pending = false;
     }
 
     void BPSK_CCSDS_Deframer::reset_frame()

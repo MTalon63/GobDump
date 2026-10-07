@@ -511,9 +511,11 @@ namespace satdump
             size_t x = (size_t)rx;
             size_t y = (size_t)ry;
 
-            double x_diff = rx - x;
-            double y_diff = ry - y;
+            return get_pixel_bilinear_xy(cc, x, rx - x, y, ry - y);
+        }
 
+        int Image::get_pixel_bilinear_xy(int cc, size_t x, double x_diff, size_t y, double y_diff)
+        {
             size_t index = (y * d_width + x);
             size_t max_index = (size_t)d_width * (size_t)d_height; // per-channel, matches get(c, i)
 
@@ -573,6 +575,54 @@ namespace satdump
             }
 
             return ret;
+        }
+
+        // x_diff is always 0; arithmetic mirrors get_pixel_bilinear() for bit-exactness.
+        void Image::get_pixel_bilinear_row(int cc, size_t y, double y_diff, int *out, size_t n)
+        {
+            if (y >= d_height || d_width < 2 || cc < 0 || cc >= (int)d_channels)
+            {
+                for (size_t x = 0; x < n; x++)
+                    out[x] = 0;
+                return;
+            }
+
+            const size_t index = y * d_width;
+            const size_t max_index = (size_t)d_width * (size_t)d_height;
+            const int a_n = get(cc, index);
+
+            for (size_t x = 0; x < n; x++)
+            {
+                if (index + x + 1 >= max_index || x == d_width - 1)
+                {
+                    out[x] = a_n;
+                    continue;
+                }
+
+                int a = get(cc, index + x);
+                int b = get(cc, index + x + 1);
+                int c = (index + d_width + x < max_index) ? get(cc, index + d_width + x) : a;
+                int d = (index + d_width + x + 1 < max_index) ? get(cc, index + d_width + x + 1) : a;
+
+                float a_a = 1.0f, b_a = 1.0f, c_a = 1.0f, d_a = 1.0f;
+                if (d_channels == 4 && cc != 3)
+                {
+                    a_a = (float)get(3, index + x) / (float)d_maxv;
+                    b_a = (float)get(3, index + x + 1) / (float)d_maxv;
+                    c_a = (float)get(3, index + d_width + x) / (float)d_maxv;
+                    d_a = (float)get(3, index + d_width + x + 1) / (float)d_maxv;
+                    b = (float)b * b_a;
+                    c = (float)c * c_a;
+                    d = (float)d * d_a;
+                }
+
+                a = (float)a * a_a;
+                int ret = clamp((float)(a * (1 - 0.0) * (1 - y_diff) + b * 0.0 * (1 - y_diff) + c * (y_diff) * (1 - 0.0) + d * 0.0 * y_diff));
+                if (d_channels == 4 && cc != 3)
+                    ret = (float)ret / (a_a * (1 - 0.0) * (1 - y_diff) + b_a * 0.0 * (1 - y_diff) + c_a * (y_diff) * (1 - 0.0) + d_a * 0.0 * y_diff);
+
+                out[x] = ret;
+            }
         }
 
         void Image::fill(int val)

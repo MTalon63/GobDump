@@ -24,11 +24,16 @@ namespace def
 
         int corr_64(uint64_t v1, uint64_t v2)
         {
+#if defined(__GNUC__) || defined(__clang__)
+            // Same value as the shift-and-clear loop it replaces (that loop is a popcount); runs per CADU byte.
+            return __builtin_popcountll(v1 ^ v2);
+#else
             int cor = 0;
             uint64_t diff = v1 ^ v2;
             for (; diff; cor++)
                 diff &= diff - 1;
             return cor;
+#endif
         }
 
         uint8_t byte_shifter;

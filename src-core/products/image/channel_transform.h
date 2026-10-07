@@ -277,5 +277,12 @@ namespace satdump
             else if (d_type == TYPE_INVALID)
                 throw satdump_exception("Invalid Channel Transform!\n");
         }
+
+        /** @brief True when the reverse x output does not depend on x; requires the 1-D spline case. */
+        bool is_reverse_x_separable() const
+        {
+            return d_type == TYPE_AFFINE_INTERPX && interp_rev_interpolator &&
+                   interp_rev_interpolator->getType() == projection::VIZ_GEOREF_SPLINE_ONE_DIMENSIONAL;
+        }
     };
 } // namespace satdump
