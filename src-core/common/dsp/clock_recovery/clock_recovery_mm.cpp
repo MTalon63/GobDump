@@ -5,6 +5,15 @@
 
 #define DO_BRANCH 0
 
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#include <xmmintrin.h>
+#define MM_PREFETCH_T0(p) _mm_prefetch((const char *)(p), _MM_HINT_T0)
+#elif defined(__GNUC__) || defined(__clang__)
+#define MM_PREFETCH_T0(p) __builtin_prefetch((const void *)(p), 0, 3)
+#else
+#define MM_PREFETCH_T0(p) ((void)0)
+#endif
+
 #if (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)) && defined(DSP_HAVE_AVX2_ISA)
 #include <immintrin.h>
 
@@ -142,7 +151,7 @@ namespace dsp
                 pinc = mm_inc + (int)pfl;
                 imu = (int)rint((ppos - pfl) * pfb.nfilt);
                 // Pull the dot's sample window in early: it is the only load that can miss cache.
-                _mm_prefetch((const char *)&buffer[pinc + 8], _MM_HINT_T0);
+                MM_PREFETCH_T0(&buffer[pinc + 8]);
             }
             else
             {
