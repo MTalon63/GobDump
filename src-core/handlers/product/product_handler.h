@@ -117,5 +117,8 @@ namespace satdump
          * @return appropriate handler pointer
          */
         std::shared_ptr<ProductHandler> getProductHandlerForProduct(std::shared_ptr<products::Product> product, bool dataset_mode = false);
+
+        /** @brief Whether any preset in the instrument config has "autogen": true; no handler is built. */
+        bool has_autogen_preset_for(std::string instrument_name);
     } // namespace handlers
 } // namespace satdump

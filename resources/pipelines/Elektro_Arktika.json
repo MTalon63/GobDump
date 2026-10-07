@@ -2,6 +2,10 @@
     "elektro_rdas": {
         "name": "ELEKTRO-L RDAS",
         "samplerate": 45e6,
+        "live": [
+            1,
+            2
+        ],
         "frequencies": [
             [
                 "RDAS",

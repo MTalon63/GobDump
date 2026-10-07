@@ -21,6 +21,11 @@ namespace dsp
         int ntaps;
         int align;
         int aligned_tap_count;
+
+        // Blocked complex kernel: real/imag split of one chunk, sized so it stays cache-resident.
+        static constexpr int FIR_CHUNK = 1024;
+        float *fir_scratch = nullptr;
+
         void work();
 
     public:

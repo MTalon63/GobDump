@@ -62,7 +62,14 @@ namespace satdump
                 //// META
 
                 savemtx.unlock();
-                if (!save_as_matrix && !d_no_not_save_images)
+            }
+
+            // Channel encoding is minutes of CPU on large images; concurrent saving is safe because
+            // the files are independent and libpng/zlib keep all state per call.
+            if (!save_as_matrix && !d_no_not_save_images)
+            {
+#pragma omp parallel for
+                for (int64_t c = 0; c < (int64_t)images.size(); c++)
                     image::save_img(images[c].image, directory + "/" + images[c].filename);
             }
 

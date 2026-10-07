@@ -2,6 +2,7 @@
 #include "imgui/imgui.h"
 #include "logger.h"
 
+#include "handlers/product/product_handler.h"
 #include "products/dataset.h"
 #include "products/product_process.h"
 
@@ -43,6 +44,17 @@ namespace satdump
                 {
                     std::string pro_path = pro_dir + "/" + d;
                     logger->warn("Processing product at " + pro_path);
+
+                    // Skip no-autogen products; image load costs ~197 MiB and is discarded.
+                    {
+                        auto meta = satdump::products::loadProduct(pro_path, false);
+                        if (!satdump::handlers::has_autogen_preset_for(meta->instrument_name))
+                        {
+                            logger->debug("No autogen preset for " + meta->instrument_name + ", skipping image load");
+                            continue;
+                        }
+                    }
+
                     auto prod = satdump::products::loadProduct(pro_path);
                     satdump::products::process_product_with_handler(prod, pro_dir);
                 }

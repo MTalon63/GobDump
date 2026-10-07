@@ -168,6 +168,8 @@ namespace satdump
                 // Clock recovery
                 rec = std::make_shared<dsp::MMClockRecoveryBlock<complex_t>>(is_oqpsk ? delay->output_stream : (d_post_costas_dc_blocking ? post_pll_dc->output_stream : pll->output_stream), final_sps,
                                                                              d_clock_gain_omega, d_clock_mu, d_clock_gain_mu, d_clock_omega_relative_limit);
+                // Real constellations only; OQPSK and the higher orders keep the complex-slicer TED.
+                rec->bpsk_real_ted = is_bpsk;
             }
 
             PSKDemodModule::~PSKDemodModule() { delete[] sym_buffer; }

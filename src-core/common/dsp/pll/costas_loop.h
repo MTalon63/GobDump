@@ -11,16 +11,18 @@ namespace dsp
     class CostasLoopBlock : public Block<complex_t, complex_t>
     {
     private:
-        float error = 0;
         int order;
 
-        float phase = 0, freq = 0;
+        float freq = 0;
+        float pha_re = 1, pha_im = 0; // Phase, used as NCO
+        float fre_re = 1, fre_im = 0; // Freq, as phase increment
+        unsigned int renorm_ctr = 0;
         float loop_bw;
         float alpha, beta;
 
         float freq_limit_min, freq_limit_max;
+        float freq_limit_min_re, freq_limit_min_im, freq_limit_max_re, freq_limit_max_im;
 
-        complex_t tmp_val;
         void work();
 
     public:

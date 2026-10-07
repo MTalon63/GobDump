@@ -106,6 +106,60 @@ namespace satdump
             }
         }
 
+        bool has_autogen_preset_for(std::string instrument_name)
+        {
+            // Must stay in step with the merge the ProductHandler constructor performs.
+            std::string config_path = "instrument_cfgs/" + instrument_name + ".json";
+            if (!resources::resourceExists(config_path))
+                return false;
+
+            nlohmann::ordered_json cfg;
+            try
+            {
+                cfg = loadJsonFile(resources::getResourcePath(config_path));
+
+                std::filesystem::recursive_directory_iterator commonIterator(resources::getResourcePath("instrument_cfgs/common"));
+                std::error_code iteratorError;
+                while (commonIterator != std::filesystem::recursive_directory_iterator())
+                {
+                    std::string path = commonIterator->path().string();
+                    if (std::filesystem::is_regular_file(commonIterator->path()))
+                    {
+                        try
+                        {
+                            auto additional_presets = loadJsonFile(path);
+                            auto instr = additional_presets["instruments"].get<std::vector<std::string>>();
+
+                            if (std::find_if(instr.begin(), instr.end(), [&](const std::string &el) { return el == instrument_name; }) != instr.end())
+                                for (nlohmann::ordered_json p : additional_presets["presets"])
+                                    cfg["presets"].push_back(p);
+                        }
+                        catch (std::exception &)
+                        {
+                        }
+                    }
+
+                    commonIterator.increment(iteratorError);
+                    if (iteratorError)
+                        break;
+                }
+            }
+            catch (std::exception &e)
+            {
+                logger->error("Instrument configuration invalid! %s", e.what());
+                return false;
+            }
+
+            if (!cfg.contains("presets") || !cfg["presets"].is_array())
+                return false;
+
+            for (auto &preset : cfg["presets"])
+                if (preset.contains("autogen") && preset["autogen"].is_boolean() && preset["autogen"].get<bool>())
+                    return true;
+
+            return false;
+        }
+
         bool ProductHandler::renderPresetMenu()
         {
             bool was_changed = false;

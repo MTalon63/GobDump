@@ -30,3 +30,6 @@ src-core/satdump_varst.cpp
 PLANS/
 windows/deps 
 live_output/*
+*.ziq
+
+*.cs8

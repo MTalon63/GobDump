@@ -145,6 +145,17 @@ if(UNIX OR MINGW)
 endif()
 
 add_library(gobdump_core SHARED ${GobDump_core_CPPS})
+
+# Probe, don't hardcode: "-mavx2" is invalid off x86, and MSVC wants "/arch:AVX2".
+include(FindAVX)
+if(CXX_AVX2_FOUND)
+    set_source_files_properties(common/dsp/filter/fir.cpp
+        PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS}"
+                   COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+    set_source_files_properties(common/dsp/clock_recovery/clock_recovery_mm.cpp
+        PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS} -funroll-loops -ffast-math"
+                   COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+endif()
 target_include_directories(gobdump_core PUBLIC .)
 #target_precompile_headers(gobdump_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/nlohmann/json.hpp>")
 
@@ -342,3 +353,10 @@ endif()
 
 install(DIRECTORY . DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gobdump FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY . DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gobdump FILES_MATCHING PATTERN "*.hpp")
+
+# Scratch perf tools (build/perf): built by the real build system so they can never drift from
+# gobdump_core's class layout. Off by default; -DBUILD_PERF_SCRATCH=1 to enable.
+option(BUILD_PERF_SCRATCH "Build scratch perf tools from build/perf" OFF)
+if(BUILD_PERF_SCRATCH)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/build/perf ${CMAKE_BINARY_DIR}/scratch-perf)
+endif()
