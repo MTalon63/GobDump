@@ -52,7 +52,10 @@
                     "cadu_size": 8192,
                     "derandomize": true,
                     "nrzm": true,
-                    "rs_i": 0
+                    "rs_i": 0,
+                    "asm_acquire_errors": 4,
+                    "asm_good_frames": 3,
+                    "asm_confirm": true
                 }
             },
             "products": {
@@ -109,7 +112,10 @@
                     "cadu_size": 8192,
                     "derandomize": true,
                     "nrzm": true,
-                    "rs_i": 0
+                    "rs_i": 0,
+                    "asm_acquire_errors": 4,
+                    "asm_good_frames": 3,
+                    "asm_confirm": true
                 }
             },
             "products": {
