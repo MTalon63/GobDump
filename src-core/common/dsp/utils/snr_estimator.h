@@ -43,8 +43,6 @@ public:
     float snr();
     float signal();
     float noise();
-
-    bool real_signal = false; // BPSK: I-only moments
 };
 
 //! \brief Decision-directed SNR estimator using error-vector magnitude (EVM).

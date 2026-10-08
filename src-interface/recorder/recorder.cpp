@@ -374,6 +374,8 @@ namespace satdump
         if (ImGui::CollapsingHeader(_("FFT"), tracking_started_cli ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_DefaultOpen))
         {
             if (ImGui::Combo(_("FFT Size"), &selected_fft_size,
+                             "524288\0"
+                             "262144\0"
                              "131072\0"
                              "65536\0"
                              "32768\0"

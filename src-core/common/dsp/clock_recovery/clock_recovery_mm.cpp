@@ -92,6 +92,8 @@ namespace dsp
 #endif
         ouc = 0;
 
+        mm_i = MM_RING; // re-anchor the predicted position: inc is rebased per block, mm_* was not
+
         // TED form is chosen outside the loop; an in-body branch measured ~8-10% slower here.
         if (bpsk_real_ted)
             work_loop<true>(nsamples);

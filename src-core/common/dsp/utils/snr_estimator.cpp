@@ -15,36 +15,21 @@ M2M4SNREstimator::M2M4SNREstimator(float alpha)
 
 void M2M4SNREstimator::update(complex_t *input, int size)
 {
-    if (real_signal)
+    if ((int)d_mag2.size() < size)
+        d_mag2.resize(size);
+
+    // Per-sample magnitude^2 via VOLK
+    volk_32fc_magnitude_squared_32f(d_mag2.data(), (const lv_32fc_t *)input, size);
+
+    for (int i = 0; i < size; i++)
     {
-        for (int i = 0; i < size; i++)
-        {
-            double v = (double)input[i].real;
-            double y1 = v * v;
-            double y2 = y1 * y1;
+        double mag2 = (double)d_mag2[i];
 
-            d_y1 = d_alpha * y1 + d_beta * d_y1;
-            d_y2 = d_alpha * y2 + d_beta * d_y2;
-        }
-    }
-    else
-    {
-        if ((int)d_mag2.size() < size)
-            d_mag2.resize(size);
+        double y1 = mag2;
+        double y2 = mag2 * mag2;
 
-        // Per-sample magnitude^2 via VOLK
-        volk_32fc_magnitude_squared_32f(d_mag2.data(), (const lv_32fc_t *)input, size);
-
-        for (int i = 0; i < size; i++)
-        {
-            double mag2 = (double)d_mag2[i];
-
-            double y1 = mag2;
-            double y2 = mag2 * mag2;
-
-            d_y1 = d_alpha * y1 + d_beta * d_y1;
-            d_y2 = d_alpha * y2 + d_beta * d_y2;
-        }
+        d_y1 = d_alpha * y1 + d_beta * d_y1;
+        d_y2 = d_alpha * y2 + d_beta * d_y2;
     }
 
     if (d_y1 != d_y1)
@@ -55,27 +40,15 @@ void M2M4SNREstimator::update(complex_t *input, int size)
 
 float M2M4SNREstimator::snr()
 {
-    if (real_signal)
-    {
-        // real: S = sqrt((3*M2^2 - M4)/2)
-        double disc = 3.0 * d_y1 * d_y1 - d_y2;
-        if (disc < 0.0)
-            disc = 0.0;
+    double y1_2 = d_y1 * d_y1;
+    double disc = 2.0 * y1_2 - d_y2;
 
-        d_signal = sqrt(disc / 2.0);
-        d_noise = d_y1 - d_signal;
-    }
-    else
-    {
-        double y1_2 = d_y1 * d_y1;
-        double disc = 2.0 * y1_2 - d_y2;
+    if (disc < 0.0)
+        disc = 0.0;
 
-        if (disc < 0.0)
-            disc = 0.0;
-
-        d_signal = sqrt(disc);
-        d_noise = d_y1 - d_signal;
-    }
+    double root = sqrt(disc);
+    d_signal = root;
+    d_noise = d_y1 - root;
 
     if (d_noise <= 0.0)
         d_noise = 1e-12;

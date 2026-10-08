@@ -23,6 +23,7 @@ namespace dsp
         // Written by the control thread, polled by the worker: as a plain bool at -O3 the load could be
         // hoisted out of the loop below, so stop() was free to never be observed.
         std::atomic<bool> should_run{false};
+        std::atomic<bool> stop_called{false};
         virtual void work() = 0;
         bool d_got_input;
         void run()
@@ -51,11 +52,14 @@ namespace dsp
         }
         virtual void start()
         {
+            stop_called = false;
             should_run = true;
             d_thread = std::thread(&Block::run, this);
         }
         virtual void stop()
         {
+            if (stop_called.exchange(true) || !should_run)
+                return;
             should_run = false;
 
             if (d_got_input)

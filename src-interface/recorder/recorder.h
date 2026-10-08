@@ -84,13 +84,14 @@ namespace satdump
     protected:
         uint64_t frequency_hz = 100000000;
         bool show_waterfall = true;
-        bool is_started = false, is_recording = false, is_processing = false, is_stopping_processing = false;
+        bool is_started = false, is_recording = false, is_processing = false;
+        std::atomic<bool> is_stopping_processing{false};
         bool is_destroying = false; // Set in the destructor to prevent firing events back into the explorer during teardown
 
         double xconverter_frequency = 0;
 
         int selected_fft_size = 0;
-        std::vector<int> fft_sizes_lut = {131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024};
+        std::vector<int> fft_sizes_lut = {524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024};
         int fft_size = 8192; // * 4;
         int fft_rate = 120;
         int waterfall_rate = 60;

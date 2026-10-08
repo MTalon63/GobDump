@@ -216,7 +216,11 @@ namespace satdump
 
     void RecorderApplication::stop_processing()
     {
-        if (is_processing)
+        bool expected = false;
+        if (!is_processing || !is_stopping_processing.compare_exchange_strong(expected, true))
+            return;
+
+        try
         {
             is_stopping_processing = true;
             logger->trace("Stop pipeline...");
@@ -239,6 +243,11 @@ namespace satdump
                 std::lock_guard<std::mutex> lck(live_pipeline_mtx);
                 live_pipeline.reset();
             }
+        }
+        catch (...)
+        {
+            is_stopping_processing = is_processing = false;
+            throw;
         }
     }
 
