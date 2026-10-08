@@ -99,6 +99,9 @@ namespace satdump
                 if (parameters.count("snr_estimator") > 0)
                     d_use_evm_snr = (parameters["snr_estimator"].get<std::string>() == "evm");
 
+                if (is_bpsk)
+                    snr_estimator.real_signal = true;
+
                 // Warn (non-fatally) about parameters this module does not understand, so silently
                 // dropped operator tuning is visible.
                 static const std::set<std::string> known_keys = {
