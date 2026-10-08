@@ -37,6 +37,9 @@ namespace satdump
 {
     SATDUMP_DLL2 std::shared_ptr<explorer::ExplorerApplication> explorer_app;
 
+    uint64_t add_recorder_handler_id = 0;
+    uint64_t try_open_file_handler_id = 0;
+
     SATDUMP_DLL2 bool update_ui = true;
 
     widgets::MarkdownHelper credits_md;
@@ -65,9 +68,12 @@ namespace satdump
 
         // Register events
         eventBus->register_handler<ShowProcesingEvent>([](ShowProcesingEvent) { showProcessing(); });
-        eventBus->register_handler<AddRecorderEvent>(
+        add_recorder_handler_id = eventBus->register_handler<AddRecorderEvent>(
             [](AddRecorderEvent)
             {
+                if (!explorer_app)
+                    return;
+
                 explorer_app->tryOpenSomethingInExplorer(
                     [](explorer::ExplorerApplication *)
                     {
@@ -75,7 +81,7 @@ namespace satdump
                         eventBus->fire_event<explorer::ExplorerAddHandlerEvent>({std::make_shared<RecorderApplication>(), true}); // TODOREWORK do not bind this directly.
                     });
             });
-        eventBus->register_handler<TryOpenFileInMainExplorerEvent>([](TryOpenFileInMainExplorerEvent e) { explorer_app->tryOpenFileInExplorer(e.path); });
+        try_open_file_handler_id = eventBus->register_handler<TryOpenFileInMainExplorerEvent>([](TryOpenFileInMainExplorerEvent e) { if (explorer_app) explorer_app->tryOpenFileInExplorer(e.path); });
 
         eventBus->register_handler<StyleOrUINeedUpdateEvent>([&](auto e) { update_ui = true; });
 
@@ -125,6 +131,11 @@ namespace satdump
     void exitMainUI()
     {
         satdump_cfg.saveUser();
+
+        // Stop dispatching to the explorer before it is destroyed - processing workers can still fire these
+        eventBus->unregister_handler(add_recorder_handler_id);
+        eventBus->unregister_handler(try_open_file_handler_id);
+
         explorer_app.reset();
     }
 

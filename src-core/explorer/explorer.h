@@ -101,6 +101,8 @@ namespace satdump
             widget::MenuItemFileOpen file_open_dialog;
             TaskQueue file_open_queue;
 
+            std::vector<uint64_t> handler_ids;
+
             std::string quickOpenString;
 
         protected:
