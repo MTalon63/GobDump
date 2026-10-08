@@ -25,8 +25,8 @@ namespace dsp
             return;
         }
 
-        // Gain update is a feedback accumulator and was latency-bound (sqrt per sample, no ILP);
-        // updating per AGC_GROUP keeps the pole (1-rate*K*|x|)^(1/K) ~ 1-rate*|x| but vectorises.
+        // Averaged gain update per group; the group-mean update must be the exact n-step form,
+        // not rate*n, which exceeds |pole|<1 on any but tiny inputs and diverges (alternating).
         static constexpr int AGC_GROUP = 16;
         float mag[AGC_GROUP];
 
@@ -48,7 +48,15 @@ namespace dsp
             for (int j = 0; j < n; j++)
                 Block<T, T>::output_stream->writeBuf[i + j] = Block<T, T>::input_stream->readBuf[i + j] * gain;
 
-            gain += rate * (reference - mean * gain) * (float)n;
+            float b = 1.0f - rate * mean;
+            float bn = b;
+            for (int k = 1; k < n; k++)
+                bn *= b;
+
+            if (mean < 1e-9f)
+                gain += rate * reference * n;
+            else
+                gain = gain * bn + rate * reference * ((1.0f - bn) / (1.0f - b));
 
             if (max_gain > 0.0 && gain > max_gain)
                 gain = max_gain;
