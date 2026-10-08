@@ -1,3 +1,6 @@
 [submodule "docs/res"]
 	path = docs/res
 	url = https://git.satdump.org/SatDump/Resources.git
+[submodule "external/rdas_layer_aligner"]
+	path = external/rdas_layer_aligner
+	url = https://github.com/MTalon63/rdas_layer_aligner.git
