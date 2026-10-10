@@ -1,6 +1,8 @@
 #define SATDUMP_DLL_EXPORT 1
 #include "satdump_vars.h"
 
+#include <filesystem>
+
 #if defined(__APPLE__)
 #include <filesystem>
 #include <libgen.h>
@@ -13,6 +15,9 @@
 #include <shlwapi.h>
 #define LIBRARIES_SEARCH_PATH "\\..\\lib\\gobdump\\"
 #define RESOURCES_SEARCH_PATH "\\..\\"
+#else
+#include <limits.h>
+#include <unistd.h>
 #endif
 
 namespace satdump
@@ -78,4 +83,29 @@ namespace satdump
     std::string LIBPATH = init_lib_path();
 
     std::string getSatDumpVersionName() { return "GobDump v" + (std::string)SATDUMP_VERSION + (satdump::SATDUMP_VERSION_TAG.size() ? " (" + satdump::SATDUMP_VERSION_TAG + ")" : ""); }
+
+    std::string getExecutableDir()
+    {
+#if defined(__APPLE__)
+        uint32_t bufsize = 0;
+        _NSGetExecutablePath(nullptr, &bufsize);
+        std::string exec_path(bufsize, '\0');
+        if (_NSGetExecutablePath(exec_path.data(), &bufsize) != 0)
+            return "";
+        return std::filesystem::path(exec_path.c_str()).parent_path().string();
+#elif defined(_WIN32)
+        char exe_path[MAX_PATH];
+        if (GetModuleFileNameA(NULL, exe_path, MAX_PATH) == 0)
+            return "";
+        PathRemoveFileSpecA(exe_path);
+        return std::string(exe_path);
+#else
+        char exe_path[PATH_MAX];
+        ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+        if (len <= 0)
+            return "";
+        exe_path[len] = '\0';
+        return std::filesystem::path(exe_path).parent_path().string();
+#endif
+    }
 } // namespace satdump
