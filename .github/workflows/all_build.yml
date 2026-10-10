@@ -33,9 +33,6 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
-
             - name: Set up MSYS2 UCRT64
               uses: msys2/setup-msys2@v2
               with:
@@ -45,6 +42,9 @@ jobs:
                   pacboy: ccache:p
                   # setup-msys2 caches the pacman packages itself.
                   cache: true
+
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
 
             # cpu_features/airspy/airspyhf/bladeRF are built from source, which
             # dominates setup time. Everything else comes from pacman.
