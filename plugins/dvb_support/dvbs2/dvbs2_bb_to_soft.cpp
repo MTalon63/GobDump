@@ -53,13 +53,14 @@ namespace dvbs2
         int pilots_offset = 0;
 
         // Derandomize and decode slots
+        auto _lut = constellation->acquire_lut_view();
         descrambler.reset();
         for (int i = 0; i < frame_slot_count * 90; i++)
         {
             if (i % 1476 == 0 && i != 0 && pilots)
                 pilots_offset += 36;
 
-            constellation->demod_soft_lut(descrambler.descramble(input_stream->readBuf[90 + i]), &soft_slots_buffer[(i - pilots_offset) * constellation->getBitsCnt()]);
+            constellation->demod_soft_lut_view(_lut, descrambler.descramble(input_stream->readBuf[90 + i]), &soft_slots_buffer[(i - pilots_offset) * constellation->getBitsCnt()]);
         }
 
         // Deinterleave
