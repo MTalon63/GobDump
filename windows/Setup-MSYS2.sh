@@ -43,6 +43,8 @@ pacman -S --needed --noconfirm \
     ${PKG_PREFIX}-hdf5 \
     ${PKG_PREFIX}-sqlite3 \
     ${PKG_PREFIX}-armadillo \
+    ${PKG_PREFIX}-opencv \
+    ${PKG_PREFIX}-jsoncpp \
     ${PKG_PREFIX}-opencl-icd \
     ${PKG_PREFIX}-opencl-headers
 
