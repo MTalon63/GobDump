@@ -33,3 +33,5 @@ live_output/*
 *.ziq
 
 *.cs8
+
+imgui.ini

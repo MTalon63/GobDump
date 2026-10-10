@@ -6,7 +6,9 @@
 #include "logger.h"
 
 #include "elektro_arktika/instruments/msugs/module_msugs.h"
+#include "elektro_arktika/instruments/msugs/msugs_proj.h"
 #include "elektro_arktika/lrit/module_elektro_lrit_data_decoder.h"
+#include "projection/raytrace/satellite_raytracer.h"
 
 class ElektroArktikaSupport : public satdump::Plugin
 {
@@ -16,8 +18,15 @@ public:
     void init()
     {
         satdump::eventBus->register_handler<satdump::pipeline::RegisterModulesEvent>(registerPluginsHandler);
+        satdump::eventBus->register_handler<satdump::projection::RequestSatelliteRaytracerEvent>(provideSatProjHandler);
 
         satdump::eventBus->register_handler<satdump::cli::RegisterSubcommandEvent>(registerCliCommands);
+    }
+
+    static void provideSatProjHandler(const satdump::projection::RequestSatelliteRaytracerEvent &evt)
+    {
+        if (evt.id == "normal_single_xy_line")
+            evt.r.push_back(std::make_shared<satdump::projection::NormalLineXYSatProj>(evt.cfg));
     }
 
     static void registerCliCommands(const satdump::cli::RegisterSubcommandEvent &evt)

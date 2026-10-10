@@ -14,4 +14,5 @@ namespace satdump
     SATDUMP_DLL extern std::string LIBPATH;
 
     std::string getSatDumpVersionName();
+    std::string getExecutableDir();
 } // namespace satdump

@@ -5,6 +5,8 @@
 #include "pipeline/modules/base/filestream_to_filestream.h"
 #include "pipeline/modules/instrument_utils.h"
 
+#include <memory>
+
 namespace elektro_arktika
 {
     namespace msugs
@@ -16,7 +18,7 @@ namespace elektro_arktika
             MSUVISReader vis1_reader;
             MSUVISReader vis2_reader;
             MSUVISReader vis3_reader;
-            MSUIRReader infr_reader;
+            std::unique_ptr<MSUIRReader> infr_reader; // Only allocated when IR decoding is enabled
 
             // Statuses
             instrument_status_t channels_statuses[10] = {DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING};
@@ -26,6 +28,15 @@ namespace elektro_arktika
 
             bool is_arktika = false;
             int sat_num = 0;
+
+            bool decode_ir = false;
+            bool project_vis2 = false;
+            bool fill_missing = false;
+            size_t max_fill_lines = 50;
+
+#ifdef ENABLE_RDAS_ALIGNER
+            bool recalibrate_aligner = false;
+#endif
 
         public:
             MSUGSDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
