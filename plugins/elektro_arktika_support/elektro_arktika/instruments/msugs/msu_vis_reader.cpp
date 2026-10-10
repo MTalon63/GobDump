@@ -126,8 +126,6 @@ namespace elektro_arktika
                 return;
             }
 
-            // Resolve the frame we held on the previous call: it was a real line only if this
-            // counter continues it. Otherwise it was a bit-flip in the counter field.
             if (pending_valid)
             {
                 if (counter == pending_counter + 1 && !line_filled[pending_counter])
@@ -141,15 +139,12 @@ namespace elektro_arktika
                 pending_valid = false;
             }
 
-            // Never overwrite a line we already have (that is what corrupted counters used to do)
             if (line_filled[counter])
             {
                 rejected_frames++;
                 return;
             }
 
-            // A large forward jump is ambiguous: hold it and let the next frame tell us. A bit-flip
-            // is followed by the true next line, a real gap by the held counter + 1.
             if (counter > last_counter && counter - last_counter > MAX_LINE_GAP)
             {
                 if ((int)pending_data.size() != FRAME_BYTES)
@@ -160,15 +155,12 @@ namespace elektro_arktika
                 return;
             }
 
-            // Sequential line, or a late-delivered line filling a row we don't have yet
             writeFrame(data, counter);
             if (counter > last_counter)
                 last_counter = counter;
         }
 
-        // Cosmetic fill, same idea as the Meteor-M LRPT "fill missing data": interpolate each
-        // missing line between its neighbours. Only gaps of at most max_lines are filled, and
-        // the line timestamps are interpolated too so the projection can still use those rows.
+        // Meteor-M LRPT style gap fill
         size_t MSUVISReader::fillMissing(size_t max_lines)
         {
             if (max_lines == 0)
@@ -195,7 +187,6 @@ namespace elektro_arktika
                 int end = y - 1;
                 int len = end - start + 1;
 
-                // Can only bridge a gap with a good line on either side
                 if (len <= (int)max_lines && start > 0 && y < 17200 && line_filled[start - 1] && line_filled[y])
                 {
                     const unsigned short *top1 = &imageBuffer1[(start - 1) * W];

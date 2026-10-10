@@ -18,7 +18,7 @@ namespace elektro_arktika
             MSUVISReader vis1_reader;
             MSUVISReader vis2_reader;
             MSUVISReader vis3_reader;
-            std::unique_ptr<MSUIRReader> infr_reader; // Only allocated when IR decoding is enabled
+            std::unique_ptr<MSUIRReader> infr_reader;
 
             // Statuses
             instrument_status_t channels_statuses[10] = {DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING, DECODING};
@@ -33,10 +33,7 @@ namespace elektro_arktika
             bool project_vis2 = false;
             bool fill_missing = false;
             size_t max_fill_lines = 50;
-
-#ifdef ENABLE_RDAS_ALIGNER
             bool recalibrate_aligner = false;
-#endif
 
         public:
             MSUGSDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);

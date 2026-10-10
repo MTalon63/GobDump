@@ -57,6 +57,12 @@ cp gobdump MacApp/GobDump.app/Contents/MacOS
 cp satdump_sdr_server MacApp/GobDump.app/Contents/MacOS
 cp plugins/*.dylib MacApp/GobDump.app/Contents/Resources/plugins
 
+aligner_args=""
+if [[ -f rdas_aligner ]]; then
+    cp rdas_aligner MacApp/GobDump.app/Contents/MacOS
+    aligner_args="-x MacApp/GobDump.app/Contents/MacOS/rdas_aligner"
+fi
+
 if [[ -n "$MACOS_SIGNING_SIGNATURE" ]]
 then
     SIGN_FLAG="-ns"
@@ -75,10 +81,13 @@ dylibbundler $SIGN_FLAG \
   -s $HOMEBREW_LIB/opt/libomp/lib \
   -s $HOMEBREW_LIB/opt/openblas/lib \
   -s $HOMEBREW_LIB/opt/gfortran/lib/gcc/current \
+  -s $HOMEBREW_LIB/opt/opencv/lib \
+  -s $HOMEBREW_LIB/opt/jsoncpp/lib \
   -d MacApp/GobDump.app/Contents/libs \
   -x MacApp/GobDump.app/Contents/MacOS/gobdump-ui \
   -x MacApp/GobDump.app/Contents/MacOS/satdump_sdr_server \
   -x MacApp/GobDump.app/Contents/MacOS/gobdump \
+  $aligner_args \
   $plugin_args
 
 # SDRPlay is custom, not staticaly linked; we can copy it manually

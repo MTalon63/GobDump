@@ -77,8 +77,6 @@ namespace elektro_arktika
         }
 
 #ifdef ENABLE_RDAS_ALIGNER
-        // The user config dir differs depending on the working directory (see init.cpp), so the
-        // aligner calibration has to be searched for in each of the places it can land.
         static std::string getDefaultUserDir()
         {
 #ifdef _WIN32
@@ -104,8 +102,6 @@ namespace elektro_arktika
             }
         }
 
-        // The aligner reads/writes ./config.json, so it is always started in its own calibration directory
-        // with its output piped back into the GobDump log.
         static int runRDASAligner(const std::string &exe, const std::string &workdir, const std::string &sat, const std::string &rdas_dir, const std::string &mode)
         {
 #ifdef _WIN32
@@ -212,11 +208,7 @@ namespace elektro_arktika
 
             const std::string sat = std::string(is_arktika ? "M" : "L") + std::to_string(sat_num);
 
-            // Calibration is stored next to settings.json, exactly like the rest of the user config, so
-            // it persists between runs. Where settings.json lives depends on how GobDump was started
-            // (portable ./config when gobdump_cfg.json is in the working directory, otherwise
-            // %APPDATA%/gobdump on Windows or $HOME/.config/gobdump elsewhere), so reuse a valid
-            // calibration from any of those places and only calibrate when none of them has one.
+            // Reuse a calibration from wherever settings.json lives; only calibrate if there is none.
             auto calibrationOk = [&](const std::filesystem::path &p) {
                 if (!std::filesystem::exists(p))
                     return false;
@@ -233,16 +225,11 @@ namespace elektro_arktika
             };
 
             std::filesystem::path settings_dir = std::filesystem::path(satdump::satdump_cfg.user_cfg_path).parent_path();
-            if (settings_dir.empty()) // settings.json sits directly in the working directory
+            if (settings_dir.empty())
                 settings_dir = std::filesystem::current_path();
 
             const std::filesystem::path exe_dir = satdump::getExecutableDir();
-            std::vector<std::filesystem::path> cal_bases = {
-                settings_dir,                    // next to settings.json
-                getDefaultUserDir(),             // %APPDATA%/gobdump or $HOME/.config/gobdump
-                exe_dir / "config",              // portable install
-                exe_dir.parent_path() / "config" // source tree
-            };
+            std::vector<std::filesystem::path> cal_bases = {settings_dir, getDefaultUserDir(), exe_dir / "config", exe_dir.parent_path() / "config"};
 
             std::filesystem::path cal_dir;
             bool calibrated = false;
@@ -264,12 +251,9 @@ namespace elektro_arktika
             const std::filesystem::path cfg_path = cal_dir / "config.json";
             const std::string workdir = cal_dir.string();
 
-            // The transforms decide whether a calibration exists - a file left behind by a failed run has only ROIs.
             if (calibrated)
                 logger->log(slog::LOG_INFO, "Reusing RDAS layer aligner calibration from " + cfg_path.string());
 
-            // Generate the missing calibration: start from the shipped merge parameters (ROIs) only,
-            // the transforms are always derived from this decode.
             if (!calibrated)
             {
                 nlohmann::ordered_json seed = nlohmann::ordered_json::object();
@@ -317,8 +301,6 @@ namespace elektro_arktika
             std::ofstream data_unknown(directory + "/data_unknown.bin", std::ios::binary);
 
             logger->info("Demultiplexing and deframing...");
-
-            double last_val = 0;
 
             while (should_run())
             {
@@ -430,7 +412,6 @@ namespace elektro_arktika
                 {
                     // printf("%d %4.4f\n", p.first, p.second);
 
-                    double orign = p.second;
                     p.second -= 60509 + 15597568; // 51686860;
                     p.second *= 17200. / 44065.;  // 17200. / 20.;
                     //  p.second =
@@ -581,7 +562,6 @@ namespace elektro_arktika
                 msuvis_product.images.push_back({1, "MSUGS-VIS-2", "2", vis2_reader.getImage2(), 10, t2});
                 msuvis_product.images.push_back({2, "MSUGS-VIS-3", "3", vis3_reader.getImage2(), 10, t3});
 
-                // Off by default: the GUI projection pass on the full 6004x17200 VIS2 image is slow.
                 if (project_vis2)
                 {
                 const std::string proj_cfg_path = std::string("projections_settings/") + (is_arktika ? "arktika_m" : "elektro_l") + std::to_string(sat_num) + "_msugs_vis2.json";

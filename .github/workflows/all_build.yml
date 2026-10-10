@@ -33,6 +33,9 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
+
             - name: Set up MSYS2 UCRT64
               uses: msys2/setup-msys2@v2
               with:
@@ -81,6 +84,7 @@ jobs:
               run: |
                   cmake --install build --prefix install
                   cp -r resources pipelines install/ 2>/dev/null || true
+                  cp build/rdas_aligner.exe install/ 2>/dev/null || true
 
             - name: Upload Portable
               uses: actions/upload-artifact@v4
@@ -97,6 +101,9 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Cache dependencies
               uses: actions/cache@v4
@@ -158,6 +165,7 @@ jobs:
                   -DPLUGINS_ALL=ON
                   -DPLUGIN_AARONIA_SDR_SUPPORT=ON
                   -DBUILD_MSVC=ON
+                  -DBUILD_RDAS_ALIGNER=OFF
                   -DCMAKE_C_COMPILER_LAUNCHER=sccache
                   -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
@@ -194,6 +202,9 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Cache dependencies
               uses: actions/cache@v4
@@ -258,6 +269,7 @@ jobs:
                   -DPLUGINS_ALL=ON
                   -DPLUGIN_LIMESDR_SDR_SUPPORT=OFF
                   -DBUILD_MSVC=ON
+                  -DBUILD_RDAS_ALIGNER=OFF
                   -DCMAKE_C_COMPILER_LAUNCHER=sccache
                   -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
@@ -373,11 +385,14 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
+
             - name: Update repositories
               run: sudo apt update
 
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
+              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libopencv-dev libjsoncpp-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -438,11 +453,14 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
+
             - name: Update repositories
               run: sudo apt update
 
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
+              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libopencv-dev libjsoncpp-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -485,11 +503,14 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
+
             - name: Update repositories
               run: sudo apt update
 
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev ninja-build
+              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libopencv-dev libjsoncpp-dev libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev ninja-build
 
             - name: Delete build dir
               run: rm -rf ${{runner.workspace}}/build
@@ -535,6 +556,9 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
+
             - name: Select Xcode version
               run: sudo xcode-select -s '/Applications/Xcode_16.2.app/Contents/Developer'
 
@@ -542,7 +566,7 @@ jobs:
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
               # sqlite3 libtool autoconf libjpeg-turbo libtiff libusb libpng zstd
-              run: brew install ccache ninja dylibbundler automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
+              run: brew install ccache ninja dylibbundler automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc opencv jsoncpp pkg-config
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -609,13 +633,16 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Checkout RDAS aligner
+              run: git submodule update --init external/rdas_layer_aligner
+
             - name: Select Xcode version
               run: sudo xcode-select -s '/Applications/Xcode_16.2.app/Contents/Developer'
 
             - name: Install brew dependencies
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
-              run: brew install ccache ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc
+              run: brew install ccache ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc opencv jsoncpp pkg-config
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
