@@ -88,13 +88,80 @@ gobdump legacy record baseband_name --source airspy --samplerate 6e6 --frequency
 
 # Building / Installing
 
+### Quick start (any platform)
+
+There is a `Makefile` that wraps the whole CMake flow. On a machine with the
+dependencies already installed, building is:
+
+```bash
+git clone --recursive -b ports https://github.com/MTalon63/GobDump.git
+cd GobDump
+make build        # configure (if needed) + build
+make run          # build, then run the CLI
+```
+
+Two things matter in that command:
+
+- **`-b ports`** - the default branch (`master`) does not contain the current
+  work, including the RDAS submodule and the arm64/NEON support. Build `ports`.
+- **`--recursive`** - `external/rdas_layer_aligner` is a git submodule and the
+  RDAS layer aligner is built by default. If you cloned without it, run
+  `git submodule update --init --recursive`.
+
+Useful `make` variables and targets (`make help` lists everything):
+
+```bash
+make BUILD_TYPE=Debug BUILD_DIR=build-debug   # debug build, separate tree
+make JOBS=4                                   # limit parallelism
+make CMAKE_ARGS='-DBUILD_GUI=OFF'             # pass extra CMake flags
+make test                                     # build, then run ctest
+make install                                  # install to CMAKE_INSTALL_PREFIX
+make reconfigure                              # re-run CMake after changing options
+make clean / make distclean                   # clean outputs / wipe the build dir
+```
+
+The CMake commands below remain the canonical way to build; the `Makefile` only
+saves typing. It passes `-DPLUGINS_ALL=ON` by default, since a normal dev build
+wants the plugins.
+
+#### Build options
+
+| Option | Default | Notes |
+|---|---|---|
+| `BUILD_GUI` | `ON` | The `gobdump-ui` GUI |
+| `BUILD_OPENCL` | `ON` | GPU accelerations |
+| `BUILD_OPENMP` | `ON` | OpenMP |
+| `BUILD_ZIQ` | `ON` | ZIQ recording compression |
+| `BUILD_RDAS_ALIGNER` | `ON` | Needs OpenCV **and** jsoncpp. If either is missing the aligner is skipped with a warning, not an error. |
+| `BUILD_TESTING` | `OFF` | `ctest` test programs |
+| `BUILD_TOOLS` | `OFF` | Extra tools programs |
+| `BUILD_DOCS` | `OFF` | Doxygen docs |
+| `ENABLE_I18N` | `ON` | Translations |
+
+#### Profiling the arm64 NEON kernels
+
+On an Apple Silicon Mac there is a self-contained profiler that measures the DVB-S2
+NEON kernels against the scalar path and against libvolk's dispatched kernels:
+
+```bash
+./tools/dvbs2_neon_profile/dvbs2_neon_profile.sh
+```
+
+It compiles the exact kernel bodies into a standalone benchmark (it never modifies the
+git tree) and reports best-of-N timings plus a checksum comparison against the scalar
+path, so you can see both the speed and that the result is unchanged. Read the notes it
+prints at the end before drawing conclusions - VOLK's NEON path is already vectorized,
+so a small win or even a loss is a realistic outcome for these kernels.
+
+> **Building for your own machine vs. distributing:** a local (non-CI) build adds
+> `-march=native`, so the resulting binaries only run on the CPU that built them. That
+> is usually what you want, but do not ship those binaries. Building with the `CI`
+> environment variable set (e.g. `CI=1 make build`) turns it off for portable output.
+
 ### Windows
 
-The fastest way to get started is to head over to the [Releases](https://github.com/altillimity/SatDump/releases) page, where you can download SatDump's installer or portable app - no compilation necessary.
-
-Our builds are made with Visual Studio 2019 for x64, so the appropriate Visual C++ Runtime will be required (though, likely to be already installed). You can get it [here](https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0). Once downloaded, run either gobdump-ui.exe or gobdump.exe (CLI) to get started!
-
-For compilation information, see the dedicated documentation [here](https://docs.satdump.org/build_windows.html).
+Prebuilt installers and portable builds are on the [Releases](https://github.com/MTalon63/GobDump/releases)
+page - no compilation necessary.
 
 #### Building with MSYS2 (MinGW-w64 UCRT64)
 
@@ -102,51 +169,50 @@ Visual Studio is not required. From an **MSYS2 UCRT64** shell:
 
 ```bash
 ./windows/Setup-MSYS2.sh          # installs all dependencies (one time)
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON
-cmake --build build
+make build                        # or the equivalent CMake commands below
 ```
 
-A `Makefile` wrapping the above is provided for convenience — `make`, `make run`, `make clean`, `make distclean`, `make install`. Run `make help` for the full list. It only saves typing; the CMake commands above remain the canonical way to build.
+The equivalent CMake flow, if you prefer it explicit:
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON
+cmake --build build --parallel
+```
 
 _Note : the SDDC (RX666/RX888) plugin is unavailable on MinGW, as it depends on the MSVC-only Cypress CyAPI library._
 
 ### macOS
 
-Dependency-free macOS builds are provided on the [releases page](https://github.com/altillimity/SatDump/releases).
+Dependency-free macOS builds are on the [Releases](https://github.com/MTalon63/GobDump/releases) page.
 
-General build instructions (Homebrew is required!)
+General build instructions (Homebrew is required). Note `jsoncpp` and `opencv` - the
+RDAS layer aligner needs both:
 
 ```bash
 # Install build tools and dependencies
-brew install cmake dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost libusb nng volk libjpeg-turbo libtiff libomp libpng glfw3 libusb fftw libxml2 portaudio jemalloc nng zstd armadillo hdf5 sqlite3
+brew install cmake ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib \
+             portaudio boost nng volk libomp glfw3 fftw jemalloc zstd armadillo hdf5 \
+             sqlite3 opencv jsoncpp pkg-config protobuf grpc
 
-# Clone GobDump
-git clone https://github.com/SatDump/SatDump.git && cd SatDump
-mkdir build && cd build
+# Clone GobDump, including the submodules
+git clone --recursive -b ports https://github.com/MTalon63/GobDump.git
+cd GobDump
 
-# Build additional dependencies
-../macOS/build_deps.sh
+# Build the dependencies GobDump builds from source (not from Homebrew)
+macOS/build_deps.sh
 
-# Build GobDump
-cmake -DCMAKE_BUILD_TYPE=Release ..  # If you want to bundle the app, you must also add -DBUNDLING_MODE=ON, that makes the binary usable in a bundle
-make -j$(sysctl -n hw.logicalcpu)
-
-# If -DBUNDLING_MODE was OFF
-ln -s ../pipelines .        # Symlink pipelines so it can run
-ln -s ../resources .        # Symlink resources so it can run
-ln -s ../gobdump_cfg.json . # Symlink settings so it can run
-
-./gobdump-ui
-
-# If -DBUNDLING_MODE was ON and you want to bundle the app
-../macOS/bundle.sh
-
-# The bundled app is now available in ./MacApp
+# Build
+make build        # or: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON && cmake --build build --parallel
+make run          # CLI;  make ui  for the GUI
 ```
+
+To produce a bundle (`.app` / `.dmg`), configure with `-DBUNDLING_MODE=ON` and run
+`macOS/bundle.sh`; the result lands in `MacApp/`.
 
 ### Linux
 
-On Linux, building from source is recommended, but builds are provided for x64-based Ubuntu distributions. Here are some build instructions for common distros.
+Building from source is recommended. Prebuilt `.deb` packages are produced for
+Ubuntu by CI.
 
 ---
 
@@ -155,31 +221,37 @@ On Linux, building from source is recommended, but builds are provided for x64-b
 <summary>Install Dependencies - Debian, Ubuntu, and other Debian-based distros</summary>
 
 ```bash
-sudo apt install git build-essential cmake g++ pkgconf libfftw3-dev libpng-dev \
+# Required
+sudo apt install git build-essential cmake ninja-build pkgconf libfftw3-dev libpng-dev \
                  libtiff-dev libjemalloc-dev libcurl4-openssl-dev libsqlite3-dev
-sudo apt install libvolk-dev                                                      # If this package is not found, use libvolk2-dev or libvolk1-dev
-sudo apt install libnng-dev                                                       # If this package is not found, follow build instructions below for NNG
+sudo apt install libvolk-dev       # If this package is not found, use libvolk2-dev or libvolk1-dev
+sudo apt install libnng-dev        # If this package is not found, follow the NNG instructions below
+
+# Required for the RDAS layer aligner, which is built by default.
+# Skip these only if you configure with -DBUILD_RDAS_ALIGNER=OFF.
+sudo apt install libopencv-dev libjsoncpp-dev
+sudo apt install ocl-icd-opencl-dev opencl-headers
 
 # (Optional)
-sudo apt install libglfw3-dev libdbus-1-dev                                       # Only if you want to build the GUI Version
-sudo apt install portaudio19-dev                                                  # Only if you want audio output
-sudo apt install libzstd-dev                                                      # Only if you want to build with ZIQ Recording compression
-sudo apt install libhdf5-dev                                                      # Only if you want official product support (ex, EUMETSAT)
-sudo apt install librtlsdr-dev libhackrf-dev libairspy-dev libairspyhf-dev        # All libraries required for live processing
-sudo apt install libad9361-dev libiio-dev                                         # For ADALM-Pluto, PlutoPlus, AntSDR and other SDRs based on Analog AD9361
-sudo apt install libbladerf-dev                                                   # For BladeRF
-sudo apt install libomp-dev                                                       # Shouldn't be required in general, but in case you have errors with OMP
-sudo apt install ocl-icd-opencl-dev                                               # Optional, but recommended as it drastically increases speed of some operations. Installs OpenCL.
-sudo apt install intel-opencl-icd                                                 # Enables OpenCL for Intel Integrated Graphics
-sudo apt install mesa-opencl-icd                                                  # For AMD Radeon cards *BEFORE series 5000* (e.g. RX480/580...). For newer cards, please install the official AMD drivers.
+sudo apt install libglfw3-dev libdbus-1-dev                      # Only if you want to build the GUI Version
+sudo apt install portaudio19-dev                                  # Only if you want audio output
+sudo apt install libzstd-dev                                      # Only if you want to build with ZIQ Recording compression
+sudo apt install libhdf5-dev                                      # Only if you want official product support (ex, EUMETSAT)
+sudo apt install librtlsdr-dev libhackrf-dev libairspy-dev libairspyhf-dev   # Libraries required for live processing
+sudo apt install libad9361-dev libiio-dev                         # For ADALM-Pluto, PlutoPlus, AntSDR and other AD9361-based SDRs
+sudo apt install libbladerf-dev                                   # For BladeRF
+sudo apt install libomp-dev                                       # Shouldn't be required in general, but in case you have errors with OMP
+sudo apt install intel-opencl-icd                                 # Enables OpenCL for Intel Integrated Graphics
+sudo apt install mesa-opencl-icd                                  # For AMD Radeon cards *BEFORE series 5000*; newer cards need the official AMD drivers
 sudo apt install libarmadillo-dev
 
 # One-liner to install all dependencies:
-sudo apt install git build-essential cmake g++ pkgconf libfftw3-dev libpng-dev \
+sudo apt install git build-essential cmake ninja-build pkgconf libfftw3-dev libpng-dev \
                  libtiff-dev libjemalloc-dev libcurl4-openssl-dev libvolk-dev libnng-dev \
+                 libopencv-dev libjsoncpp-dev ocl-icd-opencl-dev opencl-headers \
                  libglfw3-dev zenity portaudio19-dev libzstd-dev libhdf5-dev librtlsdr-dev \
                  libhackrf-dev libairspy-dev libairspyhf-dev libad9361-dev libiio-dev \
-                 libbladerf-dev libomp-dev ocl-icd-opencl-dev intel-opencl-icd mesa-opencl-icd \
+                 libbladerf-dev libomp-dev intel-opencl-icd mesa-opencl-icd \
                  libdbus-1-dev libarmadillo-dev libsqlite3-dev
 ```
 
@@ -189,24 +261,18 @@ sudo apt install git build-essential cmake g++ pkgconf libfftw3-dev libpng-dev \
 <summary>Install Dependencies - Red-Hat-based systems</summary>
 
 ```bash
-sudo dnf install git cmake g++ fftw-devel volk-devel libpng-devel jemalloc-devel \
+sudo dnf install git cmake ninja-build g++ fftw-devel volk-devel libpng-devel jemalloc-devel \
                  libtiff-devel nng-devel curl-devel sqlite-devel
+sudo dnf install opencv-devel jsoncpp-devel ocl-icd opencl-headers   # RDAS aligner (built by default)
 
 # (Optional)
-sudo dnf install glfw-devel zenity dbus-devel                                                       # Only if you want to build the GUI Version
-sudo dnf install portaudio-devel                                                  # Only if you want audio output
-sudo dnf install libzstd-devel                                                    # Only if you want to build with ZIQ Recording compression
-sudo dnf install hdf5-devel                                                       # Only if you want official product support (ex, EUMETSAT)
-sudo dnf install rtl-sdr-devel hackrf-devel airspyone_host-devel                  # All libraries required for live processing
-sudo dnf install libomp-devel                                                     # Shouldn't be required in general, but in case you have errors with OMP
-sudo dnf install ocl-icd                                                          # Optional, but recommended as it drastically increases speed of some operations. Installs OpenCL.
-sudo dnf install intel-opencl                                                     # Enables OpenCL for Intel Integrated Graphics
-
-# One-liner to install all dependencies:
-sudo dnf install git cmake g++ fftw-devel volk-devel libpng-devel jemalloc-devel hdf5-devel \
-                 libtiff-devel nng-devel curl-devel glfw-devel zenity portaudio-devel \
-                 libzstd-devel rtl-sdr-devel hackrf-devel airspyone_host-devel libomp-devel \
-                 ocl-icd intel-opencl
+sudo dnf install glfw-devel zenity dbus-devel                       # Only if you want to build the GUI Version
+sudo dnf install portaudio-devel                                    # Only if you want audio output
+sudo dnf install libzstd-devel                                      # Only if you want to build with ZIQ Recording compression
+sudo dnf install hdf5-devel                                         # Only if you want official product support (ex, EUMETSAT)
+sudo dnf install rtl-sdr-devel hackrf-devel airspyone_host-devel    # Libraries required for live processing
+sudo dnf install libomp-devel                                       # Shouldn't be required in general, but in case you have errors with OMP
+sudo dnf install intel-opencl                                       # Enables OpenCL for Intel Integrated Graphics
 ```
 
 </details>
@@ -217,16 +283,16 @@ sudo dnf install git cmake g++ fftw-devel volk-devel libpng-devel jemalloc-devel
 ```bash
 # Adding the testing repository is required for libvolk-dev.
 # You need to build libnng from source, see below.
-sudo apk add git cmake make g++ pkgconf fftw-dev libvolk-dev libpng-dev \
+sudo apk add git cmake ninja make g++ pkgconf fftw-dev libvolk-dev libpng-dev \
              jemalloc-dev tiff-dev curl-dev sqlite-dev
+sudo apk add opencv-dev jsoncpp-dev opencl-dev   # RDAS aligner (community repo for OpenCL)
 
 # (Optional)
-sudo apk add glfw-dev zenity dbus-dev                                  # Only if you want to build the GUI Version
-sudo apk add portaudio-dev                                             # Only if you want audio output
-sudo apk add zstd-dev                                                  # Only if you want to build with ZIQ Recording compression
-sudo apk add hdf5-dev                                                  # Only if you want official product support (ex, EUMETSAT)
-sudo apk add librtlsdr-dev hackrf-dev airspyone-host-dev airspyhf-dev  # All libraries required for live processing
-sudo apk add opencl-dev                                                # Optional, but recommended as it drastically increases speed of some operations. Installs OpenCL. Community repo required.
+sudo apk add glfw-dev zenity dbus-dev                  # Only if you want to build the GUI Version
+sudo apk add portaudio-dev                             # Only if you want audio output
+sudo apk add zstd-dev                                  # Only if you want to build with ZIQ Recording compression
+sudo apk add hdf5-dev                                  # Only if you want official product support (ex, EUMETSAT)
+sudo apk add librtlsdr-dev hackrf-dev airspyone-host-dev airspyhf-dev  # Libraries required for live processing
 ```
 
 </details>
@@ -236,32 +302,24 @@ sudo apk add opencl-dev                                                # Optiona
 
 ```bash
 # Assumes you already have gcc, g++, pkgconf, and cmake installed.
-# Using Gentoo, you probably do!
 #
 # NOTE: You will need to build nng yourself. See below for details.
-#       Some SDR sources, such as AirSpy, also need to be build from
+#       Some SDR sources, such as AirSpy, also need to be built from
 #       source if needed.
 
 sudo emerge --ask dev-vcs/git sci-libs/fftw dev-libs/jemalloc sci-libs/volk \
                   media-libs/libpng media-libs/tiff net-misc/curl dev-db/sqlite
+sudo emerge --ask media-libs/opencv dev-libs/jsoncpp   # RDAS aligner (built by default)
 
-sudo emerge --ask media-libs/glfw gnome-extra/zenity sys-apps/dbus                                                      # Only if you want to build the GUI Version
-sudo emerge --ask media-libs/portaudio                    # Only if you want audio output
-sudo emerge --ask app-arch/zstd                           # Only if you want to build with ZIQ Recording compression
-sudo emerge --ask sci-libs/hdf5                           # Only if you want official product support (ex, EUMETSAT)
-sudo emerge --ask net-wireless/rtl-sdr                    # RTL-SDR Support
-sudo emerge --ask net-libs/libhackrf                      # HackRF Support
-sudo emerge --ask net-wireless/bladerf                    # bladeRF Support
-sudo emerge --ask net-libs/libiio net-libs/libad9361-iio  # For ADALM-Pluto, PlutoPlus, AntSDR and other SDRs based on Analog AD9361
-sudo emerge --ask dev-libs/opencl-icd-loader              # OpenCL Support, Optional, but recommended
-
-# One-liner to install all dependencies:
-sudo emerge --ask dev-vcs/git sci-libs/fftw dev-libs/jemalloc sci-libs/volk \
-                  media-libs/libpng media-libs/tiff net-misc/curl sci-libs/hdf5 \
-                  media-libs/glfw gnome-extra/zenity media-libs/portaudio \
-                  app-arch/zstd net-wireless/rtl-sdr net-libs/libhackrf   \
-                  net-wireless/bladerf net-libs/libiio net-libs/libad9361-iio \
-                  dev-libs/opencl-icd-loader
+sudo emerge --ask media-libs/glfw gnome-extra/zenity sys-apps/dbus          # Only if you want to build the GUI Version
+sudo emerge --ask media-libs/portaudio                                      # Only if you want audio output
+sudo emerge --ask app-arch/zstd                                             # Only if you want to build with ZIQ Recording compression
+sudo emerge --ask sci-libs/hdf5                                             # Only if you want official product support (ex, EUMETSAT)
+sudo emerge --ask net-wireless/rtl-sdr                                      # RTL-SDR Support
+sudo emerge --ask net-libs/libhackrf                                        # HackRF Support
+sudo emerge --ask net-wireless/bladerf                                      # bladeRF Support
+sudo emerge --ask net-libs/libiio net-libs/libad9361-iio                    # For ADALM-Pluto, PlutoPlus, AntSDR and other AD9361-based SDRs
+sudo emerge --ask dev-libs/opencl-icd-loader                                # OpenCL Support, Optional, but recommended
 ```
 
 </details>
@@ -270,36 +328,29 @@ sudo emerge --ask dev-vcs/git sci-libs/fftw dev-libs/jemalloc sci-libs/volk \
 <summary>Install Dependencies - openSUSE</summary>
 
 ```bash
-sudo zypper install git gcc-c++ cmake g++ pkgconf fftw3-devel libpng-devel \
-                    libtiff-devel jemalloc-devel libcurl-devel volk-devel  \
+sudo zypper install git gcc-c++ cmake ninja pkgconf fftw3-devel libpng-devel \
+                    libtiff-devel jemalloc-devel libcurl-devel volk-devel \
                     nng-devel sqlite3-devel
+sudo zypper install opencv-devel jsoncpp-devel opencl-headers libOpenCL1   # RDAS aligner (built by default)
 
 # (Optional)
-sudo zypper install libglfw-devel zenity dbus-1-devel                                                # Only if you want to build the GUI Version
-sudo zypper install portaudio-devel                                             # Only if you want audio output
-sudo zypper install libzstd-devel                                               # Only if you want to build with ZIQ Recording compression
-sudo zypper install hdf5-devel                                                  # Only if you want official product support (ex, EUMETSAT)
-sudo zypper install rtl-sdr-devel hackrf-devel airspy-devel airspyhf-devel      # All libraries required for live processing
-sudo zypper install libad9361-iio-devel libiio-devel                            # For ADALM-Pluto, PlutoPlus, AntSDR and other SDRs based on Analog AD9361
-sudo zypper install bladeRF-devel                                               # For BladeRF
-sudo zypper install libomp-devel                                                # Shouldn't be required in general, but in case you have errors with OMP
-sudo zypper install opencl-headers libOpenCL1                                   # Optional, but recommended as it drastically increases speed of some operations. Installs OpenCL.
-sudo zypper install intel-opencl                                                # Enables OpenCL for Intel Integrated Graphics
-sudo zypper install Mesa-libOpenCL                                              # For AMD Radeon cards *BEFORE series 5000* (e.g. RX480/580...). For newer cards, please install the official AMD drivers.
-
-# One-liner to install all dependencies:
-sudo zypper install git gcc-c++ cmake g++ pkgconf fftw3-devel libpng-devel libtiff-devel jemalloc-devel \
-                    libcurl-devel hdf5-devel volk-devel nng-devel libglfw-devel zenity portaudio-devel \
-                    libzstd-devel rtl-sdr-devel hackrf-devel airspy-devel airspyhf-devel libad9361-iio-devel \
-                    libiio-devel bladeRF-devel libomp-devel opencl-headers libOpenCL1 intel-opencl Mesa-libOpenCL
-
+sudo zypper install libglfw-devel zenity dbus-1-devel                       # Only if you want to build the GUI Version
+sudo zypper install portaudio-devel                                        # Only if you want audio output
+sudo zypper install libzstd-devel                                          # Only if you want to build with ZIQ Recording compression
+sudo zypper install hdf5-devel                                             # Only if you want official product support (ex, EUMETSAT)
+sudo zypper install rtl-sdr-devel hackrf-devel airspy-devel airspyhf-devel  # Libraries required for live processing
+sudo zypper install libad9361-iio-devel libiio-devel                       # For ADALM-Pluto, PlutoPlus, AntSDR and other AD9361-based SDRs
+sudo zypper install bladeRF-devel                                          # For BladeRF
+sudo zypper install libomp-devel                                           # Shouldn't be required in general, but in case you have errors with OMP
+sudo zypper install intel-opencl                                           # Enables OpenCL for Intel Integrated Graphics
+sudo zypper install Mesa-libOpenCL                                         # For AMD Radeon cards *BEFORE series 5000*; newer cards need the official AMD drivers
 ```
 
 </details>
 
 ---
 
-If nng is not available for your distro, you will have to build it from source
+If nng is not available for your distro, you will have to build it from source:
 
 ```bash
 git clone https://github.com/nanomsg/nng.git -b v1.9.0
@@ -312,31 +363,37 @@ cd ../..
 rm -rf nng
 ```
 
-#### Build GobDump
+---
 
-```
-git clone https://github.com/SatDump/SatDump.git
-cd SatDump
-mkdir build && cd build
-# If you do not want to build the GUI Version, add -DBUILD_GUI=OFF to the command
-# If you want to disable some SDRs, you can add -DPLUGIN_HACKRF_SDR_SUPPORT=OFF or similar
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr ..
-make -j`nproc`
+#### Build GobDump (Linux)
 
-# To run without installing
-ln -s ../resources .        # Symlink resources so it can run
-ln -s ../gobdump_cfg.json . # Symlink settings so it can run
+```bash
+git clone --recursive -b ports https://github.com/MTalon63/GobDump.git
+cd GobDump
 
-# To install system-wide
+make build   # or: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON && cmake --build build --parallel
+
+# To run without installing, symlink the runtime data next to the binary
+cd build
+ln -sf ../pipelines .
+ln -sf ../resources .
+ln -sf ../gobdump_cfg.json .
+cd ..
+
+# To install system-wide instead
 sudo make install
 
-# Run (if you want!)
-./gobdump-ui
+# Run
+make run     # CLI;  make ui  for the GUI
 ```
+
+Add `-DBUILD_GUI=OFF` if you do not want the GUI. To skip the RDAS aligner
+without installing OpenCV/jsoncpp, use `-DBUILD_RDAS_ALIGNER=OFF`.
 
 ### Raspberry Pi
 
-In case you are using RPi3 (any revision) and older, run `make -j1 ` instead of ``make -j`nproc` `` **otherwise the system will crash**.
+Same as the Linux instructions above. On a Raspberry Pi 3 (any revision) or older, use
+`make JOBS=1` **otherwise the system will crash** from running out of memory.
 
 ### Android
 
