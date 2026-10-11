@@ -20,6 +20,13 @@ public:
             return;
         }
 #endif
+#ifdef DVB_HAS_NEON
+        if (!cpu_features::get_cpu_features().CPU_ARM_NEON)
+        {
+            logger->error("CPU Does not support NEON. Extension plugin NOT loading!");
+            return;
+        }
+#endif
 
         satdump::eventBus->register_handler<satdump::pipeline::RegisterModulesEvent>(registerPluginsHandler);
     }

@@ -156,6 +156,19 @@ if(CXX_AVX2_FOUND)
         PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS} -funroll-loops -ffast-math"
                    COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
 endif()
+
+# NEON twin of the two kernels above. FindNEON fails cleanly on x86, so this is inert there.
+# Deliberately no -ffast-math on the M&M TU: FMA contraction is already a rounding change and
+# that loop is a feedback loop.
+include(FindNEON)
+if(NEON_FOUND)
+    set_source_files_properties(common/dsp/filter/fir.cpp
+        PROPERTIES COMPILE_FLAGS "${NEON_C_FLAGS}"
+                   COMPILE_DEFINITIONS "DSP_HAVE_NEON_ISA=1")
+    set_source_files_properties(common/dsp/clock_recovery/clock_recovery_mm.cpp
+        PROPERTIES COMPILE_FLAGS "${NEON_C_FLAGS}"
+                   COMPILE_DEFINITIONS "DSP_HAVE_NEON_ISA=1")
+endif()
 target_include_directories(gobdump_core PUBLIC .)
 #target_precompile_headers(gobdump_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/nlohmann/json.hpp>")
 
