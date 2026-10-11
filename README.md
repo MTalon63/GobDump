@@ -138,20 +138,25 @@ wants the plugins.
 | `BUILD_DOCS` | `OFF` | Doxygen docs |
 | `ENABLE_I18N` | `ON` | Translations |
 
-#### Profiling the arm64 NEON kernels
+#### Profiling the DSP kernels
 
-On an Apple Silicon Mac there is a self-contained profiler that measures the DVB-S2
-NEON kernels against the scalar path and against libvolk's dispatched kernels:
+A self-contained profiler measures the DVB-S2 SIMD kernels against the scalar path and
+against libvolk's dispatched kernels. It works on **any** platform - arm64 (NEON),
+x86-64 (AVX2+FMA), or anywhere else (scalar + volk) - so you can compare machines:
 
 ```bash
-./tools/dvbs2_neon_profile/dvbs2_neon_profile.sh
+bash tools/dvbs2_neon_profile/dvbs2_neon_profile.sh
 ```
 
-It compiles the exact kernel bodies into a standalone benchmark (it never modifies the
-git tree) and reports best-of-N timings plus a checksum comparison against the scalar
-path, so you can see both the speed and that the result is unchanged. Read the notes it
-prints at the end before drawing conclusions - VOLK's NEON path is already vectorized,
-so a small win or even a loss is a realistic outcome for these kernels.
+It compiles the exact kernel bodies from `fir.cpp` and `clock_recovery_mm.cpp` into a
+standalone benchmark (it never modifies the git tree) and reports best-of-N timings plus
+a numeric comparison against the scalar path, so you can see both the speed and that the
+result is unchanged. Environment knobs: `BENCH_N` (points per call), `BENCH_REPS`
+(timing repetitions). Run from the repo root.
+
+Reading the output: compare only rows from the same machine - absolute times are not
+comparable across CPUs, but the ratios are. VOLK's SIMD kernels are already vectorized,
+so a small win, or even a loss, is a realistic outcome here rather than a bug.
 
 > **Building for your own machine vs. distributing:** a local (non-CI) build adds
 > `-march=native`, so the resulting binaries only run on the CPU that built them. That

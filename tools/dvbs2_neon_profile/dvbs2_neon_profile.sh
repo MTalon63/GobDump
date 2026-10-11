@@ -12,6 +12,10 @@
 #   It never touches your GobDump git tree. Everything is written to a temp dir.
 #   It is read-only with respect to the repo.
 #
+# WORKS ON: macOS (arm64), Linux (arm64 or x86-64), Windows/MSYS2 or WSL.
+#   On arm64 it measures the NEON kernels; on x86-64 the AVX2 ones. Same source,
+#   same methodology, so you can compare ratios across machines.
+#
 # USAGE  (run from the repository root)
 #   bash tools/dvbs2_neon_profile/dvbs2_neon_profile.sh          # bench only
 #   bash tools/dvbs2_neon_profile/dvbs2_neon_profile.sh --full   # + end-to-end guidance
@@ -32,25 +36,43 @@ c_grn()   { printf '\033[32m%s\033[0m\n' "$*"; }
 c_yel()   { printf '\033[33m%s\033[0m\n' "$*"; }
 c_bold()  { printf '\033[1m%s\033[0m\n' "$*"; }
 
-c_bold "=== DVB-S2 NEON profiler ==="
+c_bold "=== DVB-S2 DSP kernel profiler ==="
 echo "repo : $REPO"
 echo "arch : $(uname -m)   kernel: $(uname -r)"
-echo "cpu  : $(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo unknown)"
+CPU_INFO=""
+if [ "$(uname -s)" = "Darwin" ]; then
+    CPU_INFO="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
+elif [ -r /proc/cpuinfo ]; then
+    CPU_INFO="$(awk -F: '/model name|Model|Hardware/ {gsub(/^ +/,"",$2); print $2; exit}' /proc/cpuinfo)"
+fi
+NPROC=""
+if [ "$(uname -s)" = "Darwin" ]; then NPROC="$(sysctl -n hw.ncpu 2>/dev/null || true)"; else NPROC="$(nproc 2>/dev/null || true)"; fi
+echo "cpu  : ${CPU_INFO:-unknown}${NPROC:+  ($NPROC cores)}"
 echo
 
 # ---------------------------------------------------------------- sanity checks
-if [ "$(uname -s)" != "Darwin" ]; then
-    c_yel "WARNING: this is not macOS. The script still works on Linux/arm64,"
-    c_yel "         but the sysctl/hw info below will be missing."
-fi
 
 ARCH="$(uname -m)"
-if [ "$ARCH" != "arm64" ] && [ "$ARCH" != "aarch64" ]; then
-    c_red "ERROR: this is not an arm64 machine (got '$ARCH')."
-    c_red "The NEON kernels only exist on arm64, so there is nothing useful to measure."
-    exit 1
-fi
-c_grn "arm64 confirmed."
+ISA_FLAGS=""
+case "$ARCH" in
+    arm64|aarch64)
+        ISA_DESC="aarch64 NEON"
+        ;;
+    x86_64|amd64|AMD64)
+        # AVX2+FMA is what the x86 kernels need. Without it the AVX2 rows are
+        # omitted and only scalar/volk are measured, which is still useful.
+        ISA_FLAGS="-mavx2 -mfma"
+        ISA_DESC="x86-64 (AVX2+FMA requested)"
+        ;;
+    i386|i486|i586|i686|x86)
+        ISA_DESC="x86 32-bit (scalar/volk only)"
+        ;;
+    *)
+        ISA_DESC="$ARCH (scalar/volk only)"
+        c_yel "Unrecognised architecture '$ARCH' - the SIMD rows may be absent."
+        ;;
+esac
+c_grn "architecture: $ISA_DESC"
 
 CXX="${CXX:-c++}"
 if ! command -v "$CXX" >/dev/null 2>&1; then
@@ -63,15 +85,30 @@ echo "compiler: $($CXX --version | head -1)"
 
 # ---------------------------------------------------------------- volk probe
 # The comparison against libvolk is only meaningful if we find it.
-VOLK_FLAGS=""
+VOLK_CFLAGS=""
+VOLK_LIBS=""
 HAVE_VOLK=0
-if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists volk 2>/dev/null; then
-    VOLK_FLAGS="$(pkg-config --cflags --libs volk)"
+VOLK_LIBDIR=""
+if [ "${NO_VOLK:-0}" = "1" ]; then
+    c_yel "NO_VOLK=1 set - skipping the libvolk comparison."
+elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists volk 2>/dev/null; then
+    VOLK_CFLAGS="$(pkg-config --cflags volk)"
+    VOLK_LIBS="$(pkg-config --libs volk)"
+    # Remember the directory of the .so/.dylib so we can bake an rpath. On macOS the
+    # library is built with @rpath, so linking -lvolk is not enough: without an rpath
+    # dyld aborts at startup with "no LC_RPATH's found" (seen with radioconda).
+    # `--variable=libdir` is the reliable source; fall back to stripping -L off --libs.
+    for cand in $(pkg-config --variable=libdir volk 2>/dev/null) \
+                $(pkg-config --libs volk 2>/dev/null | tr " " "\n" | sed -n "s/^-L//p"); do
+        [ -n "$cand" ] && [ -d "$cand" ] && VOLK_LIBDIR="$cand" && break
+    done
     HAVE_VOLK=1
     c_grn "libvolk found via pkg-config - will include the dispatched comparison."
 elif [ -d /opt/homebrew/include/volk ] || [ -d /usr/local/include/volk ]; then
     VOLKP="$( ( [ -d /opt/homebrew/include/volk ] && echo /opt/homebrew ) || echo /usr/local )"
-    VOLK_FLAGS="-I$VOLKP/include -L$VOLKP/lib -lvolk"
+    VOLK_CFLAGS="-I$VOLKP/include"
+    VOLK_LIBS="-L$VOLKP/lib -lvolk"
+    VOLK_LIBDIR="$VOLKP/lib"
     HAVE_VOLK=1
     c_grn "libvolk found under $VOLKP - will include the dispatched comparison."
 else
@@ -92,6 +129,17 @@ BIN="$WORK/bench"
 DEFS=""
 [ "$HAVE_VOLK" = "1" ] && DEFS="-DHAVE_VOLK=1"
 
+# On macOS, libraries are linked with @rpath, so the loader needs an LC_RPATH entry
+# pointing at the directory the dylib actually lives in. Without it dyld aborts with
+# "no LC_RPATH's found" even though the link succeeded. Harmless on other platforms.
+RPATH_FLAGS=""
+if [ -n "$VOLK_LIBDIR" ]; then
+    case "$(uname -s)" in
+        Darwin) RPATH_FLAGS="-Wl,-rpath,$VOLK_LIBDIR" ;;
+        *)      RPATH_FLAGS="-Wl,-rpath,$VOLK_LIBDIR" ;;
+    esac
+fi
+
 c_bold "--- compiling benchmark ---"
 # Disable AUTO-vectorization so the "scalar" baselines are genuinely scalar.
 # Explicit NEON intrinsics are unaffected by these flags, so the NEON kernels
@@ -110,44 +158,140 @@ fi
 # -O3 to match how the real kernels are built. No -ffast-math: the point is to
 # measure the same code the decoder uses, and the M&M TU deliberately omits it.
 set -x
-$CXX -O3 -std=gnu++17 -DNDEBUG $NOVEC_FLAG $DEFS -I"$REPO" $VOLK_FLAGS "$SRC" -o "$BIN" -lm
+$CXX -O3 -std=gnu++17 -DNDEBUG $NOVEC_FLAG $ISA_FLAGS $DEFS -I"$REPO" $VOLK_CFLAGS "$SRC" -o "$BIN" $VOLK_LIBS $RPATH_FLAGS -lm
 set +x
+if [ ! -x "$BIN" ]; then
+    c_red "COMPILE FAILED - see the errors above."
+    c_red "If it is a volk link error, retry without volk: NO_VOLK=1 bash $0"
+    exit 1
+fi
 c_grn "compiled."
 echo ""
 
 # ---------------------------------------------------------------- run
+# Startup probe: catch dynamic-linker problems BEFORE looping five times, and try to
+# recover. On macOS a volk dylib built with @rpath needs either an LC_RPATH (added at
+# link time above) or DYLD_LIBRARY_PATH / DYLD_FALLBACK_LIBRARY_PATH.
+RUN_ENV=""
+if ! "$BIN" >/dev/null 2>"$WORK/probe.err"; then
+    if grep -qiE "Library not loaded|LC_RPATH|image not found" "$WORK/probe.err"; then
+        c_yel "The benchmark built, but the loader cannot find libvolk at runtime:"
+        sed -e "s/^/    /" "$WORK/probe.err" | head -4
+        case "$(uname -s)" in
+            Darwin)
+                if [ -n "$VOLK_LIBDIR" ]; then
+                    RUN_ENV="DYLD_FALLBACK_LIBRARY_PATH=$VOLK_LIBDIR${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
+                fi
+                ;;
+            *)
+                if [ -n "$VOLK_LIBDIR" ]; then
+                    RUN_ENV="LD_LIBRARY_PATH=$VOLK_LIBDIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                fi
+                ;;
+        esac
+        if [ -n "$RUN_ENV" ]; then
+            c_yel "Retrying with $RUN_ENV"
+        fi
+        # Last resort: rebuild without volk so you still get the SIMD-vs-scalar result.
+        if [ -n "$RUN_ENV" ] && env $RUN_ENV "$BIN" >/dev/null 2>&1; then
+            : # the retry works; carry on with RUN_ENV applied below
+        else
+            c_yel "Still not loading. Rebuilding WITHOUT libvolk so you at least get"
+            c_yel "the SIMD-vs-scalar comparison (set NO_VOLK=1 to skip this next time)."
+            DEFS=""
+            RPATH_FLAGS=""
+            set -x
+            $CXX -O3 -std=gnu++17 -DNDEBUG $NOVEC_FLAG $ISA_FLAGS $DEFS -I"$REPO" "$SRC" -o "$BIN" -lm
+            set +x
+            RUN_ENV=""
+            if ! "$BIN" >/dev/null 2>&1; then
+                c_red "Benchmark still will not start. Please report the output above."
+                exit 1
+            fi
+        fi
+    else
+        c_red "The benchmark failed to start:"
+        sed -e "s/^/    /" "$WORK/probe.err" | head -6
+        exit 1
+    fi
+fi
+
 c_bold "--- running (best of 5 runs; the minimum is the honest number) ---"
 for run in 1 2 3 4 5; do
     echo ""; echo "### run $run ###"
-    "$BIN"
+    env $RUN_ENV "$BIN"
 done | tee "$WORK/bench.raw.txt"
 
 # ---------------------------------------------------------------- summarise
-# Pull the NEON vs scalar vs volk lines and give a quick verdict.
-echo ""
-c_bold "=== SUMMARY (best observed per row) ==="
+# ---------------------------------------------------------------- summary
+# The row format is: "  <name>  <ms> ms  <ns/pt> ns/pt". Parse on the literal
+# " ms " marker rather than by column index - names contain spaces.
+# Emit: best ms per row, then the speedup of the SIMD row over scalar and over volk.
+c_bold "=== SUMMARY (best observed per row, across all runs) ==="
+# Parse the fixed row format "  <name>  <ms> ms  <ns/pt> ns/pt".
+# Deliberately avoids the 3-argument match(); that is a GNU awk extension and
+# macOS ships BSD awk, where it is an error.
 awk '
-  /^  / {
-    # strip the ns/pt and speedup columns, keep name + ms
-    name=""; for (i=1;i<=NF-5;i++) name=name $i " ";
-    ms=$(NF-3)+0;
-    key=name;
-    if (!(key in best) || ms < best[key]) { best[key]=ms }
+  /^  .+ [0-9.]+ ms +[0-9.]+ ns\/pt[ ]*$/ {
+    line = $0
+    sub(/[ ]+[0-9.]+[ ]+ns\/pt[ ]*$/, "", line)
+    sub(/[ ]+ms[ ]*$/, "", line)
+    n = split(line, parts, /[ ]+/)
+    ms = parts[n] + 0
+    name = line
+    sub(/[ ]+[0-9.]+[ ]*$/, "", name)
+    sub(/^[ ]+/, "", name)
+    if (name != "" && (!(name in best) || ms < best[name])) best[name] = ms
   }
-  END { for (k in best) printf "  %-36s %9.3f ms\n", k, best[k] }
+  END { for (k in best) printf "  %-38s %10.4f ms\n", k, best[k] }
 ' "$WORK/bench.raw.txt" | sort
+
+echo ""
+c_bold "=== SPEEDUP: each baseline vs the SIMD row ==="
+awk '
+  /^  .+ [0-9.]+ ms +[0-9.]+ ns\/pt[ ]*$/ {
+    line = $0
+    sub(/[ ]+[0-9.]+[ ]+ns\/pt[ ]*$/, "", line)
+    sub(/[ ]+ms[ ]*$/, "", line)
+    n = split(line, parts, /[ ]+/)
+    ms = parts[n] + 0
+    name = line
+    sub(/[ ]+[0-9.]+[ ]*$/, "", name)
+    sub(/^[ ]+/, "", name)
+    if (name != "" && (!(name in best) || ms < best[name])) best[name] = ms
+  }
+  END {
+    simd = 0
+    for (k in best) if (k ~ /^SIMD:/ && (simd == 0 || best[k] < simd)) simd = best[k]
+    if (simd <= 0) { print "  (no SIMD row found - nothing to compare)"; exit }
+    for (k in best) {
+      if (k ~ /^SIMD:/) continue
+      r = best[k] / simd
+      verdict = (r >= 1.0) ? "SIMD is faster" : "SIMD is SLOWER"
+      printf "  %-38s %7.2fx   %s\n", k, r, verdict
+    }
+  }
+' "$WORK/bench.raw.txt" | sort
+
+echo ""
+c_bold "NOTE: the SIMD row is the repo kernel for THIS architecture."
+c_bold "      A ratio below 1.00x means the SIMD kernel LOSES to that baseline."
 
 echo ""
 c_bold "=== what to look for ==="
 cat <<'EOF'
-  * 'NEON (this repo's kernel)' should beat 'scalar (vectorization off)'.
+  * The "SIMD: ..." row should beat "scalar (auto-vec disabled)".
     If it does not, the kernel is not worth keeping on this CPU.
-  * Compare 'NEON ...' against 'libvolk (dispatched)'. That is the real question:
-    VOLK's NEON path is already vectorized, so a small win (~1.1x) is expected and
-    a LOSS is entirely possible. Report it either way - do not assume the port wins.
-  * The FIR kernel measured near break-even (~1.0-1.1x) on emulation. If it is at or
-    below 1.0x on your M4, it should be dropped - it is self-contained behind its guard.
-  * The M&M kernel was the better bet (~1.5x). Confirm or refute.
+    On x86 the SIMD row is AVX2; on arm64 it is NEON - same source, both measured.
+  * Compare the SIMD row against 'libvolk (dispatched)'. That is the real question.
+    VOLK's SIMD kernels are already vectorized, so a small win is expected and a LOSS
+    is entirely possible. Report it either way - do not assume the port wins.
+  * On arm64 the FIR kernel measured near break-even (~1.0-1.1x) under emulation.
+    If it is at or below 1.0x on real hardware it should be dropped - it is
+    self-contained behind its arch guard and nothing else depends on it.
+  * The M&M kernel is the better bet (measured ~1.5x on arm64). Confirm or refute.
+  * Absolute ms values are machine-specific. Compare RATIOS across machines, and
+    only ever compare rows produced on the same machine.
 EOF
 
 echo ""
