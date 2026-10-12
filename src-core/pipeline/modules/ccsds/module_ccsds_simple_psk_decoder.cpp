@@ -6,6 +6,7 @@
 #include "core/exception.h"
 #include "imgui/imgui.h"
 #include "logger.h"
+#include <cmath>
 
 // Return filesize
 uint64_t getFilesize(std::string filepath);
@@ -347,21 +348,79 @@ namespace satdump
 
                     if (d_constellation == dsp::BPSK)
                     {
-                        for (int i = 0; i < 2048; i++)
+                        int num_points = std::min<int>(d_buffer_size, 2048);
+
+                        // 1. Find approximate peak magnitude to isolate clusters from transitions/zeros
+                        float max_a = 0.0f;
+                        for (int i = 0; i < num_points; i++)
                         {
-                            draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i] / 127.0) * 130 * ui_scale) % int(200 * ui_scale),
-                                                              ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + rng.gasdev() * 14 * ui_scale) % int(200 * ui_scale)),
-                                                       2 * ui_scale, style::theme.constellation);
+                            float a = std::abs((float)((int8_t *)soft_buffer)[i]);
+                            if (a > max_a)
+                                max_a = a;
+                        }
+
+                        // Measure noise variance only on symbols near the constellation peaks (|v| > 0.45 * max_a)
+                        float threshold = max_a * 0.45f;
+                        float sum_a = 0.0f;
+                        int count_a = 0;
+                        for (int i = 0; i < num_points; i++)
+                        {
+                            float a = std::abs((float)((int8_t *)soft_buffer)[i]);
+                            if (a > threshold)
+                            {
+                                sum_a += a;
+                                count_a++;
+                            }
+                        }
+
+                        float mean_a = (count_a > 10) ? (sum_a / (float)count_a) : 80.0f;
+                        float var_sum = 0.0f;
+                        int var_count = 0;
+                        for (int i = 0; i < num_points; i++)
+                        {
+                            float a = std::abs((float)((int8_t *)soft_buffer)[i]);
+                            if (a > threshold)
+                            {
+                                float diff = a - mean_a;
+                                var_sum += diff * diff;
+                                var_count++;
+                            }
+                        }
+
+                        float sigma_soft = (var_count > 10) ? std::sqrt(var_sum / (float)var_count) : 6.0f;
+                        float scale_px = 80.0f / 127.0f;
+                        float sigma_py = sigma_soft * scale_px;
+                        if (sigma_py < 2.0f)
+                            sigma_py = 2.0f;
+                        else if (sigma_py > 20.0f)
+                            sigma_py = 20.0f;
+
+                        for (int i = 0; i < num_points; i++)
+                        {
+                            int8_t val = ((int8_t *)soft_buffer)[i];
+                            if (val == 0)
+                                continue;
+                            float jitter = rng.ran1() - 0.5f;
+                            float px = rect_min.x + (100.0f + ((float)val + jitter) * scale_px) * ui_scale;
+                            float py = rect_min.y + (100.0f + rng.gasdev() * sigma_py) * ui_scale;
+                            draw_list->AddCircleFilled(ImVec2(px, py), 2 * ui_scale, style::theme.constellation);
                         }
                     }
                     else
                     {
-                        for (int i = 0; i < 2048; i++)
+                        int num_points = std::min<int>(d_buffer_size / 2, 2048);
+                        float scale_px = 80.0f / 127.0f;
+                        for (int i = 0; i < num_points; i++)
                         {
-                            draw_list->AddCircleFilled(
-                                ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0) * 100 * ui_scale) % int(200 * ui_scale),
-                                       ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0) * 100 * ui_scale) % int(200 * ui_scale)),
-                                2 * ui_scale, style::theme.constellation);
+                            int8_t val_x = ((int8_t *)soft_buffer)[i * 2 + 0];
+                            int8_t val_y = ((int8_t *)soft_buffer)[i * 2 + 1];
+                            if (val_x == 0 && val_y == 0)
+                                continue;
+                            float jitter_x = rng.ran1() - 0.5f;
+                            float jitter_y = rng.ran1() - 0.5f;
+                            float px = rect_min.x + (100.0f + ((float)val_x + jitter_x) * scale_px) * ui_scale;
+                            float py = rect_min.y + (100.0f + ((float)val_y + jitter_y) * scale_px) * ui_scale;
+                            draw_list->AddCircleFilled(ImVec2(px, py), 2 * ui_scale, style::theme.constellation);
                         }
                     }
 
