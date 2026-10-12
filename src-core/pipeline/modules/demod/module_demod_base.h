@@ -22,6 +22,7 @@
 #include <chrono>
 #include <locale>
 #include <vector>
+#include <cmath>
 
 namespace satdump
 {
@@ -134,11 +135,11 @@ namespace satdump
                 // Util
                 int8_t clamp(float x)
                 {
-                    if (x < -128.0)
+                    if (x < -127.0f)
                         return -127;
-                    if (x > 127.0)
+                    if (x > 127.0f)
                         return 127;
-                    return x;
+                    return (int8_t)std::round(x);
                 }
 
                 // Stopping, etc. Written by the UI thread (Abort), polled by the work thread as the
