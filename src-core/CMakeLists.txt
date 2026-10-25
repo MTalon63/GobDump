@@ -16,8 +16,11 @@ endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx ${PROJECT_BINARY_DIR}/satdump_varst.cpp @ONLY)
 
+# NOTE: the generated satdump_varst.cpp is added explicitly below. Do NOT pass its absolute
+# path to GLOB_RECURSE: an absolute path makes CMake walk the whole binary tree, so any nested
+# CMake build under build/ (scratch/repro dirs) contributes a second copy and the link fails
+# with "multiple definition of satdump::SATDUMP_VERSION".
 file(GLOB_RECURSE GobDump_core_CPPS *.cpp
-    ${PROJECT_BINARY_DIR}/satdump_varst.cpp
     libs/aec/*.c
     libs/predict/*.c
     libs/bzlib/*.c
@@ -40,6 +43,10 @@ file(GLOB_RECURSE GobDump_core_CPPS *.cpp
 
 list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cpp)
 list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_BINARY_DIR}/src-core/satdump_varst.cpp)
+
+# The configured version TU must be listed explicitly, and only once. It cannot go through
+# GLOB_RECURSE (see above) and it cannot be left to the *.cpp glob, which runs in src-core/.
+list(APPEND GobDump_core_CPPS ${PROJECT_BINARY_DIR}/satdump_varst.cpp)
 
 ################################################################
 ####### AngelScript START

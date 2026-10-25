@@ -241,20 +241,22 @@ namespace dsp
 
         for (int i = 0; i < const_states; i++)
         {
-            // Calculate the distance between the sample and the current
-            // constellation point.
-            float dist = std::abs(std::complex<float>(sample - constellation[i]));
+            // Squared Euclidean distance: the Gaussian likelihood is exp(-d^2 / (2*sigma^2)).
+            complex_t diff = sample - constellation[i];
+            float d2 = diff.real * diff.real + diff.imag * diff.imag;
 
-            if (dist < min_dist)
+            if (d2 < min_dist)
             {
-                min_dist = dist;
+                min_dist = d2;
                 closest = constellation[i];
                 // c_i = i;
             }
 
-            // Calculate the probability factor from the distance and
-            // the scaled noise power.
-            float d = expf(-dist / npwr);
+            // Clamped so expf cannot underflow to 0 and logf cannot see -inf.
+            float e = -d2 / (2.0f * npwr);
+            if (!(e > -50.0f))
+                e = -50.0f;
+            float d = expf(e);
 
             v = i;
 
@@ -289,13 +291,13 @@ namespace dsp
 
     int8_t constellation_t::clamp(float x)
     {
-        while (x < -127 || x > 127)
-        {
-            x *= 0.5;
-            if (!std::isfinite(x))
-                return x;
-        }
-        return x;
+        if (std::isnan(x))
+            return 0;
+        if (x >= 127.0f)
+            return 127;
+        if (x <= -127.0f)
+            return -127;
+        return (int8_t)x;
     }
 
     void constellation_t::make_lut(int resolution, float npwr)

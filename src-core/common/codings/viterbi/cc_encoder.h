@@ -10,6 +10,13 @@ namespace viterbi
     {
     private:
         unsigned char Partab[256];
+
+        // Output bit per (low d_k state bits x poly), used when K is small enough.
+        std::vector<unsigned char> out_table;
+        size_t d_table_stride = 0;
+        bool d_use_table = false;
+        int d_low_mask = 0;
+        void build_out_table();
         unsigned int d_frame_size;
         unsigned int d_max_frame_size;
         unsigned int d_rate;

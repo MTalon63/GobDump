@@ -72,7 +72,11 @@ image::Image downloadTileMap(std::string url_source, double lat0, double lon0, d
             {
                 logger->debug("Downloading tile from: " + url);
 
-                satdump::perform_http_request(url, res);
+                if (satdump::perform_http_request(url, res))
+                {
+                    logger->error("Failed to download tile from: " + url);
+                    continue;
+                }
 
                 image::Image tile;
                 image::load_img(tile, (uint8_t *)res.data(), res.size());

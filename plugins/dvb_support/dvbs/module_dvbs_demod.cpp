@@ -174,7 +174,6 @@ namespace satdump
                                 continue;
                             }
 
-#if 1
                             int frm_cnt = dat_size / (204 * 8);
 
                             for (int i = 0; i < frm_cnt; i++)
@@ -214,12 +213,6 @@ namespace satdump
                                 }
                             }
 
-#else
-                            if (output_data_type == DATA_FILE)
-                                data_out.write((char *)def->output_stream->readBuf, dat_size);
-                            else
-                                output_fifo->write((uint8_t *)def->output_stream->readBuf, dat_size);
-#endif
                             def->output_stream->flush();
                         }
                     });
