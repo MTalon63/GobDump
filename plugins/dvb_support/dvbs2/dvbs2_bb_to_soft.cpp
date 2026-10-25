@@ -63,7 +63,6 @@ namespace dvbs2
             constellation->demod_soft_lut_view(_lut, descrambler.descramble(input_stream->readBuf[90 + i]), &soft_slots_buffer[(i - pilots_offset) * constellation->getBitsCnt()]);
         }
 
-        // Deinterleave
         deinterleaver->deinterleave(soft_slots_buffer, output_stream->writeBuf);
 
         input_stream->flush();

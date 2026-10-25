@@ -81,4 +81,21 @@ else()
     message("NEON Features not found! This is only an error on ARM CPUs that should support NEON")
 endif()
 
+# AVX2 selects the 32-lane DVB-S2 LDPC kernel. It must be target-wide: the
+# simd_type it selects is visible from bbframe_ldpc.h, so a per-source define
+# would give different TUs different class layouts.
+option(DVB_LDPC_AVX2 "Use the 32-lane AVX2 DVB-S2 LDPC kernel" ON)
+if(DVB_LDPC_AVX2 AND NOT ANDROID)
+    include(FindAVX)
+endif()
+
+if(DVB_LDPC_AVX2 AND CXX_AVX2_FOUND)
+    message("Found AVX2 features, enabling 32-lane DVB-S2 LDPC")
+    separate_arguments(DVB_AVX2_FLAGS NATIVE_COMMAND "${CXX_AVX2_FLAGS}")
+    target_compile_options(dvb_support PUBLIC ${DVB_AVX2_FLAGS})
+    target_compile_definitions(dvb_support PUBLIC DVB_HAS_AVX2)
+else()
+    message("AVX2 not used for DVB-S2 LDPC; keeping 16-lane path")
+endif()
+
 install(TARGETS dvb_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins)

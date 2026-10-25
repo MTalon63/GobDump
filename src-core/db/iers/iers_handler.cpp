@@ -62,26 +62,55 @@ namespace satdump
         if (perform_http_request(url_str, res))
         {
             logger->error("Error fetching IERS Bulletins!");
-            return;
         }
-
-        h->tr_begin();
-
-        nlohmann::json j = nlohmann::json::parse(res);
-        for (auto &v : j["EOP"]["data"]["timeSeries"])
+        else
         {
+            // Parse fully before opening a transaction.
+            struct IersEntry
+            {
+                time_t time;
+                double a_pole_x;
+                double a_pole_y;
+                double ut1_utc;
+            };
+            std::vector<IersEntry> entries;
+
             try
             {
-                if (v["dataEOP"]["pole"][0]["source"] == "BulletinA")
+                nlohmann::json j = nlohmann::json::parse(res);
+                for (auto &v : j["EOP"]["data"]["timeSeries"])
                 {
-                    time_t time = ((std::stod(v["time"]["MJD"].get<std::string>()) - 40587) * 86400);
-                    double a_pole_x = std::stod(v["dataEOP"]["pole"][0]["X"].get<std::string>());
-                    double a_pole_y = std::stod(v["dataEOP"]["pole"][0]["Y"].get<std::string>());
-                    double ut1_utc = std::stod(v["dataEOP"]["UT"][0]["UT1-UTC"].get<std::string>());
+                    try
+                    {
+                        if (v["dataEOP"]["pole"][0]["source"] != "BulletinA")
+                            continue;
 
-                    std::string sql = "INSERT INTO iers (time, a_pole_x, a_pole_y, ut1_utc) VALUES (" + std::to_string(time) + ", '" + std::to_string(a_pole_x) + "', '" + std::to_string(a_pole_y) +
-                                      "', '" + std::to_string(ut1_utc) + "') ON CONFLICT(time) DO UPDATE SET a_pole_x='" + std::to_string(a_pole_x) + "', a_pole_y='" + std::to_string(a_pole_y) +
-                                      "', ut1_utc='" + std::to_string(ut1_utc) + "';";
+                        IersEntry entry;
+                        entry.time = ((std::stod(v["time"]["MJD"].get<std::string>()) - 40587) * 86400);
+                        entry.a_pole_x = std::stod(v["dataEOP"]["pole"][0]["X"].get<std::string>());
+                        entry.a_pole_y = std::stod(v["dataEOP"]["pole"][0]["Y"].get<std::string>());
+                        entry.ut1_utc = std::stod(v["dataEOP"]["UT"][0]["UT1-UTC"].get<std::string>());
+                        entries.push_back(entry);
+                    }
+                    catch (std::exception &e)
+                    {
+                        logger->debug("Skipping malformed IERS entry: %s", e.what());
+                    }
+                }
+            }
+            catch (std::exception &e)
+            {
+                logger->error("Error parsing IERS data! %s", e.what());
+            }
+
+            if (!entries.empty())
+            {
+                h->tr_begin();
+                for (auto &entry : entries)
+                {
+                    std::string sql = "INSERT INTO iers (time, a_pole_x, a_pole_y, ut1_utc) VALUES (" + std::to_string(entry.time) + ", '" + std::to_string(entry.a_pole_x) + "', '" +
+                                      std::to_string(entry.a_pole_y) + "', '" + std::to_string(entry.ut1_utc) + "') ON CONFLICT(time) DO UPDATE SET a_pole_x='" + std::to_string(entry.a_pole_x) +
+                                      "', a_pole_y='" + std::to_string(entry.a_pole_y) + "', ut1_utc='" + std::to_string(entry.ut1_utc) + "';";
 
                     char *err = NULL;
                     if (sqlite3_exec(h->db, sql.c_str(), NULL, 0, &err))
@@ -90,18 +119,9 @@ namespace satdump
                         sqlite3_free(err);
                     }
                 }
-                else
-                {
-                    logger->error("First bulletin should be A!");
-                }
-            }
-            catch (std::exception &e)
-            {
-                // logger->error("Error parsing IERS data! %s", e.what());
+                h->tr_end();
             }
         }
-
-        h->tr_end();
 
         // Leap seconds (bulletin C)
         url_str = "https://hpiers.obspm.fr/iers/bul/bulc/ntp/leap-seconds.list";
@@ -114,6 +134,13 @@ namespace satdump
 
         try
         {
+            struct LeapEntry
+            {
+                uint64_t time;
+                int leaps;
+            };
+            std::vector<LeapEntry> leap_entries;
+
             std::istringstream ls_stream(res);
             std::string l;
             while (std::getline(ls_stream, l))
@@ -139,11 +166,20 @@ namespace satdump
 
                 if (parts.size() == 6)
                 {
-                    uint64_t time = std::stoull(parts[0]) - 2208988800;
-                    int leaps = std::stod(parts[1]);
+                    LeapEntry entry;
+                    entry.time = std::stoull(parts[0]) - 2208988800;
+                    entry.leaps = std::stod(parts[1]);
+                    leap_entries.push_back(entry);
+                }
+            }
 
-                    std::string sql = "INSERT INTO leap_seconds (time, leap_seconds) VALUES (" + std::to_string(time) + ", '" + std::to_string(leaps) +
-                                      "') ON CONFLICT(time) DO UPDATE SET leap_seconds='" + std::to_string(leaps) + "';";
+            if (!leap_entries.empty())
+            {
+                h->tr_begin();
+                for (auto &entry : leap_entries)
+                {
+                    std::string sql = "INSERT INTO leap_seconds (time, leap_seconds) VALUES (" + std::to_string(entry.time) + ", '" + std::to_string(entry.leaps) +
+                                      "') ON CONFLICT(time) DO UPDATE SET leap_seconds='" + std::to_string(entry.leaps) + "';";
 
                     char *err = NULL;
                     if (sqlite3_exec(h->db, sql.c_str(), NULL, 0, &err))
@@ -152,6 +188,7 @@ namespace satdump
                         sqlite3_free(err);
                     }
                 }
+                h->tr_end();
             }
         }
         catch (std::exception &e)

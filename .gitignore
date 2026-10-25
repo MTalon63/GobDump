@@ -30,6 +30,7 @@ src-core/satdump_varst.cpp
 PLANS/
 windows/deps 
 live_output/*
+/pipelines.json
 *.ziq
 
 *.cs8

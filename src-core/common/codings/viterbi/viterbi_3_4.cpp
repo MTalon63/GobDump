@@ -56,10 +56,7 @@ namespace viterbi
         {
             for (int i = 0; i < size / 2; i++)
             {
-                /*
-                FY Puncturing is the usual 110 pattern
-                */
-#if 1
+                // FY puncturing is the usual 110 pattern.
                 if (shift ^ (i % 2 == 0))
                 {
                     out[oo++] = in[i * 2 + 0];
@@ -72,11 +69,6 @@ namespace viterbi
                     out[oo++] = in[i * 2 + 1];
                     out[oo++] = 128;
                 }
-#else
-                out[oo++] = in[i * 2 + 0];
-                out[oo++] = in[i * 2 + 1];
-                out[oo++] = 128;
-#endif
             }
         }
         else

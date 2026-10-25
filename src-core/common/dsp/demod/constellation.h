@@ -17,20 +17,7 @@ namespace dsp
         APSK32
     };
 
-    /*
-    This class was made using GNU Radio and LeanDVB's implementation
-    as an example, mostly because it was written while experimenting
-    with DVB-S2.
-
-    TODO : Faster LUT Lookup for soft bits, to make it anywhere near
-    usable. This has not been yet as BPSK and QPSK can simply be
-    soft-demodulated using the I and Q branches directly.
-
-    TODO : Optimize the soft calc function... We don't need to use a
-    std::vector and such.
-
-    This constellation parser expects symbols to be around 1 and -1.
-    */
+    // Constellation parser; expects symbols around 1 and -1.
     class constellation_t
     {
     protected:

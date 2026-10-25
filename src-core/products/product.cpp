@@ -51,7 +51,14 @@ namespace satdump
                 in_file.close();
                 cbor_data.pop_back();
             }
-            contents = nlohmann::json::from_cbor(cbor_data);
+            try
+            {
+                contents = nlohmann::json::from_cbor(cbor_data);
+            }
+            catch (std::exception &e)
+            {
+                throw satdump_exception("Could not parse product data from : " + file + " (" + e.what() + ")");
+            }
 
             instrument_name = contents["instrument"].get<std::string>();
             type = contents["type"].get<std::string>();

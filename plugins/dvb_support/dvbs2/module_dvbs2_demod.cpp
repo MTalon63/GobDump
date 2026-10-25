@@ -1,8 +1,29 @@
 #include "module_dvbs2_demod.h"
+#include <array>
+#include <cmath>
 #include "codings/dvb-s2/modcod_to_cfg.h"
 #include "common/dsp/filter/firdes.h"
 #include "imgui/imgui.h"
 #include "logger.h"
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#endif
+
+#if defined(__SSE2__)
+// Scalar repack is MSB-first, _mm_movemask_epi8 is LSB-first.
+static inline const unsigned char *rev8_table()
+{
+    static const std::array<unsigned char, 256> t = [] {
+        std::array<unsigned char, 256> r = {};
+        for (int i = 0; i < 256; i++)
+            for (int b = 0; b < 8; b++)
+                if (i & (1 << b))
+                    r[i] |= (unsigned char)(1 << (7 - b));
+        return r;
+    }();
+    return t.data();
+}
+#endif
 
 namespace satdump
 {
@@ -13,8 +34,6 @@ namespace satdump
             DVBS2DemodModule::DVBS2DemodModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
                 : BaseDemodModule(input_file, output_file_hint, parameters), constellation_s2(90.0f / 127.0f, 90.0f / 127.0f, demod_constellation_size)
             {
-                // Buffers
-
                 // Parse params
                 if (parameters.count("rrc_alpha") > 0)
                     d_rrc_alpha = parameters["rrc_alpha"].get<float>();
@@ -67,6 +86,23 @@ namespace satdump
 
                 if (parameters.count("ldpc_trials") > 0)
                     d_max_ldpc_trials = parameters["ldpc_trials"].get<int>();
+
+                if (parameters.count("ldpc_early_term") > 0)
+                    d_ldpc_early_term = parameters["ldpc_early_term"].get<bool>();
+
+                if (parameters.count("ldpc_min_iterations") > 0)
+                    d_ldpc_min_iterations = parameters["ldpc_min_iterations"].get<int>();
+
+                if (parameters.count("ldpc_adaptive") > 0)
+                    d_ldpc_adaptive = parameters["ldpc_adaptive"].get<bool>();
+                if (parameters.count("ldpc_trials_good") > 0)
+                    d_ldpc_trials_good = parameters["ldpc_trials_good"].get<int>();
+                if (parameters.count("ldpc_trials_bad") > 0)
+                    d_ldpc_trials_bad = parameters["ldpc_trials_bad"].get<int>();
+                if (parameters.count("ldpc_snr_good") > 0)
+                    d_ldpc_snr_good = parameters["ldpc_snr_good"].get<float>();
+                if (parameters.count("ldpc_snr_bad") > 0)
+                    d_ldpc_snr_bad = parameters["ldpc_snr_bad"].get<float>();
 
                 if (parameters.count("mt_bch") > 0)
                     d_multithread_bch = parameters["mt_bch"].get<bool>();
@@ -127,6 +163,8 @@ namespace satdump
 
                 // Init the rest
                 ldpc_decoder = std::make_unique<dvbs2::BBFrameLDPC>(s2_framesize, s2_coderate);
+                ldpc_decoder->setEarlyTermination(d_ldpc_early_term);
+                ldpc_decoder->setMinIterations(d_ldpc_min_iterations);
                 bch_decoder = std::make_unique<dvbs2::BBFrameBCH>(s2_framesize, s2_coderate);
                 descramber = std::make_unique<dvbs2::BBFrameDescrambler>(s2_framesize, s2_coderate);
 
@@ -156,6 +194,9 @@ namespace satdump
 
                 time_t lastTime = 0;
 
+                // Stage the frame locally so a blocked ring write does not hold bb_to_soft's buffer.
+                std::vector<int8_t> frame_copy(64800);
+
                 // Start
                 BaseDemodModule::start();
                 rrc->start();
@@ -173,10 +214,10 @@ namespace satdump
                 if (d_multithread_bch)
                     process_bch_th = std::thread(&DVBS2DemodModule::process_s2_bch, this);
 
-                int dat_size = 0;
-                while (demod_should_run())
+                // Drain bb_to_soft even after the file ends, or the tail never reaches the FEC.
+                while (demod_should_run() || !s2_bb_to_soft->output_stream->exhausted())
                 {
-                    dat_size = s2_bb_to_soft->output_stream->read();
+                    int dat_size = s2_bb_to_soft->output_stream->read();
 
                     if (dat_size <= 0)
                     {
@@ -184,13 +225,12 @@ namespace satdump
                         continue;
                     }
 
-                    // Push into constellation
                     constellation_s2.pushComplexPL(&s2_pll->output_stream->readBuf[0], 90);
                     constellation_s2.pushComplexSlots(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
 
-                    // Estimate SNR over slots
                     snr_estimator.update(&s2_pll->output_stream->readBuf[90], frame_slot_count * 90);
                     snr = snr_estimator.snr();
+                    d_snr_shared.store(snr, std::memory_order_relaxed);
 
                     if (snr > peak_snr)
                         peak_snr = snr;
@@ -202,31 +242,34 @@ namespace satdump
                     if (frame_counter >= LLR_UPDATE_INTERVAL)
                     {
                         frame_counter = 0;
-                        // npwr = 2 * scale * 10^(-SNR/20) where scale = const_amp * const_prescale
-                        // This matches the constellation scaling used in demod_soft_calc
+                        // npwr = 2 * scale * 10^(-SNR/20), matching demod_soft_calc.
                         float scale_pll = s2_pll->constellation->get_scale_factor();
                         float scale_bb = s2_bb_to_soft->constellation->get_scale_factor();
                         float npwr_pll = 2.0f * scale_pll * powf(10.0f, -snr / 20.0f);
                         float npwr_bb = 2.0f * scale_bb * powf(10.0f, -snr / 20.0f);
-                        s2_pll->constellation->set_noise_power(npwr_pll);
-                        s2_bb_to_soft->constellation->set_noise_power(npwr_bb);
+                        // Rebuild off-thread; the LUT is published atomically.
+                        auto cons_pll = s2_pll->constellation;
+                        auto cons_bb = s2_bb_to_soft->constellation;
+                        std::thread([cons_pll, cons_bb, npwr_pll, npwr_bb]() {
+                            cons_pll->set_noise_power(npwr_pll);
+                            cons_bb->set_noise_power(npwr_bb);
+                        }).detach();
                     }
 
-                    // Get freq
                     display_freq = dsp::rad_to_hz(current_freq / final_sps, final_samplerate);
 
                     detected_modcod = s2_bb_to_soft->detect_modcod;
                     detected_shortframes = s2_bb_to_soft->detect_shortframes;
                     detected_pilots = s2_bb_to_soft->detect_pilots;
 
-                    ring_buffer->write(s2_bb_to_soft->output_stream->readBuf, d_shortframes ? 16200 : 64800);
-
+                    const int frame_sz = d_shortframes ? 16200 : 64800;
+                    memcpy(frame_copy.data(), s2_bb_to_soft->output_stream->readBuf, frame_sz);
                     s2_bb_to_soft->output_stream->flush();
+                    ring_buffer->write(frame_copy.data(), frame_sz);
 
                     // Propagate frequency to an earlier rotator, slowly
                     current_freq -= s2_pll->getFreq() * freq_propagation_factor;
                     freq_sh->set_freq_raw(current_freq);
-                    // logger->info("Freq %f, PLFreq %f", current_freq, s2_pll->getFreq());
 
                     if (input_data_type == DATA_FILE)
                         progress = file_source->getPosition();
@@ -246,7 +289,7 @@ namespace satdump
 
             nlohmann::json DVBS2DemodModule::getModuleStats()
             {
-                nlohmann::json v; // auto v = satdump::pipeline::base::FileStreamToFileStreamModule::getModuleStats();
+                nlohmann::json v;
                 v["progress"] = ((double)progress / (double)filesize);
                 v["snr"] = snr;
                 v["peak_snr"] = peak_snr;
@@ -261,34 +304,73 @@ namespace satdump
                 int8_t *sym_buffer = new int8_t[64800 * 32];
                 uint8_t *repacker_buffer = new uint8_t[64800 * 32];
 
-                while (!should_stop)
+                while (!ring_buffer->exhausted())
                 {
-                    int read = ring_buffer->read(sym_buffer, (d_shortframes ? 16200 : 64800) * dvbs2::simd_type::SIZE);
+                    // Read frame by frame so a short final batch is not discarded.
+                    const int frame_bytes = d_shortframes ? 16200 : 64800;
+                    int got = 0;
+                    for (int f = 0; f < dvbs2::simd_type::SIZE; f++)
+                    {
+                        int r = ring_buffer->read(sym_buffer + (size_t)f * frame_bytes, frame_bytes);
+                        if (r <= 0)
+                            break;
+                        got++;
+                    }
 
-                    if (read <= 0)
+                    if (got <= 0)
                         continue;
 
-                    ldpc_trials = ldpc_decoder->decode(sym_buffer, d_max_ldpc_trials);
-
-                    if (ldpc_trials == -1)
-                        ldpc_trials = d_max_ldpc_trials;
-
-                    for (int ff = 0; ff < dvbs2::simd_type::SIZE; ff++)
                     {
-                        int8_t *buf = &sym_buffer[(d_shortframes ? 16200 : 64800) * ff];
+                        int trials_cap = d_max_ldpc_trials;
+                        if (d_ldpc_adaptive)
+                        {
+                            // 0 means the SNR estimator has not settled; keep the full cap.
+                            float s = d_snr_shared.load(std::memory_order_relaxed);
+                            if (s > 0.0f)
+                            {
+                                float t = (s - d_ldpc_snr_bad) / (d_ldpc_snr_good - d_ldpc_snr_bad);
+                                t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+                                trials_cap = (int)std::lround(d_ldpc_trials_bad + t * (d_ldpc_trials_good - d_ldpc_trials_bad));
+                                if (trials_cap < d_ldpc_min_iterations)
+                                    trials_cap = d_ldpc_min_iterations;
+                            }
+                        }
 
-                        // Repack
+                        ldpc_trials = ldpc_decoder->decode(sym_buffer, trials_cap);
+                        if (ldpc_trials < 0)
+                            ldpc_trials = trials_cap;
+                    }
+
+                    // Only forward lanes that arrived; the rest hold stale data.
+                    for (int ff = 0; ff < got; ff++)
+                    {
+                        int8_t *buf = &sym_buffer[frame_bytes * ff];
+
+#if defined(__SSE2__)
+                        // 16 sign bits per movemask instead of byte-at-a-time shifts.
+                        const int nbits = ldpc_decoder->dataSize();
+                        memset(repacker_buffer, 0, nbits / 8);
+                        const unsigned char *rev = rev8_table();
+                        const __m128i zero = _mm_setzero_si128();
+                        int i = 0;
+                        for (; i + 16 <= nbits; i += 16)
+                        {
+                            __m128i v = _mm_loadu_si128((const __m128i *)(buf + i));
+                            int m = _mm_movemask_epi8(_mm_cmpgt_epi8(zero, v));
+                            repacker_buffer[i / 8] = rev[m & 0xFF];
+                            repacker_buffer[i / 8 + 1] = rev[(m >> 8) & 0xFF];
+                        }
+                        for (; i < nbits; i++)
+                            repacker_buffer[i / 8] = (uint8_t)(repacker_buffer[i / 8] << 1) | (buf[i] < 0);
+#else
                         memset(repacker_buffer, 0, ldpc_decoder->dataSize());
                         for (int i = 0; i < ldpc_decoder->dataSize(); i++)
                             repacker_buffer[i / 8] = repacker_buffer[i / 8] << 1 | (buf[i] < 0);
+#endif
 
                         if (!d_multithread_bch)
                         {
                             bch_corrections = bch_decoder->decode(repacker_buffer);
-
-                            // if (bch_corrections == -1)
-                            //     logger->error("ERROR");
-
                             descramber->work(repacker_buffer);
 
                             if (output_data_type == DATA_FILE)
@@ -315,7 +397,7 @@ namespace satdump
 
                 uint8_t *repacker_buffer = new uint8_t[64800];
 
-                while (!should_stop)
+                while (!ring_buffer2->exhausted())
                 {
                     int bch_fsize = ldpc_decoder->dataSize() / 8;
                     int bch_dsize = bch_decoder->dataSize() / 8;
@@ -325,10 +407,6 @@ namespace satdump
                         continue;
 
                     bch_corrections = bch_decoder->decode(repacker_buffer);
-
-                    // if (bch_corrections == -1)
-                    //     logger->error("ERROR");
-
                     descramber->work(repacker_buffer);
 
                     if (output_data_type == DATA_FILE)

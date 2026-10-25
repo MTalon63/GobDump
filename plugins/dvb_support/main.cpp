@@ -27,6 +27,13 @@ public:
             return;
         }
 #endif
+#ifdef DVB_HAS_AVX2
+        if (!cpu_features::get_cpu_features().CPU_X86_AVX2)
+        {
+            logger->error("CPU Does not support AVX2. Extension plugin NOT loading!");
+            return;
+        }
+#endif
 
         satdump::eventBus->register_handler<satdump::pipeline::RegisterModulesEvent>(registerPluginsHandler);
     }
