@@ -394,6 +394,21 @@ jobs:
             - name: Install dependencies
               run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libopencv-dev libjsoncpp-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
 
+            - name: Build GLFW 3.4 with X11 + Wayland for AppImage
+              shell: bash
+              run: |
+                  sudo apt install -y libwayland-dev wayland-protocols libxkbcommon-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+                  git clone --depth 1 --branch 3.4 https://github.com/glfw/glfw.git /tmp/glfw34
+                  cmake -S /tmp/glfw34 -B /tmp/glfw34/build -G Ninja \
+                    -DBUILD_SHARED_LIBS=ON -DGLFW_INSTALL=OFF \
+                    -DGLFW_BUILD_WAYLAND=ON -DGLFW_BUILD_X11=ON \
+                    -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF \
+                    -DCMAKE_BUILD_TYPE=Release
+                  cmake --build /tmp/glfw34/build
+                  sudo mkdir -p /opt/glfw34/lib
+                  sudo cp -av /tmp/glfw34/build/src/libglfw.so.3* /opt/glfw34/lib/
+                  sudo chmod -R a+rX /opt/glfw34
+
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
               # We'll use this as our working directory for all subsequent commands
@@ -447,6 +462,14 @@ jobs:
                   LIBDIR="$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu"
                   if ! test -e squashfs-root/usr/lib/x86_64-linux-gnu/libtiff.so.5 && ! test -e squashfs-root/usr/lib/libtiff.so.5; then
                     echo "libtiff.so.5 was not bundled into the AppImage" >&2
+                    exit 1
+                  fi
+                  if ! test -e squashfs-root/usr/lib/x86_64-linux-gnu/libglfw.so.3; then
+                    echo "the dual-backend GLFW 3.4 was not bundled into the AppImage" >&2
+                    exit 1
+                  fi
+                  if ! strings squashfs-root/usr/lib/x86_64-linux-gnu/libglfw.so.3 | grep -q "Wayland"; then
+                    echo "the bundled GLFW does not contain Wayland support" >&2
                     exit 1
                   fi
                   if LD_LIBRARY_PATH="$LIBDIR" ldd squashfs-root/usr/bin/gobdump-ui | grep -q "not found"; then
