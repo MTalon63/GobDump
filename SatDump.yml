@@ -27,7 +27,17 @@ ingredients:
     - libhackrf0
     - libairspy0
     - libairspyhf1
-    - libglfw3
+    - libwayland-client0
+    - libwayland-cursor0
+    - libwayland-egl1
+    - libxkbcommon0
+    - libx11-6
+    - libxrandr2
+    - libxinerama1
+    - libxcursor1
+    - libxi6
+    - libxext6
+    - libegl1
     - libzstd1
     - libjemalloc2
     - libtiff5
@@ -39,6 +49,11 @@ ingredients:
     - zenity
   #  - satdump
   exclude:
+    # GLFW is display-server-specific. Do not bundle jammy's X11-only
+    # libglfw3 (or the Wayland-only conflict package); the top-level
+    # script below installs a GLFW 3.4 build with both backends instead.
+    - libglfw3
+    - libglfw3-wayland
     - python3
     #    - libpython3.10
     - libpython3.10-minimal
@@ -51,3 +66,8 @@ ingredients:
     #    - DLD=https://github.com/SatDump/SatDump/releases/download/nightly/satdump_ubuntu_22.04_amd64.deb    #$(wget -q "https://api.github.com/repos/satdump/satdump/releases/latest"  -O - | grep -E "https.*amd64.deb" | cut -d'"' -f4)
     #    - wget -c $DLD -O /home/owner/satdump.deb
     - echo 1.2.1 > VERSION
+
+# Runs after the .debs are extracted into the AppDir. Use the dual-backend
+# GLFW 3.4 built by the CI job instead of jammy's X11-only libglfw3.
+script:
+  - cp -av /opt/glfw34/lib/libglfw.so.3* usr/lib/x86_64-linux-gnu/
