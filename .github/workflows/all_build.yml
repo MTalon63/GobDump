@@ -437,6 +437,24 @@ jobs:
               shell: bash
               run: cp *.deb gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && mkdir -p GobDump && mv gobdump.deb GobDump/ && ./pkg2appimage SatDump.yml
 
+            - name: Verify AppImage dependencies
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              run: |
+                  chmod +x out/*.AppImage
+                  rm -rf squashfs-root
+                  ./out/*.AppImage --appimage-extract > /dev/null
+                  LIBDIR="$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu"
+                  if ! test -e squashfs-root/usr/lib/x86_64-linux-gnu/libtiff.so.5 && ! test -e squashfs-root/usr/lib/libtiff.so.5; then
+                    echo "libtiff.so.5 was not bundled into the AppImage" >&2
+                    exit 1
+                  fi
+                  if LD_LIBRARY_PATH="$LIBDIR" ldd squashfs-root/usr/bin/gobdump-ui | grep -q "not found"; then
+                    echo "AppImage has unresolved shared libraries:" >&2
+                    LD_LIBRARY_PATH="$LIBDIR" ldd squashfs-root/usr/bin/gobdump-ui | grep "not found" >&2
+                    exit 1
+                  fi
+
             - name: Upload AppImage
               uses: actions/upload-artifact@v4
               with:
