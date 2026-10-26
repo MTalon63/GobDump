@@ -112,15 +112,18 @@ namespace satdump
 
         auto lvl = logger->get_level();
         logger->set_level(slog::LOG_INFO);
-        logger->info("   _____       __  ____                      ");
-        logger->info("  / ___/____ _/ /_/ __ \\__  ______ ___  ____ ");
-        logger->info("  \\__ \\/ __ `/ __/ / / / / / / __ `__ \\/ __ \\");
-        logger->info(" ___/ / /_/ / /_/ /_/ / /_/ / / / / / / /_/ /");
-        logger->info("/____/\\__,_/\\__/_____/\\__,_/_/ /_/ /_/ .___/ ");
-        logger->info("                                    /_/      ");
+        logger->info("                __        __");
+        logger->info("   ____ _____  / /_  ____/ /_  ______ ___  ____");
+        logger->info("  / __ `/ __ \\/ __ \\/ __  / / / / __ `__ \\/ __ \\");
+        logger->info(" / /_/ / /_/ / /_/ / /_/ / /_/ / / / / / / /_/ /");
+        logger->info(" \\__, /\\____/_.___/\\__,_/\\__,_/_/ /_/ /_/ .___/");
+        logger->info("/____/                                 /_/");
         logger->info(_("Starting ") + getSatDumpVersionName());
         logger->info("");
         logger->set_level(lvl);
+        // First thing to check when plugins/resources are missing.
+        logger->debug("Resources path : " + RESPATH);
+        logger->debug("Libraries path : " + LIBPATH);
 
 #ifdef _WIN32
         if (std::filesystem::exists("gobdump_cfg.json"))

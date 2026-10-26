@@ -80,12 +80,36 @@ void loadPlugins(std::map<std::string, std::shared_ptr<satdump::Plugin>> &loaded
 #ifdef __ANDROID__
     plugins_paths.push_back(android_plugins_dir + "/");
 #else
-    if (std::filesystem::exists("plugins")) // Try local plugins directory first
-        plugins_paths.push_back("./plugins");
-    if (std::filesystem::exists(satdump::LIBPATH + "plugins") && // Followed by system
-        std::filesystem::absolute(satdump::LIBPATH + "plugins") != std::filesystem::absolute("./plugins"))
-        plugins_paths.push_back(satdump::LIBPATH + "plugins");
+    // Absolute locations first: desktop launchers use an unrelated CWD.
+    std::filesystem::path exe_dir = satdump::getExecutableDir();
+    if (!exe_dir.empty())
+    {
+        plugins_paths.push_back((exe_dir / "plugins").string());                            // build tree / portable
+        plugins_paths.push_back((exe_dir / ".." / "lib" / "gobdump" / "plugins").string()); // installed from bin/
+        plugins_paths.push_back((exe_dir / ".." / "lib64" / "gobdump" / "plugins").string());
+    }
+    if (!satdump::LIBPATH.empty())
+        plugins_paths.push_back((std::filesystem::path(satdump::LIBPATH) / "plugins").string());
+    plugins_paths.push_back("./plugins"); // legacy layouts, last resort
 #endif
+
+    // Keep only directories that exist, once each (canonical).
+    {
+        std::vector<std::string> valid_paths;
+        for (const std::string &path : plugins_paths)
+        {
+            std::error_code ec;
+            if (!std::filesystem::is_directory(path, ec))
+                continue;
+
+            std::filesystem::path canonical = std::filesystem::weakly_canonical(path, ec);
+            std::string key = ec ? path : canonical.string();
+            if (std::find(valid_paths.begin(), valid_paths.end(), key) != valid_paths.end())
+                continue;
+            valid_paths.push_back(key);
+        }
+        plugins_paths = valid_paths;
+    }
 
     if (plugins_paths.size() == 0)
         logger->critical("No valid plugin directory found!");

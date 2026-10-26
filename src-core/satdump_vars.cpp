@@ -76,8 +76,61 @@ namespace satdump
     std::string init_res_path() { return "./"; }
     std::string init_lib_path() { return "./"; }
 #else
-    std::string init_res_path() { return std::string(RESOURCES_PATH); }
-    std::string init_lib_path() { return std::string(LIBRARIES_PATH); }
+    std::string ensure_slash(std::string path)
+    {
+        if (!path.empty() && path.back() != '/')
+            path += '/';
+        return path;
+    }
+
+    bool is_resources_dir(const std::string &path)
+    {
+        std::error_code ec;
+        return std::filesystem::is_directory(path + "resources", ec);
+    }
+
+    bool is_libraries_dir(const std::string &path)
+    {
+        std::error_code ec;
+        return std::filesystem::is_directory(path + "plugins", ec);
+    }
+
+    std::string init_res_path()
+    {
+        // Prefer exe-relative paths so build trees and portable copies work.
+        const std::string exe_dir = getExecutableDir();
+        if (!exe_dir.empty())
+        {
+            const std::string candidates[] = {
+                ensure_slash(exe_dir),
+                ensure_slash(exe_dir + "/.."),
+                ensure_slash(exe_dir + "/../share/gobdump"),
+            };
+            for (const std::string &candidate : candidates)
+                if (is_resources_dir(candidate))
+                    return candidate;
+        }
+
+        return ensure_slash(std::string(RESOURCES_PATH));
+    }
+
+    std::string init_lib_path()
+    {
+        const std::string exe_dir = getExecutableDir();
+        if (!exe_dir.empty())
+        {
+            const std::string candidates[] = {
+                ensure_slash(exe_dir),
+                ensure_slash(exe_dir + "/../lib/gobdump"),
+                ensure_slash(exe_dir + "/../lib64/gobdump"),
+            };
+            for (const std::string &candidate : candidates)
+                if (is_libraries_dir(candidate))
+                    return candidate;
+        }
+
+        return ensure_slash(std::string(LIBRARIES_PATH));
+    }
 #endif
     std::string RESPATH = init_res_path();
     std::string LIBPATH = init_lib_path();

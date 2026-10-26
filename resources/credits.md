@@ -2,12 +2,12 @@
 
 This is a fork of SatDump. It should function exactly same, below are links for the original project and credits.
 
-First time here? See the reference documents below to get started using SatDump.
+First time here? See the reference documents below to get started using GobDump.
 [About](https://www.satdump.org/about/) | [Basic Usage](https://www.satdump.org/posts/basic-usage/) | [Docs](https://docs.satdump.org/)
 
 # Libraries
 
-**Libraries included in libsatdump_core**
+**Libraries included in libgobdump_core**
 
 - [bzip2](https://github.com/libarchive/bzip2), for BZIP2 decompression utilized on MetOp admin messages and Himawaricast
 - [ctpl](https://github.com/vit-vit/ctpl), for thread pools used over the program
@@ -45,7 +45,7 @@ First time here? See the reference documents below to get started using SatDump.
 
 _Those libraries above are included directly as they are either header-only, not already present on most systems or required some modifications for the purpose of this software. For the code included, the licenses of each respective library applies._
 
-### Projects some code was taken from and included in libsatdump_core
+### Projects some code was taken from and included in libgobdump_core
 
 - [GNU Radio](https://github.com/gnuradio/gnuradio), for the convolutional decoding / encoding (quite heavily modified) and a few other bits
 - [gr-dvbs2rx](https://github.com/igorauad/gr-dvbs2rx), for TS Parsing and a few other bits

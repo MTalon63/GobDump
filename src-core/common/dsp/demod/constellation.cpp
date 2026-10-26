@@ -291,13 +291,13 @@ namespace dsp
 
     int8_t constellation_t::clamp(float x)
     {
-        if (std::isnan(x))
+        if (!std::isfinite(x))
             return 0;
         if (x >= 127.0f)
             return 127;
         if (x <= -127.0f)
             return -127;
-        return (int8_t)x;
+        return (int8_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
     }
 
     void constellation_t::make_lut(int resolution, float npwr)
