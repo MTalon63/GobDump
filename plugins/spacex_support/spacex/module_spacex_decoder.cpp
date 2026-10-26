@@ -2,9 +2,11 @@
 #include "common/codings/randomization.h"
 #include "common/codings/reedsolomon/reedsolomon.h"
 #include "common/codings/rotation.h"
+#include "common/widgets/constellation.h"
 #include "imgui/imgui.h"
 #include "logger.h"
 #include <cstdint>
+#include <algorithm>
 
 #define BUFFER_SIZE 8192 * 10
 
@@ -136,12 +138,7 @@ namespace spacex
                 draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                 draw_list->PushClipRect(rect_min, rect_max);
 
-                for (int i = 0; i < 2048; i++)
-                {
-                    draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (buffer[i] / 127.0) * 100 * ui_scale) % int(200 * ui_scale),
-                                                      ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + rng.gasdev() * 6 * ui_scale) % int(200 * ui_scale)),
-                                               2 * ui_scale, style::theme.constellation);
-                }
+                satdump::widgets::drawSoftConstellation(draw_list, rect_min, rect_max, buffer, std::min(BUFFER_SIZE, 2048), 1, &rng, 0.8f, 2 * ui_scale);
 
                 draw_list->PopClipRect();
                 ImGui::Dummy(ImVec2(200 * ui_scale + 3, 200 * ui_scale + 3));

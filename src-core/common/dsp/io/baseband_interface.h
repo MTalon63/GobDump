@@ -308,7 +308,10 @@ namespace dsp
 
         inline void close()
         {
+            // Don't close the file under an in-flight read.
+            main_mtx.lock();
             input_file.close();
+            main_mtx.unlock();
         }
 
         inline bool is_eof()

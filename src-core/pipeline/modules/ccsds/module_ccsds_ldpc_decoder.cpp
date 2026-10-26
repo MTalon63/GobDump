@@ -5,6 +5,7 @@
 #include "common/codings/rotation.h"
 #include "common/dsp/complex.h"
 #include "common/utils.h"
+#include "common/widgets/constellation.h"
 #include "common/widgets/themed_widgets.h"
 #include "core/exception.h"
 #include "logger.h"
@@ -554,26 +555,13 @@ namespace satdump
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
+                    // Bounded by the frame size, not a fixed 2048.
                     if (d_constellation == dsp::BPSK)
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i] / 127.0f) * col_w * 0.65f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (float)rng.gasdev() * col_w * 0.07f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_ldpc_frame_size, 2048), 1,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
                     else
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_ldpc_frame_size / 2, 2048), 2,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
 
                     draw_list->PopClipRect();
                     ImGui::Dummy(ImVec2(col_w, col_w));

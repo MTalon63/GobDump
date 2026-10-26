@@ -1,11 +1,13 @@
 #include "module_metop_ahrpt_decoder.h"
 #include "common/codings/randomization.h"
 #include "common/codings/reedsolomon/reedsolomon.h"
+#include "common/widgets/constellation.h"
 #include "common/widgets/themed_widgets.h"
 #include "logger.h"
 #include "pipeline/module.h"
 #include "pipeline/modules/base/filestream_to_filestream.h"
 #include <cstdint>
+#include <algorithm>
 
 #define BUFFER_SIZE 8192 * 2
 
@@ -119,12 +121,7 @@ namespace metop
                 draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                 draw_list->PushClipRect(rect_min, rect_max);
 
-                for (int i = 0; i < 2048; i++)
-                {
-                    draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0) * 100 * ui_scale) % int(200 * ui_scale),
-                                                      ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0) * 100 * ui_scale) % int(200 * ui_scale)),
-                                               2 * ui_scale, style::theme.constellation);
-                }
+                satdump::widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(BUFFER_SIZE / 2, 2048), 2, nullptr, 0.8f, 2 * ui_scale);
 
                 draw_list->PopClipRect();
                 ImGui::Dummy(ImVec2(200 * ui_scale + 3, 200 * ui_scale + 3));
