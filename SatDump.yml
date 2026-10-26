@@ -17,9 +17,37 @@ ingredients:
     - libusb-1.0-0
     - libgomp1
     - ocl-icd-libopencl1
-    - libopengl0
     - libiio0
     - libad9361-0
+    - libmbedtls14
+    - libmbedx509-1
+    - libmbedcrypto7
+    - librtmp1
+    - libldap-2.5-0
+    - libssh-4
+    - libsasl2-2
+    - libsasl2-modules-db
+    - libgnutls30
+    - libgmp10
+    - libhogweed6
+    - libnettle8
+    - libidn2-0
+    - libunistring2
+    - libp11-kit0
+    - libtasn1-6
+    - libffi8
+    - libgssapi-krb5-2
+    - libkrb5-3
+    - libkrb5support0
+    - libk5crypto3
+    - libcom-err2
+    - libkeyutils1
+    - libdb5.3
+    - libbrotli1
+    - libnghttp2-14
+    - libpsl5
+    - libssl3
+    - libjbig0
     - libvolk2.5
     - libpng16-16
     - libnng1
@@ -37,7 +65,6 @@ ingredients:
     - libxcursor1
     - libxi6
     - libxext6
-    - libegl1
     - libzstd1
     - libjemalloc2
     - libtiff5
@@ -54,6 +81,13 @@ ingredients:
     # script below installs a GLFW 3.4 build with both backends instead.
     - libglfw3
     - libglfw3-wayland
+    # Graphics/EGL/GLVND must come from the host so the vendor driver
+    # (Mesa, NVIDIA, etc.) can provide the correct Wayland/X11 EGL display.
+    - libegl1
+    - libopengl0
+    - libglvnd0
+    - libglx0
+    - libgl1
     - python3
     #    - libpython3.10
     - libpython3.10-minimal
