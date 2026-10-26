@@ -14,6 +14,7 @@ namespace elektro_arktika
             imageBuffer2 = new unsigned short[17200 * 6004];
             timestamps.resize(17200, -1);
             line_filled.resize(17200, 0);
+            line_stale.resize(17200, 0);
             frames = 0;
         }
 
@@ -23,7 +24,7 @@ namespace elektro_arktika
             delete[] imageBuffer2;
         }
 
-        void MSUVISReader::writeFrame(uint8_t *data, int counter)
+        void MSUVISReader::writeFrame(uint8_t *data, int counter, bool overwrite)
         {
             // Offset to start reading from
             int pos = 5 * 38;
@@ -69,7 +70,9 @@ namespace elektro_arktika
             }
 
             line_filled[counter] = 1;
-            frames++;
+            line_stale[counter] = 0;
+            if (!overwrite)
+                frames++;
         }
 
         void MSUVISReader::pushFrame(uint8_t *data, bool apply_correction)
@@ -81,13 +84,19 @@ namespace elektro_arktika
             // Does correction logic if specified by the user
             if (apply_correction)
             {
-                // Unlocks if we are fstarting a new image
-                // Not implemented in RDAS!
-                /*
-                if (counter_locked) && (counter == 1 || counter == 2)) {
+                // Drop a lock that can't belong to this image (garbage or a previous scan).
+                if (counter_locked && (global_counter >= 17200 || (counter <= 2 && global_counter > 2) ||
+                                       counter + MAX_LINE_BACKTRACK < global_counter))
+                {
+                    logger->debug("Counter correction UNLOCKED! Counter: " + std::to_string(counter));
                     counter_locked = false;
-
-                } else*/
+                    global_counter = counter;
+                    pending_valid = false;
+                    angle_points.clear();
+                    for (int i = 0; i < 17200; i++)
+                        if (line_filled[i])
+                            line_stale[i] = 1;
+                }
 
                 if (!counter_locked)
                 {
@@ -116,8 +125,6 @@ namespace elektro_arktika
                     global_counter = counter;
                 }
             }
-            // Warning: The above code MUST have an unlock in the FD end! Since the code doesn't have
-            // handling for more than one FD at a time right now, I didn't add this. Just keep it in mind!
 
             // Sanity check
             if (counter >= 17200)
@@ -141,6 +148,11 @@ namespace elektro_arktika
 
             if (line_filled[counter])
             {
+                if (line_stale[counter])
+                {
+                    writeFrame(data, counter, true);
+                    return;
+                }
                 rejected_frames++;
                 return;
             }
