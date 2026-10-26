@@ -295,7 +295,7 @@ The aim of this is to list all possible satellite processing pipelines as well a
 ## Proba
 
 *   `proba1_dump`: Proba-1 dump
-*   `proba2_dump`: Proba-2 dump
+*   `proba2_dump`: Proba-2 dump (SWAP images, LYRA levels 0-2)
 *   `probav_s_dump`: Proba-V S-Band dump
 *   `probav_x_dump`: Proba-V X-Band dump
 

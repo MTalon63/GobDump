@@ -30,7 +30,50 @@ namespace proba
                 d_satellite = PROBA_3;
             else
                 throw satdump_exception("Proba Instruments Decoder : Proba satellite \"" + parameters["satellite"].get<std::string>() + "\" is not valid!");
+
+            if (parameters.contains("swap_align"))
+            {
+                const auto &value = parameters["swap_align"];
+                swap_align = value.is_boolean() ? value.get<bool>() : (value.is_number() && value.get<double>() != 0.0);
+            }
+
+            if (parameters.contains("swap_gif"))
+            {
+                const auto &value = parameters["swap_gif"];
+                swap_gif = value.is_boolean() ? value.get<bool>() : (value.is_number() && value.get<double>() != 0.0);
+            }
+
+            if (swap_gif && !swap_align)
+            {
+                logger->warn("SWAP: animation GIF needs \"SWAP: centre sun\", not generating an animation");
+                swap_gif = false;
+            }
+
             fsfsm_enable_output = false;
+        }
+
+        void PROBAInstrumentsDecoderModule::handleProba2Packet(ccsds::CCSDSPacket &packet)
+        {
+            switch (packet.header.apid)
+            {
+            case 2: // Housekeeping
+                if (lyra_reader)
+                    lyra_reader->workTemperature(packet);
+                break;
+            case 18: // GPS
+                gps_clock.addRecord(packet);
+                break;
+            case 20: // SWAP
+                if (swap_reader)
+                    swap_reader->work(packet);
+                break;
+            case 21: // LYRA
+                if (lyra_reader)
+                    lyra_reader->work(packet);
+                break;
+            default:
+                break;
+            }
         }
 
         void PROBAInstrumentsDecoderModule::process()
@@ -74,11 +117,15 @@ namespace proba
             else if (d_satellite == PROBA_2)
             {
                 std::string swap_directory = d_output_file_hint.substr(0, d_output_file_hint.rfind('/')) + "/SWAP";
+                std::string lyra_directory = d_output_file_hint.substr(0, d_output_file_hint.rfind('/')) + "/LYRA";
 
                 if (!std::filesystem::exists(swap_directory))
                     std::filesystem::create_directory(swap_directory);
+                if (!std::filesystem::exists(lyra_directory))
+                    std::filesystem::create_directory(lyra_directory);
 
-                swap_reader = std::make_unique<swap::SWAPReader>(swap_directory);
+                swap_reader = std::make_unique<swap::SWAPReader>(swap_directory, gps_clock, swap_align, swap_gif);
+                lyra_reader = std::make_unique<lyra::LYRAReader>(lyra_directory, gps_clock);
             }
             else if (d_satellite == PROBA_V)
             {
@@ -107,8 +154,6 @@ namespace proba
 
                 gps_ascii_reader = std::make_unique<gps_ascii::GPSASCII>(d_output_file_hint.substr(0, d_output_file_hint.rfind('/')) + "/gps_logs.txt");
             }
-
-            int i = 0;
 
             // bool is_pv_x = true;
 
@@ -166,43 +211,18 @@ namespace proba
                             if (pkt.header.apid == 18) // GPS ASCII Logs
                                 gps_ascii_reader->work(pkt);
                         }
+                        else if (d_satellite == PROBA_2)
+                            handleProba2Packet(pkt);
                     }
                 }
-                else if (vcdu.vcid == 2) // IDK VCID
+                else if (vcdu.vcid == 2) // Housekeeping
                 {
-#if 0
                     std::vector<ccsds::CCSDSPacket> ccsdsFrames = demuxer_vcid2.work(cadu);
                     for (ccsds::CCSDSPacket &pkt : ccsdsFrames)
                     {
-                        if (d_satellite == PROBA_V)
-                        {
-                            printf("APID %d\n", pkt.header.apid);
-
-                            if (pkt.header.apid == 7)
-                            {
-                                pkt.payload.resize(16000);
-                                output.write((char *)pkt.payload.data(), 16000);
-                            }
-                        }
-                        // if (pkt.header.apid != 2047)
-                        //    logger->info("%d, %d", pkt.header.apid, pkt.payload.size());
-
-                        // if (pkt.header.apid == 103)
-                        // {
-                        //     pkt.payload.resize(16000);
-                        //     output.write((char *)pkt.payload.data(), 16000);
-                        // }
-
-                        // if (pkt.header.apid != 2047)
-                        //     logger->info("%d, %d", pkt.header.apid, pkt.payload.size());
-
-                        // if (pkt.header.apid == 18)
-                        //{
-                        //     pkt.payload.resize(16000);
-                        //     output.write((char *)pkt.payload.data(), 16000);
-                        // }
+                        if (d_satellite == PROBA_2)
+                            handleProba2Packet(pkt);
                     }
-#endif
                 }
                 else if (vcdu.vcid == 3) // SWAP VCID
                 {
@@ -210,8 +230,7 @@ namespace proba
                     for (ccsds::CCSDSPacket &pkt : ccsdsFrames)
                     {
                         if (d_satellite == PROBA_2)
-                            if (pkt.header.apid == 20)
-                                swap_reader->work(pkt);
+                            handleProba2Packet(pkt);
                     }
                 }
                 else if (vcdu.vcid == 4) // Idk VCID
@@ -308,6 +327,8 @@ namespace proba
                             }
                         }
                         else if (d_satellite == PROBA_3) {}
+                        else if (d_satellite == PROBA_2)
+                            handleProba2Packet(pkt);
                     }
                 }
             }
@@ -340,6 +361,9 @@ namespace proba
                 hrc_status = DONE;
             }
 
+            if (d_satellite == PROBA_2)
+                gps_clock.finalize();
+
             // SWAP
             if (d_satellite == PROBA_2)
             {
@@ -351,6 +375,20 @@ namespace proba
                 swap_reader->save();
 
                 swap_status = DONE;
+            }
+
+            // LYRA
+            if (d_satellite == PROBA_2)
+            {
+                lyra_status = SAVING;
+
+                logger->info("----------- LYRA");
+                logger->info("Packets : %d (%d skipped)", lyra_reader->packet_count, lyra_reader->skipped);
+                logger->info("Temperature reports : %d", lyra_reader->temperature_reports);
+
+                lyra_reader->save();
+
+                lyra_status = DONE;
             }
 
             // VegS
@@ -576,6 +614,14 @@ namespace proba
                     ImGui::TextColored(style::theme.green, "%d", swap_reader->count);
                     ImGui::TableSetColumnIndex(2);
                     drawStatus(swap_status);
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("LYRA");
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextColored(style::theme.green, "%d", lyra_reader->packet_count);
+                    ImGui::TableSetColumnIndex(2);
+                    drawStatus(lyra_status);
                 }
 
                 if (d_satellite == PROBA_V)
