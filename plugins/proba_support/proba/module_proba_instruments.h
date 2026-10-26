@@ -2,6 +2,8 @@
 
 #include "instruments/chris/chris_reader.h"
 #include "instruments/hrc/hrc_reader.h"
+#include "instruments/lyra/lyra_reader.h"
+#include "instruments/proba2_clock.h"
 #include "instruments/swap/swap_reader.h"
 #include "pipeline/modules/base/filestream_to_filestream.h"
 
@@ -31,19 +33,28 @@ namespace proba
             std::unique_ptr<chris::CHRISReader> chris_reader;
             std::unique_ptr<hrc::HRCReader> hrc_reader;
             std::unique_ptr<swap::SWAPReader> swap_reader;
+            std::unique_ptr<lyra::LYRAReader> lyra_reader;
             std::unique_ptr<vegetation::VegetationS> vegs_readers[3][6];
             std::unique_ptr<gps_ascii::GPSASCII> gps_ascii_reader;
+
+            proba2::GPSClock gps_clock;
+            bool swap_align = false;
+            bool swap_gif = false;
 
             // Statuses
             instrument_status_t chris_status = DECODING;
             instrument_status_t hrc_status = DECODING;
             instrument_status_t swap_status = DECODING;
+            instrument_status_t lyra_status = DECODING;
             instrument_status_t vegs_status[3][6];
 
         public:
             PROBAInstrumentsDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
             void process();
             void drawUI(bool window);
+
+        private:
+            void handleProba2Packet(ccsds::CCSDSPacket &packet);
 
         public:
             static std::string getID();
