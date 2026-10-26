@@ -6,7 +6,7 @@ binpatch: false
 
 ingredients:
   debs:
-    - gobdump.deb
+    - /tmp/gobdump.deb
   packages:
     - libfftw3-3
     - libfftw3-single3
