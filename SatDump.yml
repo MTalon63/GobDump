@@ -1,39 +1,53 @@
+# NOTE: pkg2appimage's YAML parser assumes exactly 2 spaces per nesting level.
+# Reindenting this file to 4 spaces makes it silently ignore the package list
+# (and therefore not bundle libtiff and the other runtime libraries).
 app: GobDump
 binpatch: false
 
 ingredients:
-    debs:
-        - gobdump.deb
-    packages:
-        - libfftw3-3
-        - libvolk2.5
-        - libpng16-16
-        - libnng1
-        - librtlsdr2
-        - libhackrf0
-        - libairspy0
-        - libairspyhf1
-        - libglfw3
-        - libzstd1
-        - libjemalloc2
-        - libtiff5
-        - libuhd4.1.0
-        - liblimesuite20.10-1
-        - libbladerf2
-        - libhdf5-103-1
-        - libhdf5-hl-100
-        - zenity
-    #    - satdump
-    exclude:
-        - python3
-        #    - libpython3.10
-        - libpython3.10-minimal
-        - libpython3.10-stdlib
-    sources:
-        - deb http://archive.ubuntu.com/ubuntu/ jammy main universe
-    dist:
-        - jammy #bookworm
-    script:
-        #    - DLD=https://github.com/SatDump/SatDump/releases/download/nightly/satdump_ubuntu_22.04_amd64.deb    #$(wget -q "https://api.github.com/repos/satdump/satdump/releases/latest"  -O - | grep -E "https.*amd64.deb" | cut -d'"' -f4)
-        #    - wget -c $DLD -O /home/owner/satdump.deb
-        - echo "1.2.1" > VERSION
+  debs:
+    - gobdump.deb
+  packages:
+    - libfftw3-3
+    - libfftw3-single3
+    - libsqlite3-0
+    - libcurl4
+    - libdbus-1-3
+    - libportaudio2
+    - libusb-1.0-0
+    - libgomp1
+    - ocl-icd-libopencl1
+    - libopengl0
+    - libiio0
+    - libad9361-0
+    - libvolk2.5
+    - libpng16-16
+    - libnng1
+    - librtlsdr0
+    - libhackrf0
+    - libairspy0
+    - libairspyhf1
+    - libglfw3
+    - libzstd1
+    - libjemalloc2
+    - libtiff5
+    - libuhd4.1.0
+    - liblimesuite20.10-1
+    - libbladerf2
+    - libhdf5-103-1
+    - libhdf5-hl-100
+    - zenity
+  #  - satdump
+  exclude:
+    - python3
+    #    - libpython3.10
+    - libpython3.10-minimal
+    - libpython3.10-stdlib
+  sources:
+    - deb http://archive.ubuntu.com/ubuntu/ jammy main universe
+  dist:
+    - jammy
+  script:
+    #    - DLD=https://github.com/SatDump/SatDump/releases/download/nightly/satdump_ubuntu_22.04_amd64.deb    #$(wget -q "https://api.github.com/repos/satdump/satdump/releases/latest"  -O - | grep -E "https.*amd64.deb" | cut -d'"' -f4)
+    #    - wget -c $DLD -O /home/owner/satdump.deb
+    - echo 1.2.1 > VERSION
