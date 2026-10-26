@@ -435,7 +435,7 @@ jobs:
             - name: Make AppImage
               working-directory: ${{runner.workspace}}/build
               shell: bash
-              run: cp *.deb gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && mkdir -p GobDump && mv gobdump.deb GobDump/ && ./pkg2appimage SatDump.yml
+              run: cp *.deb /tmp/gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && ./pkg2appimage SatDump.yml
 
             - name: Verify AppImage dependencies
               working-directory: ${{runner.workspace}}/build
