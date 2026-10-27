@@ -20,22 +20,25 @@
 #include "core/resources.h"
 #include "init.h"
 #include "nlohmann/json_utils.h"
-
-#ifdef ENABLE_RDAS_ALIGNER
-#include "core/config.h"
-#include "satdump_vars.h"
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
-#endif
+#include "rdas_aligner.h"
 
 namespace elektro_arktika
 {
     namespace msugs
     {
+        static double meanValidTimestamp(const std::vector<double> &timestamps)
+        {
+            double sum = 0;
+            size_t count = 0;
+            for (double t : timestamps)
+                if (t > 0)
+                {
+                    sum += t;
+                    count++;
+                }
+            return count > 0 ? sum / (double)count : 0;
+        }
+
         static int getMSUGSNorad(bool is_arktika, int sat_num)
         {
             if (is_arktika)
@@ -75,216 +78,6 @@ namespace elektro_arktika
             if (decode_ir)
                 infr_reader = std::make_unique<MSUIRReader>();
         }
-
-#ifdef ENABLE_RDAS_ALIGNER
-        static std::string getDefaultUserDir()
-        {
-#ifdef _WIN32
-            const char *appdata = getenv("APPDATA");
-            return appdata ? std::string(appdata) + "/gobdump" : std::string(".");
-#else
-            const char *home = getenv("HOME");
-            return home ? std::string(home) + "/.config/gobdump" : std::string(".");
-#endif
-        }
-
-        static void logRDASAlignerOutput(std::string &pending)
-        {
-            size_t nl;
-            while ((nl = pending.find('\n')) != std::string::npos)
-            {
-                std::string line = pending.substr(0, nl);
-                pending.erase(0, nl + 1);
-                if (!line.empty() && line.back() == '\r')
-                    line.pop_back();
-                if (!line.empty())
-                    logger->info("RDAS aligner: " + line);
-            }
-        }
-
-        static int runRDASAligner(const std::string &exe, const std::string &workdir, const std::string &sat, const std::string &rdas_dir, const std::string &mode)
-        {
-#ifdef _WIN32
-            std::string cmd = "\"" + exe + "\" -s " + sat + " -d \"" + rdas_dir + "\" -m " + mode;
-            std::vector<char> cmdline(cmd.begin(), cmd.end());
-            cmdline.push_back('\0');
-
-            SECURITY_ATTRIBUTES sa{};
-            sa.nLength = sizeof(sa);
-            sa.bInheritHandle = TRUE;
-            HANDLE rd = NULL, wr = NULL;
-            if (!CreatePipe(&rd, &wr, &sa, 0))
-                return -1;
-            SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
-
-            STARTUPINFOA si{};
-            si.cb = sizeof(si);
-            si.dwFlags = STARTF_USESTDHANDLES;
-            si.hStdOutput = wr;
-            si.hStdError = wr;
-            si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-            PROCESS_INFORMATION pi{};
-            if (!CreateProcessA(NULL, cmdline.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, workdir.c_str(), &si, &pi))
-            {
-                CloseHandle(rd);
-                CloseHandle(wr);
-                return -1;
-            }
-            CloseHandle(wr);
-
-            std::string pending;
-            char buf[4096];
-            DWORD n = 0;
-            while (ReadFile(rd, buf, sizeof(buf), &n, NULL) && n > 0)
-            {
-                pending.append(buf, n);
-                logRDASAlignerOutput(pending);
-            }
-            if (!pending.empty())
-                logger->info("RDAS aligner: " + pending);
-            CloseHandle(rd);
-
-            WaitForSingleObject(pi.hProcess, INFINITE);
-            DWORD rc = 1;
-            GetExitCodeProcess(pi.hProcess, &rc);
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-            return (int)rc;
-#else
-            int fds[2];
-            if (pipe(fds) != 0)
-                return -1;
-
-            pid_t pid = fork();
-            if (pid == 0)
-            {
-                dup2(fds[1], STDOUT_FILENO);
-                dup2(fds[1], STDERR_FILENO);
-                close(fds[0]);
-                close(fds[1]);
-                if (chdir(workdir.c_str()) != 0)
-                    _exit(127);
-                execl(exe.c_str(), exe.c_str(), "-s", sat.c_str(), "-d", rdas_dir.c_str(), "-m", mode.c_str(), (char *)nullptr);
-                _exit(127);
-            }
-            close(fds[1]);
-            if (pid < 0)
-            {
-                close(fds[0]);
-                return -1;
-            }
-
-            std::string pending;
-            char buf[4096];
-            ssize_t n = 0;
-            while ((n = read(fds[0], buf, sizeof(buf))) > 0)
-            {
-                pending.append(buf, n);
-                logRDASAlignerOutput(pending);
-            }
-            if (!pending.empty())
-                logger->info("RDAS aligner: " + pending);
-            close(fds[0]);
-
-            int status = 0;
-            waitpid(pid, &status, 0);
-            return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
-#endif
-        }
-
-        static bool runRDASLayerAligner(bool is_arktika, int sat_num, bool recalibrate, const std::string &rdas_dir)
-        {
-            const std::string dir = satdump::getExecutableDir();
-#ifdef _WIN32
-            const std::string exe = dir + "/rdas_aligner.exe";
-#else
-            const std::string exe = dir + "/rdas_aligner";
-#endif
-            if (!std::filesystem::exists(exe))
-            {
-                logger->warn("RDAS layer aligner not found (" + exe + "), skipping alignment");
-                return false;
-            }
-
-            const std::string sat = std::string(is_arktika ? "M" : "L") + std::to_string(sat_num);
-
-            // Reuse a calibration from wherever settings.json lives; only calibrate if there is none.
-            auto calibrationOk = [&](const std::filesystem::path &p) {
-                if (!std::filesystem::exists(p))
-                    return false;
-                try
-                {
-                    nlohmann::ordered_json cfg = loadJsonFile(p.string());
-                    return cfg.contains(sat + "VIS1") && cfg[sat + "VIS1"].contains("CH2") &&
-                           cfg.contains(sat + "VIS2") && cfg[sat + "VIS2"].contains("CH2");
-                }
-                catch (std::exception &)
-                {
-                    return false;
-                }
-            };
-
-            std::filesystem::path settings_dir = std::filesystem::path(satdump::satdump_cfg.user_cfg_path).parent_path();
-            if (settings_dir.empty())
-                settings_dir = std::filesystem::current_path();
-
-            const std::filesystem::path exe_dir = satdump::getExecutableDir();
-            std::vector<std::filesystem::path> cal_bases = {settings_dir, getDefaultUserDir(), exe_dir / "config", exe_dir.parent_path() / "config"};
-
-            std::filesystem::path cal_dir;
-            bool calibrated = false;
-            for (const std::filesystem::path &base : cal_bases)
-            {
-                std::filesystem::path candidate = base / "rdas_aligner" / sat;
-                if (calibrationOk(candidate / "config.json"))
-                {
-                    cal_dir = candidate;
-                    calibrated = true;
-                    break;
-                }
-            }
-            if (cal_dir.empty())
-                cal_dir = cal_bases[0] / "rdas_aligner" / sat;
-
-            std::error_code ec;
-            std::filesystem::create_directories(cal_dir, ec);
-            const std::filesystem::path cfg_path = cal_dir / "config.json";
-            const std::string workdir = cal_dir.string();
-
-            if (calibrated)
-                logger->log(slog::LOG_INFO, "Reusing RDAS layer aligner calibration from " + cfg_path.string());
-
-            if (!calibrated)
-            {
-                nlohmann::ordered_json seed = nlohmann::ordered_json::object();
-                if (resources::resourceExists("elektro/rdas_aligner.json"))
-                {
-                    nlohmann::ordered_json defaults = loadJsonFile(resources::getResourcePath("elektro/rdas_aligner.json"));
-                    for (const std::string &key : {sat + "VIS1", sat + "VIS2"})
-                        if (defaults.contains(key) && defaults[key].contains("ROI"))
-                            seed[key]["ROI"] = defaults[key]["ROI"];
-                }
-                saveJsonFile(cfg_path.string(), seed);
-            }
-
-            if (!calibrated || recalibrate)
-            {
-                logger->info("Calibrating RDAS layer aligner for " + sat + (recalibrate ? " (forced)" : " (first decode)") + ", this takes a couple of minutes...");
-                int rc = runRDASAligner(exe, workdir, sat, rdas_dir, "calibrate");
-                if (rc != 0)
-                {
-                    logger->error("RDAS layer aligner calibration failed with code " + std::to_string(rc));
-                    return false;
-                }
-            }
-
-            logger->info("Aligning RDAS MSU-GS layers for " + sat + "...");
-            int rc = runRDASAligner(exe, workdir, sat, rdas_dir, "generate");
-            if (rc != 0)
-                logger->error("RDAS layer aligner exited with code " + std::to_string(rc));
-            return rc == 0;
-        }
-#endif
 
         void MSUGSDecoderModule::process()
         {
@@ -396,6 +189,7 @@ namespace elektro_arktika
             if (!std::filesystem::exists(directory))
                 std::filesystem::create_directory(directory);
 
+            // Raw channels are staggered; these transforms cancel it in the viewer.
             nlohmann::json sat_cfg;
             if (is_arktika && resources::resourceExists("elektro/m" + std::to_string(sat_num) + "_cfg.json"))
                 sat_cfg = loadJsonFile(resources::getResourcePath("elektro/m" + std::to_string(sat_num) + "_cfg.json"));
@@ -436,9 +230,7 @@ namespace elektro_arktika
 
                 logger->info("Done calculating!");
 
-                // Row-major equivalent of the column-major loop in the else branch: same reverse()
-                // call and same pixel written once, but each source row is resampled once and then
-                // stride-copied into every destination column.
+                // Row-major equivalent of the else branch: resample each row once.
                 if (!points.empty() && t.is_reverse_x_separable())
                 {
                     const int W = (int)img_o.width(), H = (int)img_o.height();
@@ -635,12 +427,44 @@ namespace elektro_arktika
 
             const std::string dataset_dir = d_output_file_hint.substr(0, d_output_file_hint.rfind('/'));
 
-#ifdef ENABLE_RDAS_ALIGNER
-            if (runRDASLayerAligner(is_arktika, sat_num, recalibrate_aligner, dataset_dir))
-                for (const char *aligned : {"MSUGS_VIS_Aligned", "MSUGS_VIS-1_Aligned", "MSUGS_VIS-2_Aligned"})
-                    if (std::filesystem::exists(dataset_dir + "/" + aligned))
-                        dataset.products_list.push_back(aligned);
-#endif
+            // In-process RDAS alignment, crop/warp/merge into regular products.
+            try
+            {
+                RDASImages rdas_images;
+                image::Image vis1_ch1 = vis1_reader.getImage1();
+                image::Image vis1_ch2 = vis2_reader.getImage1();
+                image::Image vis1_ch3 = vis3_reader.getImage1();
+                image::Image vis2_ch1 = vis1_reader.getImage2();
+                image::Image vis2_ch2 = vis2_reader.getImage2();
+                image::Image vis2_ch3 = vis3_reader.getImage2();
+
+                rdas_images.vis1_ch1 = &vis1_ch1;
+                rdas_images.vis1_ch2 = &vis1_ch2;
+                rdas_images.vis1_ch3 = &vis1_ch3;
+                rdas_images.vis2_ch1 = &vis2_ch1;
+                rdas_images.vis2_ch2 = &vis2_ch2;
+                rdas_images.vis2_ch3 = &vis2_ch3;
+
+                RDASProcessOptions rdas_options;
+                rdas_options.satellite = std::string(is_arktika ? "M" : "L") + std::to_string(sat_num);
+                rdas_options.recalibrate = recalibrate_aligner.load();
+                rdas_options.output_directory = dataset_dir;
+                rdas_options.product_source = sat_name;
+                rdas_options.vis1_timestamp = meanValidTimestamp(vis1_reader.timestamps);
+                rdas_options.vis2_timestamp = meanValidTimestamp(vis2_reader.timestamps);
+                rdas_options.dataset = &dataset;
+
+                const RDASProcessResult rdas_result = processRDASLayers(rdas_images, rdas_options);
+                if (rdas_result.success)
+                    logger->info("RDAS layer alignment done (" + std::to_string(rdas_result.products.size()) +
+                                 (rdas_result.products.size() == 1 ? " product)" : " products)"));
+                else
+                    logger->warn(std::string("RDAS layer alignment skipped: ") + rdas_result.error);
+            }
+            catch (std::exception &e)
+            {
+                logger->error(std::string("RDAS layer alignment failed: ") + e.what());
+            }
 
             dataset.save(dataset_dir);
         }
@@ -684,6 +508,13 @@ namespace elektro_arktika
             }
 
             drawProgressBar();
+
+            bool recalibrate = recalibrate_aligner.load();
+            if (ImGui::Checkbox("Recalibrate RDAS layers on this run##rdas_recalibrate", &recalibrate))
+                recalibrate_aligner.store(recalibrate);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Redo the MSU-GS layer calibration at the end of this decode.\n"
+                                  "Otherwise the saved calibration is reused.");
 
             ImGui::End();
         }

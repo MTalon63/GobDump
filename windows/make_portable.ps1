@@ -12,7 +12,6 @@ mkdir portable
 cp gobdump.exe portable
 cp gobdump-ui.exe portable
 cp *.dll portable
-if (Test-Path rdas_aligner.exe) { cp rdas_aligner.exe portable }
 
 # Plugins
 mkdir portable/plugins

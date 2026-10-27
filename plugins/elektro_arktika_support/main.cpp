@@ -1,5 +1,6 @@
 #include "cli/ggak_ingestor.h"
 #include "cli/ggak_merger.h"
+#include "cli/rdas_align.h"
 #include "core/cli/cli.h"
 #include "core/plugin.h"
 #include "elektro_arktika/ggak/module_ggak_to_mqtt.h"
@@ -38,6 +39,7 @@ public:
     {
         evt.cmd_handlers.push_back(std::make_shared<satdump::GGAKMergerCmdHandler>());
         evt.cmd_handlers.push_back(std::make_shared<satdump::GGAKIngestorCmdHandler>());
+        evt.cmd_handlers.push_back(std::make_shared<satdump::RDASAlignCmdHandler>());
     }
 
     static void registerProductsHandler(const satdump::products::RegisterProductsEvent &evt)

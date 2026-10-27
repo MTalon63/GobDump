@@ -5,6 +5,7 @@
 #include "pipeline/modules/base/filestream_to_filestream.h"
 #include "pipeline/modules/instrument_utils.h"
 
+#include <atomic>
 #include <memory>
 
 namespace elektro_arktika
@@ -33,7 +34,7 @@ namespace elektro_arktika
             bool project_vis2 = false;
             bool fill_missing = false;
             size_t max_fill_lines = 50;
-            bool recalibrate_aligner = false;
+            std::atomic<bool> recalibrate_aligner{false};
 
         public:
             MSUGSDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
