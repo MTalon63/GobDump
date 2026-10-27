@@ -184,7 +184,7 @@ namespace satdump
                     if (input_data_type == DATA_FILE)
                         progress = file_source->getPosition();
 
-                    if (time(NULL) % 10 == 0 && lastTime != time(NULL))
+                    if (input_data_type == DATA_FILE && time(NULL) % 10 == 0 && lastTime != time(NULL))
                     {
                         lastTime = time(NULL);
                         if (filesize > 0)

@@ -1,6 +1,4 @@
-# NOTE: pkg2appimage's YAML parser assumes exactly 2 spaces per nesting level.
-# Reindenting this file to 4 spaces makes it silently ignore the package list
-# (and therefore not bundle libtiff and the other runtime libraries).
+# pkg2appimage requires 2-space YAML nesting.
 app: GobDump
 binpatch: false
 
@@ -74,22 +72,16 @@ ingredients:
     - libhdf5-103-1
     - libhdf5-hl-100
     - zenity
-  #  - satdump
   exclude:
-    # GLFW is display-server-specific. Do not bundle jammy's X11-only
-    # libglfw3 (or the Wayland-only conflict package); the top-level
-    # script below installs a GLFW 3.4 build with both backends instead.
+    # GLFW and graphics/EGL/GLVND are host/CI supplied.
     - libglfw3
     - libglfw3-wayland
-    # Graphics/EGL/GLVND must come from the host so the vendor driver
-    # (Mesa, NVIDIA, etc.) can provide the correct Wayland/X11 EGL display.
     - libegl1
     - libopengl0
     - libglvnd0
     - libglx0
     - libgl1
     - python3
-    #    - libpython3.10
     - libpython3.10-minimal
     - libpython3.10-stdlib
   sources:
@@ -97,11 +89,8 @@ ingredients:
   dist:
     - jammy
   script:
-    #    - DLD=https://github.com/SatDump/SatDump/releases/download/nightly/satdump_ubuntu_22.04_amd64.deb    #$(wget -q "https://api.github.com/repos/satdump/satdump/releases/latest"  -O - | grep -E "https.*amd64.deb" | cut -d'"' -f4)
-    #    - wget -c $DLD -O /home/owner/satdump.deb
     - echo 1.2.1 > VERSION
 
-# Runs after the .debs are extracted into the AppDir. Use the dual-backend
-# GLFW 3.4 built by the CI job instead of jammy's X11-only libglfw3.
+# Runs after .deb extraction.
 script:
   - cp -av /opt/glfw34/lib/libglfw.so.3* usr/lib/x86_64-linux-gnu/

@@ -299,7 +299,8 @@
         "name": "ELEKTRO-L GGAK",
         "live": [
             1,
-            2
+            2,
+            3
         ],
         "frequencies": [
             [
@@ -308,6 +309,38 @@
             ]
         ],
         "samplerate": 3e6,
+        "parameters": {
+            "interpolate_mag_gaps": {
+                "type": "bool",
+                "value": false,
+                "name": "Interpolate small magnetometer gaps",
+                "description": "Fill gaps of up to 2 frames in the FM-VE magnetometer time series."
+            },
+            "csv": {
+                "type": "bool",
+                "value": true,
+                "name": "Write realtime CSV",
+                "description": "Append decoded data to daily per-instrument CSV files while decoding."
+            },
+            "csv_dir": {
+                "type": "string",
+                "value": "",
+                "name": "CSV output directory",
+                "description": "Empty writes the CSV files next to the GGAK product in the output directory."
+            },
+            "csv_max_mb": {
+                "type": "int",
+                "value": 64,
+                "name": "Max CSV part size (MB)",
+                "description": "Start a new numbered part within the same UTC day when a file reaches this size. 0 disables the size cap (daily splitting still applies)."
+            },
+            "csv_raw_frames": {
+                "type": "bool",
+                "value": false,
+                "name": "Write raw frames CSV",
+                "description": "Append every 224-byte frame including the full payload as hex. Off by default; the per-instrument CSVs are much smaller."
+            }
+        },
         "work": {
             "baseband": {},
             "soft": {
@@ -326,6 +359,13 @@
                     "derandomize": false,
                     "nrzm": false,
                     "rs_i": 0
+                }
+            },
+            "products": {
+                "module": "elektro_arktika_ggak",
+                "parameters": {
+                    "interpolate_mag_gaps": false,
+                    "csv": true
                 }
             }
         }
@@ -386,6 +426,38 @@
             ]
         ],
         "samplerate": 3e6,
+        "parameters": {
+            "interpolate_mag_gaps": {
+                "type": "bool",
+                "value": false,
+                "name": "Interpolate small magnetometer gaps",
+                "description": "Fill gaps of up to 2 frames in the FM-VE magnetometer time series."
+            },
+            "csv": {
+                "type": "bool",
+                "value": true,
+                "name": "Write realtime CSV",
+                "description": "Append decoded data to daily per-instrument CSV files while decoding."
+            },
+            "csv_dir": {
+                "type": "string",
+                "value": "",
+                "name": "CSV output directory",
+                "description": "Empty writes the CSV files next to the GGAK product in the output directory."
+            },
+            "csv_max_mb": {
+                "type": "int",
+                "value": 64,
+                "name": "Max CSV part size (MB)",
+                "description": "Start a new numbered part within the same UTC day when a file reaches this size. 0 disables the size cap (daily splitting still applies)."
+            },
+            "csv_raw_frames": {
+                "type": "bool",
+                "value": false,
+                "name": "Write raw frames CSV",
+                "description": "Append every 224-byte frame including the full payload as hex. Off by default; the per-instrument CSVs are much smaller."
+            }
+        },
         "work": {
             "baseband": {},
             "soft": {
@@ -408,6 +480,13 @@
                     "nrzm": false,
                     "rs_i": 0
                 }
+            },
+            "products": {
+                "module": "elektro_arktika_ggak",
+                "parameters": {
+                    "interpolate_mag_gaps": false,
+                    "csv": true
+                }
             }
         }
     },
@@ -424,6 +503,38 @@
             ]
         ],
         "samplerate": 3e6,
+        "parameters": {
+            "interpolate_mag_gaps": {
+                "type": "bool",
+                "value": false,
+                "name": "Interpolate small magnetometer gaps",
+                "description": "Fill gaps of up to 2 frames in the FM-VE magnetometer time series."
+            },
+            "csv": {
+                "type": "bool",
+                "value": true,
+                "name": "Write realtime CSV",
+                "description": "Append decoded data to daily per-instrument CSV files while decoding."
+            },
+            "csv_dir": {
+                "type": "string",
+                "value": "",
+                "name": "CSV output directory",
+                "description": "Empty writes the CSV files next to the GGAK product in the output directory."
+            },
+            "csv_max_mb": {
+                "type": "int",
+                "value": 64,
+                "name": "Max CSV part size (MB)",
+                "description": "Start a new numbered part within the same UTC day when a file reaches this size. 0 disables the size cap (daily splitting still applies)."
+            },
+            "csv_raw_frames": {
+                "type": "bool",
+                "value": false,
+                "name": "Write raw frames CSV",
+                "description": "Append every 224-byte frame including the full payload as hex. Off by default; the per-instrument CSVs are much smaller."
+            }
+        },
         "work": {
             "baseband": {},
             "soft": {
@@ -445,6 +556,13 @@
                     "derandomize": false,
                     "nrzm": false,
                     "rs_i": 0
+                }
+            },
+            "products": {
+                "module": "elektro_arktika_ggak",
+                "parameters": {
+                    "interpolate_mag_gaps": false,
+                    "csv": true
                 }
             }
         }
