@@ -116,10 +116,6 @@ int main(int argc, char *argv[])
     // logger->warn("\n" + parameters.dump(4));
     // exit(0);
 
-// On Linux, let GLFW choose its platform (Wayland or X11). The bundled
-// AppImage deliberately does not ship an X11-only libglfw3: the host's
-// GLFW 3.4 selects Wayland when the session provides it and X11 otherwise.
-
     // Setup window
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit())
