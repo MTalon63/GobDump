@@ -320,6 +320,12 @@ namespace satdump
                     if (got <= 0)
                         continue;
 
+                    // Idle lanes: zeroed soft bits are a valid all-zero codeword, so the
+                    // batch can still exit early instead of decoding stale/uninit data.
+                    if (got < dvbs2::simd_type::SIZE)
+                        memset(sym_buffer + (size_t)got * frame_bytes, 0,
+                               (size_t)(dvbs2::simd_type::SIZE - got) * frame_bytes);
+
                     {
                         int trials_cap = d_max_ldpc_trials;
                         if (d_ldpc_adaptive)
