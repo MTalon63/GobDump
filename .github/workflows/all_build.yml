@@ -467,6 +467,29 @@ jobs:
                     exit 1
                   fi
 
+            - name: Verify AppImage output-directory fallback
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              run: |
+                  # pkg2appimage's AppRun always chdir()s into $APPDIR/usr, which
+                  # is inside the read-only squashfs mount. Default output
+                  # directories must fall back to $HOME instead of trying to
+                  # create ./live_output inside the mount.
+                  ROOT="$PWD/squashfs-root"
+                  LIBDIR="$ROOT/usr/lib:$ROOT/usr/lib/x86_64-linux-gnu"
+                  rm -rf /tmp/gobdump-home /tmp/gobdump-ro-cwd
+                  mkdir -p /tmp/gobdump-home /tmp/gobdump-ro-cwd
+                  chmod 555 /tmp/gobdump-ro-cwd
+                  ( cd /tmp/gobdump-ro-cwd && HOME=/tmp/gobdump-home \
+                      LD_LIBRARY_PATH="$LIBDIR" timeout 60 "$ROOT/usr/bin/gobdump" --help \
+                      > /tmp/gobdump-home/cli.log 2>&1 || true )
+                  if ! grep -q '/tmp/gobdump-home/live_output' /tmp/gobdump-home/.config/gobdump/settings.json; then
+                    echo "Output directories were not redirected away from the read-only working directory" >&2
+                    cat /tmp/gobdump-home/cli.log >&2 || true
+                    cat /tmp/gobdump-home/.config/gobdump/settings.json >&2 || true
+                    exit 1
+                  fi
+
             - name: Upload AppImage
               uses: actions/upload-artifact@v4
               with:
