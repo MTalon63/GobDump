@@ -2,6 +2,7 @@
 
 #include "common/dsp/block.h"
 #include "s2_defs.h"
+#include <atomic>
 
 /*
 PLHeader synchronization, for DVB-S2 clock-recovered symbols
@@ -16,7 +17,7 @@ namespace dvbs2
         void work();
 
         std::thread d_thread2;
-        bool should_run2;
+        std::atomic<bool> should_run2{false};
         void run2()
         {
             while (should_run2)

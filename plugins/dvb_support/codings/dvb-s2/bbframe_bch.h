@@ -37,10 +37,10 @@ namespace dvbs2
     class BBFrameBCH
     {
     private:
-        unsigned int kbch;
-        unsigned int nbch;
-        unsigned int bch_code;
-        unsigned int frame;
+        unsigned int kbch = 0;
+        unsigned int nbch = 0;
+        unsigned int bch_code = 0;
+        unsigned int frame = 0;
 
         // Decode
         typedef CODE::GaloisField<16, 0b10000000000101101, uint16_t> GF_NORMAL;
@@ -59,15 +59,13 @@ namespace dvbs2
         BCH_NORMAL_8 *decode_n_8;
         BCH_MEDIUM_12 *decode_m_12;
         BCH_SHORT_12 *decode_s_12;
-        uint8_t *code;
-        uint8_t *parity;
 
         // Encode
         uint8_t encode_buffer[64800];
 
         std::bitset<MAX_BCH_PARITY_BITS> crc_table[256];
         std::bitset<MAX_BCH_PARITY_BITS> crc_medium_table[16];
-        unsigned int num_parity_bits;
+        unsigned int num_parity_bits = 0;
         std::bitset<MAX_BCH_PARITY_BITS> polynome;
 
         void calculate_crc_table();
@@ -76,6 +74,21 @@ namespace dvbs2
         void bch_poly_build_tables(void);
 
     public:
+        // Frame geometry for a MODCOD, without building a decoder.
+        struct FrameParams
+        {
+            unsigned int kbch = 0;           // BBFRAME (BCH data) size, in bits
+            unsigned int nbch = 0;           // BCH codeword size, in bits
+            unsigned int bch_code = 0;       // Which BCH generator polynomial set
+            unsigned int num_parity_bits = 0;
+        };
+
+        static FrameParams frameParams(dvbs2_framesize_t framesize, dvbs2_code_rate_t rate);
+        static int dataSizeFor(dvbs2_framesize_t framesize, dvbs2_code_rate_t rate)
+        {
+            return (int)frameParams(framesize, rate).kbch;
+        }
+
         BBFrameBCH(dvbs2_framesize_t framesize, dvbs2_code_rate_t rate);
         ~BBFrameBCH();
 
