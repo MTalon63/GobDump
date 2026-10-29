@@ -2,7 +2,8 @@
 # FindNEON
 # --------
 #
-# Finds NEON support
+# Unlike FindAVX/FindSSE41 there is no run probe: NEON comes with arm64/-mfpu=neon, and
+# cross-compiling to phones is the normal case here.
 #
 # This module can be used to detect NEON support in a C compiler.  If
 # the compiler supports NEON, the flags required to compile with
