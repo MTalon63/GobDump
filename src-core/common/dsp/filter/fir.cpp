@@ -285,7 +285,11 @@ namespace dsp
         {
 #ifdef FIR_HAVE_BLOCKED_KERNEL
             // Same sum as the fallback below (taps[0] reversed row; "al" offsets are equivalent).
+#ifdef FIR_HAVE_AVX2_KERNEL
             if (fir_scratch && ntaps >= 4 && fir_avx2_ready())
+#else
+            if (fir_scratch && ntaps >= 4)
+#endif
             {
                 for (int base = 0; base < nsamples; base += FIR_CHUNK)
                 {
