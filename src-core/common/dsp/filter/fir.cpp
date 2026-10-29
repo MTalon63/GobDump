@@ -3,9 +3,18 @@
 #include <volk/volk.h>
 #include <algorithm>
 
-#if (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)) && defined(DSP_HAVE_AVX2_ISA)
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
 #include <immintrin.h>
+#if defined(__GNUC__) || defined(__clang__)
+// Target attribute + run-time check: the TU stays baseline, the kernel is picked per CPU.
 #define FIR_HAVE_AVX2_KERNEL 1
+#define FIR_AVX2_TARGET __attribute__((target("avx2,fma")))
+#define FIR_AVX2_DISPATCH 1
+#elif defined(DSP_HAVE_AVX2_ISA)
+// MSVC has no target attribute; FindAVX gates the file instead.
+#define FIR_HAVE_AVX2_KERNEL 1
+#define FIR_AVX2_TARGET
+#endif
 #endif
 
 #if defined(__aarch64__) && defined(DSP_HAVE_NEON_ISA)
@@ -20,7 +29,21 @@
 #ifdef FIR_HAVE_AVX2_KERNEL
 namespace
 {
-    static inline void fir_split8(const float *__restrict src, float *__restrict re, float *__restrict im, int n)
+#ifdef FIR_AVX2_DISPATCH
+    static bool fir_avx2_ready()
+    {
+        static const bool ready = []
+        {
+            __builtin_cpu_init();
+            return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
+        }();
+        return ready;
+    }
+#else
+    static inline bool fir_avx2_ready() { return true; }
+#endif
+
+    FIR_AVX2_TARGET static inline void fir_split8(const float *__restrict src, float *__restrict re, float *__restrict im, int n)
     {
         const __m256i idx = _mm256_setr_epi32(0, 1, 4, 5, 2, 3, 6, 7);
         int j = 0;
@@ -42,7 +65,7 @@ namespace
 
     // 8 complex outputs per iteration so the sample window is reused instead of re-walked by VOLK.
     // __restrict matters: without it the store is assumed to alias the re/im window, serialising it.
-    static inline void fir_complex_blocked(const float *__restrict re, const float *__restrict im, const float *__restrict h, int n, int ntaps, float *__restrict out)
+    FIR_AVX2_TARGET static inline void fir_complex_blocked(const float *__restrict re, const float *__restrict im, const float *__restrict h, int n, int ntaps, float *__restrict out)
     {
         int i = 0;
         for (; i + 8 <= n; i += 8)
@@ -262,7 +285,7 @@ namespace dsp
         {
 #ifdef FIR_HAVE_BLOCKED_KERNEL
             // Same sum as the fallback below (taps[0] reversed row; "al" offsets are equivalent).
-            if (fir_scratch && ntaps >= 4)
+            if (fir_scratch && ntaps >= 4 && fir_avx2_ready())
             {
                 for (int base = 0; base < nsamples; base += FIR_CHUNK)
                 {

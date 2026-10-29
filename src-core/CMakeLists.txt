@@ -154,14 +154,18 @@ endif()
 add_library(gobdump_core SHARED ${GobDump_core_CPPS})
 
 # Probe, don't hardcode: "-mavx2" is invalid off x86, and MSVC wants "/arch:AVX2".
+# fir.cpp dispatches to its AVX2 kernel at run time (target attribute), so only the M&M kernel
+# needs the build-time gate - it is inlined once per symbol.
 include(FindAVX)
 if(CXX_AVX2_FOUND)
-    set_source_files_properties(common/dsp/filter/fir.cpp
-        PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS}"
-                   COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
     set_source_files_properties(common/dsp/clock_recovery/clock_recovery_mm.cpp
         PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS} -funroll-loops -ffast-math"
                    COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+    if(MSVC AND NOT(CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+        set_source_files_properties(common/dsp/filter/fir.cpp
+            PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS}"
+                       COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+    endif()
 endif()
 
 # NEON twin of the two kernels above. FindNEON fails cleanly on x86, so this is inert there.
