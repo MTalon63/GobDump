@@ -2,6 +2,9 @@
 
 This detailed documentation is intended to provide the user with accurate and up-to-date information and instruction on how to best operate the GobDump software. GobDump is a general purpose satellite data processing software, forked from SatDump. It is a one-stop-shop that provides all the necessary stages to get from the satellite transmission to actual products.
 
+!!! note
+    GobDump is maintained by MTalon63. If you find a problem, report it on the [GobDump issue tracker](https://github.com/MTalon63/GobDump/issues) instead of contacting the original SatDump project.
+
 ## Fundamentals
 
 * General terminology and concepts

@@ -1,0 +1,74 @@
+site_name: GobDump
+site_description: Documentation for GobDump, a fork of SatDump focused on stable releases and Windows support.
+site_url: https://mtalon63.github.io/GobDump/
+repo_url: https://github.com/MTalon63/GobDump
+repo_name: MTalon63/GobDump
+edit_uri: edit/ports/docs/
+copyright: GobDump is a fork of SatDump. Original SatDump authors are credited on the project page.
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  favicon: favicon.ico
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+nav:
+  - Home: index.md
+  - Quick Start: QuickStart.md
+  - Pipelines: Pipelines.md
+  - SDR Options: SDR_Options.md
+  - Products:
+      - First-Party Products: FirstPartyProducts.md
+      - Image Product Expressions: ImageProductExpression.md
+      - Filename Templates: ImageFilenameTemplate.md
+  - Projections: Projections.md
+  - Tools:
+      - LUT Generator: LutGenerator.md
+      - ZIQ Baseband: ZIQ.md
+  - Resources: Resources.md
+  - Report an issue: https://github.com/MTalon63/GobDump/issues

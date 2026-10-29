@@ -15,7 +15,7 @@ endif
 
 STAMP := $(BUILD_DIR)/CMakeCache.txt
 
-.PHONY: all build configure reconfigure run ui clean distclean install uninstall deps test help
+.PHONY: all build configure reconfigure run ui clean distclean install uninstall deps test docs docs-serve help
 
 all: build
 
@@ -58,6 +58,14 @@ distclean:
 deps:
 	./windows/Setup-MSYS2.sh
 
+docs:
+	python -m pip install -r docs/requirements.txt
+	python -m mkdocs build --strict
+
+docs-serve:
+	python -m pip install -r docs/requirements.txt
+	python -m mkdocs serve
+
 help:
 	@echo "Targets:"
 	@echo "  build       configure if needed, then build   (default)"
@@ -70,6 +78,8 @@ help:
 	@echo "  distclean   empty $(BUILD_DIR) entirely"
 	@echo "  deps        install dependencies (MSYS2 only)"
 	@echo "  reconfigure re-run cmake configure"
+	@echo "  docs        build the documentation site"
+	@echo "  docs-serve  preview the documentation locally"
 	@echo
 	@echo "Variables: BUILD_DIR=$(BUILD_DIR) BUILD_TYPE=$(BUILD_TYPE) GENERATOR=$(GENERATOR) JOBS=$(JOBS)"
 	@echo "Example:   make BUILD_TYPE=Debug BUILD_DIR=build-debug"

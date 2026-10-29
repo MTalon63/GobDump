@@ -522,8 +522,7 @@ if((CMAKE_BUILD_TYPE MATCHES "^[Rr]elease") AND BUILD_DOCS)
                             src-core/dsp \
                             src-core/image \
                             src-core/utils \
-                            docs/pages \
-                            docs/res \
+                            docs \
                             plugins/xrit_support/xrit")
         set(DOXYGEN_FILES  "${DOXYGEN_FILES} \
                             plugins/fengyun2_support/fengyun2/svissr")
