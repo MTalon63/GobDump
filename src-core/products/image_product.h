@@ -125,6 +125,9 @@ namespace satdump
             nlohmann::json get_proj_cfg(int channel)
             {
                 // TODO CHANNEL SPECIFICS
+                if (!contents.contains("projection_cfg"))
+                    return {};
+
                 auto cfg = contents["projection_cfg"];
                 if (channel != -1)
                 {

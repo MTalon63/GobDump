@@ -1,6 +1,7 @@
 #include "msu_vis_reader.h"
 #include "logger.h"
 #include "utils/binary.h"
+#include <cstring>
 #include <string>
 
 namespace elektro_arktika
@@ -12,6 +13,8 @@ namespace elektro_arktika
             imageBuffer1 = new unsigned short[17200 * 6004];
             imageBuffer2 = new unsigned short[17200 * 6004];
             timestamps.resize(17200, -1);
+            line_filled.resize(17200, 0);
+            line_stale.resize(17200, 0);
             frames = 0;
         }
 
@@ -21,57 +24,8 @@ namespace elektro_arktika
             delete[] imageBuffer2;
         }
 
-        void MSUVISReader::pushFrame(uint8_t *data, bool apply_correction)
+        void MSUVISReader::writeFrame(uint8_t *data, int counter, bool overwrite)
         {
-
-            // First bit is never set, mask it
-            int counter = (data[8] << 8 | data[9]) & 0x7fff;
-
-            // Does correction logic if specified by the user
-            if (apply_correction)
-            {
-                // Unlocks if we are fstarting a new image
-                // Not implemented in RDAS!
-                /*
-                if (counter_locked) && (counter == 1 || counter == 2)) {
-                    counter_locked = false;
-
-                } else*/
-
-                if (!counter_locked)
-                {
-                    if (counter == global_counter + 1)
-                    {
-                        // LOCKED!
-                        logger->debug("Counter correction LOCKED! Counter: " + std::to_string(counter));
-                        counter_locked = true;
-                    }
-                    else
-                    {
-                        // We can't lock, save this counter for a check on the next one
-                        global_counter = counter;
-                    }
-                }
-                if (counter_locked)
-                {
-                    // Makes sure dropped frames don't throw us off, a few skipped lines are fine
-                    // Corrector therefore doesn't fix three LSB flips, but this improves reliability
-                    // with projections and such
-                    if (abs(counter - global_counter) > 7)
-                    {
-                        counter = global_counter + 1;
-                    }
-
-                    global_counter = counter;
-                }
-            }
-            // Warning: The above code MUST have an unlock in the FD end! Since the code doesn't have
-            // handling for more than one FD at a time right now, I didn't add this. Just keep it in mind!
-
-            // Sanity check
-            if (counter >= 17200)
-                return;
-
             // Offset to start reading from
             int pos = 5 * 38;
 
@@ -115,7 +69,171 @@ namespace elektro_arktika
                 angle_points.push_back({counter, val});
             }
 
-            frames++;
+            line_filled[counter] = 1;
+            line_stale[counter] = 0;
+            if (!overwrite)
+                frames++;
+        }
+
+        void MSUVISReader::pushFrame(uint8_t *data, bool apply_correction)
+        {
+
+            // First bit is never set, mask it
+            int counter = (data[8] << 8 | data[9]) & 0x7fff;
+
+            // Does correction logic if specified by the user
+            if (apply_correction)
+            {
+                // Drop a lock that can't belong to this image (garbage or a previous scan).
+                if (counter_locked && (global_counter >= 17200 || (counter <= 2 && global_counter > 2) ||
+                                       counter + MAX_LINE_BACKTRACK < global_counter))
+                {
+                    logger->debug("Counter correction UNLOCKED! Counter: " + std::to_string(counter));
+                    counter_locked = false;
+                    global_counter = counter;
+                    pending_valid = false;
+                    angle_points.clear();
+                    for (int i = 0; i < 17200; i++)
+                        if (line_filled[i])
+                            line_stale[i] = 1;
+                }
+
+                if (!counter_locked)
+                {
+                    if (counter == global_counter + 1)
+                    {
+                        // LOCKED!
+                        logger->debug("Counter correction LOCKED! Counter: " + std::to_string(counter));
+                        counter_locked = true;
+                    }
+                    else
+                    {
+                        // We can't lock, save this counter for a check on the next one
+                        global_counter = counter;
+                    }
+                }
+                if (counter_locked)
+                {
+                    // Makes sure dropped frames don't throw us off, a few skipped lines are fine
+                    // Corrector therefore doesn't fix three LSB flips, but this improves reliability
+                    // with projections and such
+                    if (abs(counter - global_counter) > 7)
+                    {
+                        counter = global_counter + 1;
+                    }
+
+                    global_counter = counter;
+                }
+            }
+
+            // Sanity check
+            if (counter >= 17200)
+            {
+                rejected_frames++;
+                return;
+            }
+
+            if (pending_valid)
+            {
+                if (counter == pending_counter + 1 && !line_filled[pending_counter])
+                {
+                    writeFrame(pending_data.data(), pending_counter);
+                    if (pending_counter > last_counter)
+                        last_counter = pending_counter;
+                }
+                else
+                    rejected_frames++;
+                pending_valid = false;
+            }
+
+            if (line_filled[counter])
+            {
+                if (line_stale[counter])
+                {
+                    writeFrame(data, counter, true);
+                    return;
+                }
+                rejected_frames++;
+                return;
+            }
+
+            if (counter > last_counter && counter - last_counter > MAX_LINE_GAP)
+            {
+                if ((int)pending_data.size() != FRAME_BYTES)
+                    pending_data.resize(FRAME_BYTES);
+                memcpy(pending_data.data(), data, FRAME_BYTES);
+                pending_counter = counter;
+                pending_valid = true;
+                return;
+            }
+
+            writeFrame(data, counter);
+            if (counter > last_counter)
+                last_counter = counter;
+        }
+
+        // Meteor-M LRPT style gap fill
+        size_t MSUVISReader::fillMissing(size_t max_lines)
+        {
+            if (max_lines == 0)
+                return 0;
+
+            const int W = 6004;
+            size_t filled = 0;
+            int start = -1;
+
+            for (int y = 0; y <= 17200; y++)
+            {
+                bool missing = (y < 17200) && !line_filled[y];
+
+                if (missing)
+                {
+                    if (start < 0)
+                        start = y;
+                    continue;
+                }
+
+                if (start < 0)
+                    continue;
+
+                int end = y - 1;
+                int len = end - start + 1;
+
+                if (len <= (int)max_lines && start > 0 && y < 17200 && line_filled[start - 1] && line_filled[y])
+                {
+                    const unsigned short *top1 = &imageBuffer1[(start - 1) * W];
+                    const unsigned short *bot1 = &imageBuffer1[y * W];
+                    const unsigned short *top2 = &imageBuffer2[(start - 1) * W];
+                    const unsigned short *bot2 = &imageBuffer2[y * W];
+
+#pragma omp parallel for
+                    for (int x = 0; x < W; x++)
+                    {
+                        float t1 = top1[x], b1 = bot1[x], t2 = top2[x], b2 = bot2[x];
+                        for (int k = 0; k < len; k++)
+                        {
+                            float p = (float)(k + 1) / (float)(len + 1);
+                            imageBuffer1[(start + k) * W + x] = (unsigned short)((1.0f - p) * t1 + p * b1);
+                            imageBuffer2[(start + k) * W + x] = (unsigned short)((1.0f - p) * t2 + p * b2);
+                        }
+                    }
+
+                    double above = timestamps[start - 1], below = timestamps[y];
+                    for (int k = 0; k < len; k++)
+                    {
+                        float p = (float)(k + 1) / (float)(len + 1);
+                        if (above > 0 && below > 0)
+                            timestamps[start + k] = above + (below - above) * p;
+                        line_filled[start + k] = 1;
+                    }
+
+                    filled += len;
+                }
+
+                start = -1;
+            }
+
+            return filled;
         }
 
         image::Image MSUVISReader::getImage1() { return image::Image(&imageBuffer1[0], 16, 6004, 17200, 1); }

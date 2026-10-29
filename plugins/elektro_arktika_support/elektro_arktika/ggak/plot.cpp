@@ -53,7 +53,7 @@ namespace elektro_arktika
         image::Image plotData(std::string title, std::vector<double> time, std::vector<double> data, double time_start, double time_stop)
         {
             IMGUI_CHECKVERSION();
-            ImGui::CreateContext();
+            ImGuiContext *imgui_ctx = ImGui::CreateContext();
             ImGuiIO &io = ImGui::GetIO();
             (void)io;
             io.IniFilename = NULL;
@@ -64,7 +64,7 @@ namespace elektro_arktika
 
             imgui_sw::bind_imgui_painting();
 
-            ImPlot::CreateContext();
+            ImPlotContext *implot_ctx = ImPlot::CreateContext();
 
             imgui_sw::SwOptions sw_options;
 
@@ -129,6 +129,9 @@ namespace elektro_arktika
                 img.set(1, i, (pixel_buffer[i] >> 8) & 0xFF);
                 img.set(0, i, (pixel_buffer[i] >> 0) & 0xFF);
             }
+
+            ImPlot::DestroyContext(implot_ctx);
+            ImGui::DestroyContext(imgui_ctx);
 
             return img;
         }

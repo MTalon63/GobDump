@@ -195,8 +195,14 @@ namespace goes
                 }
                 else // Write raw image dats
                 {
-                    image::Image image(&file.lrit_data[primary_header.total_header_length], 8, image_structure_record.columns_count, image_structure_record.lines_count, 1);
-                    image::save_img(image, directory + "/IMAGES/" + current_filename);
+                    size_t img_offset = primary_header.total_header_length;
+                    size_t img_size = (size_t)image_structure_record.columns_count * image_structure_record.lines_count;
+
+                    if (img_offset + img_size <= file.lrit_data.size())
+                    {
+                        image::Image image(&file.lrit_data[img_offset], 8, image_structure_record.columns_count, image_structure_record.lines_count, 1);
+                        image::save_img(image, directory + "/IMAGES/" + current_filename);
+                    }
                 }
             }
             // Check if this EMWIN data

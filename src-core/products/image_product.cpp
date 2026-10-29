@@ -62,7 +62,14 @@ namespace satdump
                 //// META
 
                 savemtx.unlock();
-                if (!save_as_matrix && !d_no_not_save_images)
+            }
+
+            // Channel encoding is minutes of CPU on large images; concurrent saving is safe because
+            // the files are independent and libpng/zlib keep all state per call.
+            if (!save_as_matrix && !d_no_not_save_images)
+            {
+#pragma omp parallel for
+                for (int64_t c = 0; c < (int64_t)images.size(); c++)
                     image::save_img(images[c].image, directory + "/" + images[c].filename);
             }
 
@@ -126,9 +133,10 @@ namespace satdump
             {
                 if (file.find("http") == 0)
                 {
+                    std::string url = directory + "/" + contents["images"][0]["file"].get<std::string>();
                     std::string res;
-                    if (perform_http_request(directory + "/" + contents["images"][0]["file"].get<std::string>(), res))
-                        throw std::runtime_error("Could not download from : " + directory + "/" + contents["images"][0]["file"].get<std::string>());
+                    if (perform_http_request(url, res))
+                        throw std::runtime_error("Could not download from : " + url);
                     std::ofstream(tmp_path + "/satdumpdltmp.tmp", std::ios::binary).write((char *)res.data(), res.size());
                     image::load_img(img_matrix, tmp_path + "/satdumpdltmp.tmp");
                     if (std::filesystem::exists(tmp_path + "/satdumpdltmp.tmp"))
@@ -171,9 +179,10 @@ namespace satdump
                 {
                     if (file.find("http") == 0)
                     {
+                        std::string url = directory + "/" + contents["images"][c]["file"].get<std::string>();
                         std::string res;
-                        if (perform_http_request(directory + "/" + contents["images"][c]["file"].get<std::string>(), res))
-                            throw std::runtime_error("Could not download from : " + directory + "/" + contents["images"][c]["file"].get<std::string>());
+                        if (perform_http_request(url, res))
+                            throw std::runtime_error("Could not download from : " + url);
                         std::ofstream(tmp_path + "/satdumpdltmp.tmp", std::ios::binary).write((char *)res.data(), res.size());
                         image::load_img(img_holder.image, tmp_path + "/satdumpdltmp.tmp");
                         if (std::filesystem::exists(tmp_path + "/satdumpdltmp.tmp"))

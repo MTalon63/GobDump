@@ -396,7 +396,7 @@ namespace satdump
                     int width = std::min<int>(result.output_image.width(), x2 + result2.output_image.width()) - x2;
                     int height = std::min<int>(result.output_image.height(), y2 + result2.output_image.height()) - y2;
 
-                    if (result2.output_image.channels() == result.output_image.channels())
+                    if (result2.output_image.channels() == 4 && result.output_image.channels() == 4)
 #pragma omp parallel for
                         for (int x = 0; x < width; x++)
                             for (int y = 0; y < height; y++)
@@ -406,10 +406,7 @@ namespace satdump
                                         for (int ch = 0; ch < 3; ch++)
                                             result.output_image.set(ch, (y + y2) * result.output_image.width() + x + x2, result2.output_image.get(ch, y * result2.output_image.width() + x));
 
-                                        if (result2.output_image.channels() == 4)
-                                            result.output_image.set(3, (y + y2) * result.output_image.width() + x + x2, result2.output_image.get(3, y * result2.output_image.width() + x));
-                                        else
-                                            result.output_image.set(3, (y + y2) * result.output_image.width() + x + x2, 65535);
+                                        result.output_image.set(3, (y + y2) * result.output_image.width() + x + x2, result2.output_image.get(3, y * result2.output_image.width() + x));
                                     }
                 }
 

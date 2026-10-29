@@ -1,12 +1,14 @@
 #include "module_ccsds_conv_concat_decoder.h"
 #include "common/codings/differential/nrzm.h"
 #include "common/codings/randomization.h"
+#include "common/widgets/constellation.h"
 #include "common/widgets/themed_widgets.h"
 #include "core/exception.h"
 #include "imgui/imgui.h"
 #include "logger.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 
 namespace satdump
@@ -42,8 +44,9 @@ namespace satdump
                   d_rs_type(parameters.count("rs_type") > 0 ? parameters["rs_type"].get<std::string>() : "none"),
                   d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false)
             {
-                soft_buffer = new int8_t[d_buffer_size];
-                frame_buffer = new uint8_t[d_buffer_size * 8]; // Larger by safety
+                if (d_rs_interleaving_depth > 10)
+                    throw satdump_exception("CCSDS Concatenated Decoder : rs_i must be <= 10!");
+
                 d_bpsk_90 = false;
                 d_oqpsk_mode = false;
 
@@ -140,7 +143,6 @@ namespace satdump
                     ViterbiSlot s;
                     s.rate = rate;
                     s.name = sname;
-                    s.out  = new uint8_t[d_buffer_size * 8];
                     // Store params so reinit() can recreate the object with a clean trellis
                     s.ber_threshold = d_viterbi_ber_threasold;
                     s.outsync_after = d_viterbi_outsync_after;
@@ -157,6 +159,7 @@ namespace satdump
                         s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_7_8)
                         s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                    s.out = new uint8_t[d_buffer_size * 8];
                     return s;
                 };
 
@@ -182,6 +185,9 @@ namespace satdump
                     else throw satdump_exception("CCSDS Concatenated Decoder : invalid conv_rate!");
                     d_rate_pool.push_back(makeSlot(rate, rname));
                 }
+
+                soft_buffer = new int8_t[d_buffer_size];
+                frame_buffer = new uint8_t[d_buffer_size * 8]; // Larger by safety
 
                 d_active_rate_idx = 0;
                 viterbi_rate_str  = d_rate_pool[0].name;
@@ -234,9 +240,10 @@ namespace satdump
                     else
                     {
                         auto clamp_8 = [](float x) -> int8_t {
-                            if (x < -127.0f) return -127;
-                            if (x > 127.0f) return 127;
-                            return (int8_t)x;
+                            if (!std::isfinite(x)) return 0;
+                            if (x <= -127.0f) return -127;
+                            if (x >= 127.0f) return 127;
+                            return (int8_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
                         };
 
                         bool any_synced = false;
@@ -547,26 +554,13 @@ namespace satdump
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
+                    // Bounded by the buffer size, not a fixed 2048.
                     if (d_constellation == dsp::BPSK)
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i] / 127.0f) * col_w * 0.65f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (float)rng.gasdev() * col_w * 0.07f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_buffer_size, 2048), 1,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
                     else
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_buffer_size / 2, 2048), 2,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
 
                     draw_list->PopClipRect();
                     ImGui::Dummy(ImVec2(col_w, col_w));

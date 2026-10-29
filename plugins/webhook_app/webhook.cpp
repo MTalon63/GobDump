@@ -68,7 +68,8 @@ namespace webhook_app
         logger->debug("Sending webhook: \"" + json + "\"");
 
         std::string response;
-        satdump::perform_http_request_post(url, response, json, "Content-Type: application/json");
+        if (satdump::perform_http_request_post(url, response, json, "Content-Type: application/json"))
+            logger->warn("Webhook POST to %s failed", url.c_str());
     }
 
     void WebhookSender::test(const WebhookConfig &config)

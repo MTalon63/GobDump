@@ -5,6 +5,7 @@
 #include "common/widgets/notated_num.h"
 #include "imgui/dialogs/widget.h"
 #include "imgui/imgui.h"
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <thread>
@@ -12,7 +13,8 @@
 class FileSource : public dsp::DSPSampleSource
 {
 protected:
-    bool is_open = false, is_started = false;
+    bool is_open = false;
+    std::atomic<bool> is_started{false};
 
     std::chrono::steady_clock::time_point start_time_point;
     std::chrono::duration<double> sample_time_period;
@@ -26,7 +28,7 @@ protected:
     satdump::widgets::NotatedNum<int> samplerate_input = satdump::widgets::NotatedNum("Samplerate", 0, "sps");
     dsp::BasebandType baseband_type = "cf32";
 
-    bool should_run = true;
+    std::atomic<bool> should_run{true};
     std::thread work_thread;
     void run_thread();
 

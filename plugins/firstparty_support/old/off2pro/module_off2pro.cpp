@@ -24,6 +24,12 @@ namespace off2pro
 
         auto products = satdump::firstparty::processFirstPartyProductFile(info, source_off_file);
 
+        if (!products)
+        {
+            logger->error("No product could be extracted from " + source_off_file + "!");
+            return;
+        }
+
         products->save(pro_output_file);
         d_output_file = pro_output_file + "/product.cbor";
 

@@ -25,7 +25,7 @@ namespace satdump
     namespace handlers
     {
         ImageProductHandler::ImageProductHandler(std::shared_ptr<products::Product> p, bool dataset_mode)
-            : ProductHandler(p, dataset_mode, [p](auto &c) { return products::check_expression_product_composite((products::ImageProduct *)p.get(), c["expression"]); })
+            : ProductHandler(p, dataset_mode, [p](auto &c) { return c.contains("expression") && c["expression"].is_string() && products::check_expression_product_composite((products::ImageProduct *)p.get(), c["expression"]); })
         {
             handler_tree_icon = u8"\uf71e";
             preset_reset_by_handler = true;
@@ -294,8 +294,12 @@ namespace satdump
                                     ImGui::SetClipboardText(str.c_str());
                                 }
 
-                                auto alignAffineF = [this, &ch]()
+                                size_t align_ch_idx = (size_t)(&ch - product->images.data());
+                                auto alignAffineF = [this, align_ch_idx]()
                                 {
+                                    if (align_ch_idx >= product->images.size())
+                                        return;
+                                    auto &ch = product->images[align_ch_idx];
                                     auto &ref = product->images[0].image;
                                     auto tgt = ch.image;
                                     double ax = double(ref.width()) / double(tgt.width());
@@ -346,7 +350,7 @@ namespace satdump
 
         void ImageProductHandler::setConfig(nlohmann::json p)
         {
-            if (p.contains("expression"))
+            if (p.contains("expression") && p["expression"].is_string())
             {
                 expression = p["expression"];
                 channel_selection_curr_id = -1;
@@ -418,7 +422,7 @@ namespace satdump
 
             for (int i = 0; i < product->images.size(); i++)
             {
-                if (channels_calibrated_ranges.count(i) && channels_calibrated_ranges[i].size() > 0)
+                if (channels_calibrated_ranges.count(i) && channels_calibrated_ranges[i].count(product->images[i].calibration_type))
                 {
                     auto &r = p["calibration_ranges"];
                     auto &name = product->images[i].channel_name;
@@ -447,6 +451,10 @@ namespace satdump
                     if (channel_calibrated)
                     { // Calibrated case
                         std::string &unit = channels_calibrated_curr_unit;
+
+                        if (!channels_calibrated_ranges.count(channel_selection_curr_id) ||
+                            !channels_calibrated_ranges[channel_selection_curr_id].count(unit))
+                            throw satdump_exception("No calibrated range available for unit " + unit);
                         img = products::generate_calibrated_product_channel(product, product->images[channel_selection_curr_id].channel_name,
                                                                             channels_calibrated_ranges[channel_selection_curr_id][unit].min,
                                                                             channels_calibrated_ranges[channel_selection_curr_id][unit].max, unit, &progress);
@@ -454,7 +462,8 @@ namespace satdump
                     else
                     { // Normal case
                         img = product->images[channel_selection_curr_id].image;
-                        image::set_metadata_proj_cfg(img, product->get_proj_cfg(product->images[channel_selection_curr_id].abs_index));
+                        if (product->has_proj_cfg())
+                            image::set_metadata_proj_cfg(img, product->get_proj_cfg(product->images[channel_selection_curr_id].abs_index));
                     }
 
                     // Set name again!
@@ -480,7 +489,7 @@ namespace satdump
             {
                 std::shared_ptr<ImageHandler> a = std::make_shared<ImageHandler>();
                 a->setConfig(img_handler->getConfig());
-                a->setImage(img_handler->getImage(false));
+                a->setImage(*img_handler->getImage(false));
                 a->setName(img_handler->getName());
                 addSubHandler(a);
             }

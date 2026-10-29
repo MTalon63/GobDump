@@ -9,6 +9,7 @@
 #include "utils/stats.h"
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 
@@ -17,12 +18,45 @@
 
 #include "common/tracking/tle.h"
 #include "core/resources.h"
+#include "init.h"
 #include "nlohmann/json_utils.h"
+#include "rdas_aligner.h"
 
 namespace elektro_arktika
 {
     namespace msugs
     {
+        static double meanValidTimestamp(const std::vector<double> &timestamps)
+        {
+            double sum = 0;
+            size_t count = 0;
+            for (double t : timestamps)
+                if (t > 0)
+                {
+                    sum += t;
+                    count++;
+                }
+            return count > 0 ? sum / (double)count : 0;
+        }
+
+        static int getMSUGSNorad(bool is_arktika, int sat_num)
+        {
+            if (is_arktika)
+                return sat_num == 2 ? 58584 : (sat_num == 1 ? 47719 : -1); // Arktika-M N1 / N2
+
+            switch (sat_num)
+            {
+            case 2:
+                return 41105; // Elektro-L 2
+            case 3:
+                return 44903; // Elektro-L 3
+            case 4:
+                return 55506; // Elektro-L 4
+            default:
+                return -1;
+            }
+        }
+
         MSUGSDecoderModule::MSUGSDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
             : satdump::pipeline::base::FileStreamToFileStreamModule(input_file, output_file_hint, parameters)
         {
@@ -34,11 +68,19 @@ namespace elektro_arktika
                 sat_num = parameters["satellite_number"].is_string() ? std::stoi(parameters["satellite_number"].get<std::string>()) : parameters["satellite_number"].get<int>();
             else
                 sat_num = 0;
+
+            recalibrate_aligner = parameters.contains("recalibrate_aligner") ? parameters["recalibrate_aligner"].get<bool>() : false;
+
+            decode_ir = parameters.contains("decode_ir") ? parameters["decode_ir"].get<bool>() : false;
+            project_vis2 = parameters.contains("project_vis2") ? parameters["project_vis2"].get<bool>() : false;
+            fill_missing = parameters.contains("fill_missing") ? parameters["fill_missing"].get<bool>() : false;
+            max_fill_lines = parameters.contains("max_fill_lines") ? parameters["max_fill_lines"].get<size_t>() : 50;
+            if (decode_ir)
+                infr_reader = std::make_unique<MSUIRReader>();
         }
 
         void MSUGSDecoderModule::process()
         {
-
             std::string directory = d_output_file_hint.substr(0, d_output_file_hint.rfind('/')) + "/MSU-GS";
 
             uint8_t cadu[1024];
@@ -52,8 +94,6 @@ namespace elektro_arktika
             std::ofstream data_unknown(directory + "/data_unknown.bin", std::ios::binary);
 
             logger->info("Demultiplexing and deframing...");
-
-            double last_val = 0;
 
             while (should_run())
             {
@@ -98,11 +138,11 @@ namespace elektro_arktika
                     for (std::vector<uint8_t> &frame : frames)
                         vis3_reader.pushFrame(&frame[0], apply_correction);
                 }
-                else if ((vcid == 4) || (vcid_2 == 4))
+                else if (decode_ir && infr_reader && ((vcid == 4) || (vcid_2 == 4)))
                 {
                     std::vector<std::vector<uint8_t>> frames = deframerIR.work(&cadu[24], 1024 - 24);
                     for (std::vector<uint8_t> &frame : frames)
-                        infr_reader.pushFrame(&frame[0]);
+                        infr_reader->pushFrame(&frame[0]);
                 }
 
                 // Unknown additional data, 0xa6007c ASM 1680-bits frames
@@ -132,16 +172,24 @@ namespace elektro_arktika
             dataset.timestamp = time(0); // satdump::get_median(vis1_reader.timestamps);
 
             logger->info("----------- MSU-GS");
-            logger->info("MSU-GS CH1 Lines        : " + std::to_string(vis1_reader.frames));
-            logger->info("MSU-GS CH2 Lines        : " + std::to_string(vis2_reader.frames));
-            logger->info("MSU-GS CH3 Lines        : " + std::to_string(vis3_reader.frames));
-            logger->info("MSU-GS IR Frames        : " + std::to_string(infr_reader.frames));
+            logger->info("MSU-GS CH1 Lines        : " + std::to_string(vis1_reader.frames) + " (dropped " + std::to_string(vis1_reader.rejected_frames) + ")");
+            logger->info("MSU-GS CH2 Lines        : " + std::to_string(vis2_reader.frames) + " (dropped " + std::to_string(vis2_reader.rejected_frames) + ")");
+            logger->info("MSU-GS CH3 Lines        : " + std::to_string(vis3_reader.frames) + " (dropped " + std::to_string(vis3_reader.rejected_frames) + ")");
+            if (decode_ir)
+                logger->info("MSU-GS IR Frames        : " + std::to_string(infr_reader->frames));
+
+            if (fill_missing)
+            {
+                size_t filled = vis1_reader.fillMissing(max_fill_lines) + vis2_reader.fillMissing(max_fill_lines) + vis3_reader.fillMissing(max_fill_lines);
+                logger->info("Filled " + std::to_string(filled) + " missing MSU-GS lines (max gap " + std::to_string(max_fill_lines) + ")");
+            }
 
             logger->info("Writing images.... (Can take a while)");
 
             if (!std::filesystem::exists(directory))
                 std::filesystem::create_directory(directory);
 
+            // Raw channels are staggered; these transforms cancel it in the viewer.
             nlohmann::json sat_cfg;
             if (is_arktika && resources::resourceExists("elektro/m" + std::to_string(sat_num) + "_cfg.json"))
                 sat_cfg = loadJsonFile(resources::getResourcePath("elektro/m" + std::to_string(sat_num) + "_cfg.json"));
@@ -158,7 +206,6 @@ namespace elektro_arktika
                 {
                     // printf("%d %4.4f\n", p.first, p.second);
 
-                    double orign = p.second;
                     p.second -= 60509 + 15597568; // 51686860;
                     p.second *= 17200. / 44065.;  // 17200. / 20.;
                     //  p.second =
@@ -168,8 +215,6 @@ namespace elektro_arktika
 
                     if (is++ % 10 == 0)
                         points.push_back({(double)p.first, p.second});
-
-                    printf("%4.4f, %4.4f\n", (double)p.first, p.second);
                 }
 
                 logger->critical(points.size());
@@ -185,24 +230,59 @@ namespace elektro_arktika
 
                 logger->info("Done calculating!");
 
-                for (int x = 0; x < 6004; x++)
+                // Row-major equivalent of the else branch: resample each row once.
+                if (!points.empty() && t.is_reverse_x_separable())
                 {
-                    printf("%d\n", x);
-                    fflush(stdout);
-
-                    for (int y = 0; y < 17200; y++)
+                    const int W = (int)img_o.width(), H = (int)img_o.height();
+                    std::vector<double> src_y(H);
+                    std::vector<char> src_ok(H);
+                    for (int y = 0; y < H; y++)
                     {
                         double xx = 0, yy = y;
-
                         t.reverse(&yy, &xx);
+                        src_y[y] = yy;
+                        src_ok[y] = (xx >= 0.0 && xx < (double)W && yy >= 0.0 && yy < (double)W) ? 1 : 0;
+                    }
 
-                        // printf("%d %d %d %d\n", x, y, (int)xx, (int)yy);
+                    uint16_t *dst = (uint16_t *)img_m.raw_data();
 
-                        if (yy >= 0 && yy < 17200)
-                            img_m.set(0, x, y, img_o.get_pixel_bilinear(0, x, yy));
+#pragma omp parallel
+                    {
+                        std::vector<int> rowbuf(W);
+
+#pragma omp for schedule(dynamic, 16)
+                        for (int y = 0; y < H; y++)
+                        {
+                            if (!src_ok[y])
+                                continue;
+
+                            int y0 = (int)src_y[y];
+                            if (y0 > W - 2 || y0 < 0) // get_pixel_bilinear() returns a for its last row
+                                y0 = W - 2;
+
+                            img_o.get_pixel_bilinear_row(0, (size_t)y0, src_y[y] - (double)y0, rowbuf.data(), (size_t)W);
+
+                            uint16_t *out = dst + y;
+                            for (int x = 0; x < W; x++)
+                                out[(size_t)x * H] = (uint16_t)rowbuf[x];
+                        }
                     }
                 }
+                else
+                {
+                    for (int x = 0; x < 6004; x++)
+                    {
+                        for (int y = 0; y < 17200; y++)
+                        {
+                            double xx = 0, yy = y;
 
+                            t.reverse(&yy, &xx);
+
+                            if (yy >= 0 && yy < 17200)
+                                img_m.set(0, x, y, img_o.get_pixel_bilinear(0, x, yy));
+                        }
+                    }
+                }
             }
 
             // MSUVIS1 TODOREWORK
@@ -274,6 +354,38 @@ namespace elektro_arktika
                 msuvis_product.images.push_back({1, "MSUGS-VIS-2", "2", vis2_reader.getImage2(), 10, t2});
                 msuvis_product.images.push_back({2, "MSUGS-VIS-3", "3", vis3_reader.getImage2(), 10, t3});
 
+                if (project_vis2)
+                {
+                const std::string proj_cfg_path = std::string("projections_settings/") + (is_arktika ? "arktika_m" : "elektro_l") + std::to_string(sat_num) + "_msugs_vis2.json";
+                if (resources::resourceExists(proj_cfg_path))
+                {
+                    int norad = getMSUGSNorad(is_arktika, sat_num);
+                    double acquisition = 0;
+                    int count = 0;
+                    for (double t : vis1_reader.timestamps)
+                        if (t > 0)
+                        {
+                            acquisition += t;
+                            count++;
+                        }
+                    if (count > 0)
+                        acquisition /= count;
+
+                    std::optional<satdump::TLE> tle;
+                    if (norad > 0 && acquisition > 0)
+                        tle = satdump::db_keplers->get_from_norad_time(norad, (time_t)acquisition);
+
+                    if (tle.has_value())
+                    {
+                        msuvis_product.set_product_timestamp(acquisition);
+                        msuvis_product.set_proj_cfg_tle_timestamps(loadJsonFile(resources::getResourcePath(proj_cfg_path)), tle, vis1_reader.timestamps);
+                        logger->info("MSU-GS VIS2 projection enabled (NORAD " + std::to_string(norad) + ")");
+                    }
+                    else
+                        logger->warn("MSU-GS VIS2 projection skipped: no TLE for NORAD " + std::to_string(norad));
+                }
+                }
+
                 msuvis_product.save(directory);
                 dataset.products_list.push_back("MSUGS_VIS2");
 
@@ -302,18 +414,59 @@ namespace elektro_arktika
             channels_statuses[2] = DONE;
 #endif
 
-            for (int i = 0; i < 7; i++)
+            if (decode_ir)
+                for (int i = 0; i < 7; i++)
+                {
+                    channels_statuses[3 + i] = PROCESSING;
+                    logger->info("Channel IR " + std::to_string(i + 4) + "...");
+                    image::Image img = infr_reader->getImage(i);
+                    channels_statuses[3 + i] = SAVING;
+                    image::save_img(img, directory + "/MSU-GS-" + std::to_string(i + 4));
+                    channels_statuses[3 + i] = DONE;
+                }
+
+            const std::string dataset_dir = d_output_file_hint.substr(0, d_output_file_hint.rfind('/'));
+
+            // In-process RDAS alignment, crop/warp/merge into regular products.
+            try
             {
-                channels_statuses[3 + i] = PROCESSING;
-                logger->info("Channel IR " + std::to_string(i + 4) + "...");
-                image::Image img = infr_reader.getImage(i);
-                //        img.crop(183, 3294);
-                channels_statuses[3 + i] = SAVING;
-                image::save_img(img, directory + "/MSU-GS-" + std::to_string(i + 4));
-                channels_statuses[3 + i] = DONE;
+                RDASImages rdas_images;
+                image::Image vis1_ch1 = vis1_reader.getImage1();
+                image::Image vis1_ch2 = vis2_reader.getImage1();
+                image::Image vis1_ch3 = vis3_reader.getImage1();
+                image::Image vis2_ch1 = vis1_reader.getImage2();
+                image::Image vis2_ch2 = vis2_reader.getImage2();
+                image::Image vis2_ch3 = vis3_reader.getImage2();
+
+                rdas_images.vis1_ch1 = &vis1_ch1;
+                rdas_images.vis1_ch2 = &vis1_ch2;
+                rdas_images.vis1_ch3 = &vis1_ch3;
+                rdas_images.vis2_ch1 = &vis2_ch1;
+                rdas_images.vis2_ch2 = &vis2_ch2;
+                rdas_images.vis2_ch3 = &vis2_ch3;
+
+                RDASProcessOptions rdas_options;
+                rdas_options.satellite = std::string(is_arktika ? "M" : "L") + std::to_string(sat_num);
+                rdas_options.recalibrate = recalibrate_aligner.load();
+                rdas_options.output_directory = dataset_dir;
+                rdas_options.product_source = sat_name;
+                rdas_options.vis1_timestamp = meanValidTimestamp(vis1_reader.timestamps);
+                rdas_options.vis2_timestamp = meanValidTimestamp(vis2_reader.timestamps);
+                rdas_options.dataset = &dataset;
+
+                const RDASProcessResult rdas_result = processRDASLayers(rdas_images, rdas_options);
+                if (rdas_result.success)
+                    logger->info("RDAS layer alignment done (" + std::to_string(rdas_result.products.size()) +
+                                 (rdas_result.products.size() == 1 ? " product)" : " products)"));
+                else
+                    logger->warn(std::string("RDAS layer alignment skipped: ") + rdas_result.error);
+            }
+            catch (std::exception &e)
+            {
+                logger->error(std::string("RDAS layer alignment failed: ") + e.what());
             }
 
-            dataset.save(d_output_file_hint.substr(0, d_output_file_hint.rfind('/')));
+            dataset.save(dataset_dir);
         }
 
         void MSUGSDecoderModule::drawUI(bool window)
@@ -333,15 +486,14 @@ namespace elektro_arktika
                 for (int i = 0; i < 10; i++)
                 {
                     int frames = 0;
-
                     if (i == 0)
                         frames = vis1_reader.frames;
                     else if (i == 1)
                         frames = vis2_reader.frames;
                     else if (i == 2)
                         frames = vis3_reader.frames;
-                    else
-                        frames = infr_reader.frames;
+                    else if (infr_reader)
+                        frames = infr_reader->frames;
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
@@ -356,6 +508,13 @@ namespace elektro_arktika
             }
 
             drawProgressBar();
+
+            bool recalibrate = recalibrate_aligner.load();
+            if (ImGui::Checkbox("Recalibrate RDAS layers on this run##rdas_recalibrate", &recalibrate))
+                recalibrate_aligner.store(recalibrate);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Redo the MSU-GS layer calibration at the end of this decode.\n"
+                                  "Otherwise the saved calibration is reused.");
 
             ImGui::End();
         }

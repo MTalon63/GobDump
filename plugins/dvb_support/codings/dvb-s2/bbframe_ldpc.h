@@ -15,7 +15,7 @@ typedef int8_t code_type;
 
 namespace dvbs2
 {
-#if defined(__AVX2__OFF)
+#if defined(DVB_HAS_AVX2)
     typedef SIMD<code_type, 32> simd_type;
 #elif defined(__SSE4_1__)
     typedef SIMD<code_type, 16> simd_type;
@@ -49,6 +49,15 @@ namespace dvbs2
 
         int decode(int8_t *frame, int max_trials);
         void encode(uint8_t *frame);
+
+        void setEarlyTermination(bool enabled)
+        {
+            decoder.set_early_termination(enabled);
+        }
+        void setMinIterations(int n)
+        {
+            decoder.set_min_iterations(n);
+        }
 
         LDPCInterface *get_instance()
         {

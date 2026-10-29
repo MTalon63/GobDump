@@ -356,8 +356,15 @@ namespace dvbs2
             typedef GF::Value<M, POLY, TYPE> ValueType;
             typedef GF::Index<M, POLY, TYPE> IndexType;
 
+            // Tables are process-wide (static LOG/EXP), so keep one immortal instance per field.
+            GaloisField() { tables(); }
+
         private:
-            GF::Tables<M, POLY, TYPE> Tables;
+            static GF::Tables<M, POLY, TYPE> &tables()
+            {
+                static GF::Tables<M, POLY, TYPE> *instance = new GF::Tables<M, POLY, TYPE>();
+                return *instance;
+            }
         };
     } // namespace CODE
 }

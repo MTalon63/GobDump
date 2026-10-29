@@ -13,7 +13,9 @@ namespace dsp
     public:
         int nfilt;
         int ntaps;
+        int stride = 0;
         float **taps;
+        float *taps_flat = nullptr;
 
     public:
         PolyphaseBank();

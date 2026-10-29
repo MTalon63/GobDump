@@ -66,7 +66,7 @@ namespace satdump
 
                         for (std::vector<uint8_t> payload : frames)
                         {
-                            if (payload[40] == 0x1a && payload[41] == 0xcf && payload[42] == 0xfc && payload[43] == 0x1d && payload.size() >= 1024) // Check this is a CADU and not other IP data
+                            if (payload.size() >= 1064 && payload[40] == 0x1a && payload[41] == 0xcf && payload[42] == 0xfc && payload[43] == 0x1d) // Check this is a CADU and not other IP data
                             {
                                 write_data(&payload[40], 1024);
                             }

@@ -1,4 +1,5 @@
 #include "calibration.h"
+#include "products/image/calibration_units.h"
 #include <cmath>
 #include <ctime>
 #include <vector>
@@ -189,7 +190,7 @@ double radiance_to_reflectance(double irradiance, double radiance, time_t ltime,
     double cos_sza = cos_sol_za(year, month, day, hour, minute, lat, lon);
     // Use cos(80°) as lower bound, to avoid division by zero
     if (cos_sza < cos80)
-        return -999.99; // CALIBRATION_INVALID_VALUE; // 0.05;    // cos80;
+        return CALIBRATION_INVALID_VALUE;
     return /*100.0 **/ radiance / tr / cos_sza;
 }
 
@@ -217,7 +218,7 @@ double compensate_radiance_for_sun(double radiance, time_t ltime, float lat, flo
     double cos_sza = cos_sol_za(year, month, day, hour, minute, lat, lon);
     // Use cos(80°) as lower bound, to avoid division by zero
     if (cos_sza < 0.01) // cos80)
-        return -999.99; // CALIBRATION_INVALID_VALUE; // 0.05;    // cos80;
+        return CALIBRATION_INVALID_VALUE;
     return /*100.0 **/ radiance / tr / cos_sza;
 }
 

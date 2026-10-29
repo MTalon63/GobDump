@@ -36,15 +36,21 @@ namespace dvbs
 
         input_stream->flush();
 
-        // Process
-        while (in_sym_buffer >= VIT_BUF_SIZE)
+        // Drain whole blocks, then compact the tail once.
+        int consumed = 0;
+        while (in_sym_buffer - consumed >= VIT_BUF_SIZE)
         {
-            memcpy(output_stream->writeBuf, &sym_buffer[0], VIT_BUF_SIZE);
+            memcpy(output_stream->writeBuf, &sym_buffer[consumed], VIT_BUF_SIZE);
             output_stream->swap(VIT_BUF_SIZE); // Swap buffers ready to use for the viterbi
+            consumed += VIT_BUF_SIZE;
+        }
 
-            if (in_sym_buffer - VIT_BUF_SIZE > 0)
-                memmove(&sym_buffer[0], &sym_buffer[VIT_BUF_SIZE], in_sym_buffer - VIT_BUF_SIZE);
-            in_sym_buffer -= VIT_BUF_SIZE;
+        if (consumed > 0)
+        {
+            const int left = in_sym_buffer - consumed;
+            if (left > 0)
+                memmove(&sym_buffer[0], &sym_buffer[consumed], left);
+            in_sym_buffer = left;
         }
     }
 }

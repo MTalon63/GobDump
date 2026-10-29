@@ -144,13 +144,13 @@ namespace reedsolomon
 
     void ReedSolomon::deinterleave(uint8_t *data, uint8_t *output, uint8_t pos, uint8_t i)
     {
-        for (int ii = 0; ii < 255 - fill_bytes; ii++)
+        for (int ii = 0; ii < (fill_bytes == -1 ? 255 : 255 - fill_bytes); ii++)
             output[ii] = data[ii * i + pos];
     }
 
     void ReedSolomon::interleave(uint8_t *data, uint8_t *output, uint8_t pos, uint8_t i)
     {
-        for (int ii = 0; ii < 255 - fill_bytes; ii++)
+        for (int ii = 0; ii < (fill_bytes == -1 ? 255 : 255 - fill_bytes); ii++)
             output[ii * i + pos] = data[ii];
     }
 };

@@ -5,8 +5,9 @@
 
 namespace satdump
 {
-    SATDUMP_DLL extern const std::string RESOURCES_PATH;
-    SATDUMP_DLL extern const std::string LIBRARIES_PATH;
+    // Constant-initialized literals: RESPATH/LIBPATH read these during static init.
+    SATDUMP_DLL extern const char *const RESOURCES_PATH;
+    SATDUMP_DLL extern const char *const LIBRARIES_PATH;
     SATDUMP_DLL extern const std::string SATDUMP_VERSION;
     SATDUMP_DLL extern const std::string SATDUMP_VERSION_TAG;
 
@@ -14,4 +15,5 @@ namespace satdump
     SATDUMP_DLL extern std::string LIBPATH;
 
     std::string getSatDumpVersionName();
+    std::string getExecutableDir();
 } // namespace satdump

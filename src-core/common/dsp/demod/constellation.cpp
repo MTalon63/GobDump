@@ -1,4 +1,5 @@
 #include "constellation.h"
+#include <cstring>
 #include <cmath>
 // #include <iostream>
 #include <vector>
@@ -240,20 +241,22 @@ namespace dsp
 
         for (int i = 0; i < const_states; i++)
         {
-            // Calculate the distance between the sample and the current
-            // constellation point.
-            float dist = std::abs(std::complex<float>(sample - constellation[i]));
+            // Squared Euclidean distance: the Gaussian likelihood is exp(-d^2 / (2*sigma^2)).
+            complex_t diff = sample - constellation[i];
+            float d2 = diff.real * diff.real + diff.imag * diff.imag;
 
-            if (dist < min_dist)
+            if (d2 < min_dist)
             {
-                min_dist = dist;
+                min_dist = d2;
                 closest = constellation[i];
                 // c_i = i;
             }
 
-            // Calculate the probability factor from the distance and
-            // the scaled noise power.
-            float d = expf(-dist / npwr);
+            // Clamped so expf cannot underflow to 0 and logf cannot see -inf.
+            float e = -d2 / (2.0f * npwr);
+            if (!(e > -50.0f))
+                e = -50.0f;
+            float d = expf(e);
 
             v = i;
 
@@ -288,13 +291,13 @@ namespace dsp
 
     int8_t constellation_t::clamp(float x)
     {
-        while (x < -127 || x > 127)
-        {
-            x *= 0.5;
-            if (!std::isfinite(x))
-                return x;
-        }
-        return x;
+        if (!std::isfinite(x))
+            return 0;
+        if (x >= 127.0f)
+            return 127;
+        if (x <= -127.0f)
+            return -127;
+        return (int8_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
     }
 
     void constellation_t::make_lut(int resolution, float npwr)
@@ -306,23 +309,24 @@ namespace dsp
         // threads are using the LUT is race-free.
         auto new_lut = std::make_shared<SoftLUT>();
         new_lut->resolution = resolution;
-        new_lut->lut.resize(resolution);
+        new_lut->bits = const_bits;
+        new_lut->phase_error_lut.assign((size_t)resolution * resolution, 0.0f);
+        new_lut->bits_lut.assign((size_t)resolution * resolution * const_bits, 0);
 
         for (int x = 0; x < resolution; x++)
         {
-            new_lut->lut[x].resize(resolution);
-
             for (int y = 0; y < resolution; y++)
             {
                 float x_v = (float(x - resolution / 2) / float(resolution)) * 1.5f;
                 float y_v = (float(y - resolution / 2) / float(resolution)) * 1.5f;
 
-                std::vector<int8_t> bits(const_bits);
+                int8_t bits[8] = {0};
                 float phase_err;
+                size_t idx = (size_t)x * resolution + y;
 
-                demod_soft_calc(complex_t(x_v, y_v), bits.data(), &phase_err, npwr);
-
-                new_lut->lut[x][y] = {bits, phase_err};
+                demod_soft_calc(complex_t(x_v, y_v), bits, &phase_err, npwr);
+                new_lut->phase_error_lut[idx] = phase_err;
+                memcpy(&new_lut->bits_lut[idx * const_bits], bits, const_bits);
             }
         }
 
@@ -343,10 +347,8 @@ namespace dsp
     {
         if (const_bits != 5)
         {
-            // Grab one immutable snapshot of the table; it stays alive for the
-            // whole call even if the demod thread swaps in a new one.
             std::shared_ptr<const SoftLUT> lut_snapshot = std::atomic_load(&lut_ptr);
-            if (lut_snapshot == nullptr) // LUT not built yet
+            if (lut_snapshot == nullptr)
             {
                 demod_soft_calc(sample, bits, phase_error);
                 return;
@@ -355,29 +357,26 @@ namespace dsp
             int resolution = lut_snapshot->resolution;
 
             int x = (sample.real / 1.5) * resolution + resolution / 2;
-#if 1
             if (x < 0)
                 x = 0;
             if (x >= resolution)
                 x = resolution - 1;
-#endif
 
             int y = (sample.imag / 1.5) * resolution + resolution / 2;
-#if 1
             if (y < 0)
                 y = 0;
             if (y >= resolution)
                 y = resolution - 1;
-#endif
 
-            const SoftResult &v = lut_snapshot->lut[x][y];
+            size_t idx = (size_t)x * resolution + y;
+            const int8_t *src_bits = &lut_snapshot->bits_lut[idx * lut_snapshot->bits];
 
             if (bits != nullptr)
                 for (int i = 0; i < const_bits; i++)
-                    bits[i] = v.bits[i];
+                    bits[i] = src_bits[i];
 
             if (phase_error != nullptr)
-                *phase_error = v.phase_error;
+                *phase_error = lut_snapshot->phase_error_lut[idx];
         }
         else
         {

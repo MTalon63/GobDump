@@ -1,6 +1,7 @@
 #include "clock_recovery_mm_fast.h"
 #include "common/dsp/block.h"
 #include "common/dsp/window/window.h"
+#include <cmath>
 
 #define BRANCHLESS_CLIP(x, clip) (0.5 * (std::abs(x + clip) - std::abs(x - clip)))
 
@@ -86,7 +87,7 @@ namespace satdump
             memcpy(&buffer[ntaps - 1], ibuf, nsamples * sizeof(T));
             ouc = 0;
 
-            for (; inc < nsamples && ouc < nsamples * 2 /* TODO THIS PROBABLY SUCKS!!!!*/;)
+            for (; inc < nsamples && ouc < (int)oblk.max_size;)
             {
                 if constexpr (std::is_same_v<T, complex_t>)
                 {
@@ -126,6 +127,11 @@ namespace satdump
                     obuf[ouc++] = p_0T;
                 }
 
+                // omega/mu are feedback accumulators, and branched_clip is comparison-based so NaN passes
+                // straight through and sticks forever. Re-seed the loop instead of indexing with garbage.
+                if (!std::isfinite(phase_error))
+                    phase_error = 0;
+
                 if (omega_upd_cnt++ == 4)
                 {
                     omega_upd_cnt = 0;
@@ -137,6 +143,12 @@ namespace satdump
 
                 // Adjust phase
                 mu = mu + omega + mu_gain * phase_error;
+
+                if (!std::isfinite(omega))
+                    omega = omega_mid;
+                if (!std::isfinite(mu))
+                    mu = 0;
+
                 inc += int(floor(mu));
                 mu -= floor(mu);
                 if (inc < 0)

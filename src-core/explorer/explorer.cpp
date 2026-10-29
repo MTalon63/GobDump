@@ -47,21 +47,21 @@ namespace satdump
             processing_handler->setCanBeDraggedTo(false);
 
             // Enable dropping files onto the explorer.
-            eventBus->register_handler<imgui_utils::FileDropEvent>(
+            handler_ids.push_back(eventBus->register_handler<imgui_utils::FileDropEvent>(
                 [this](const imgui_utils::FileDropEvent &v)
                 {
                     for (auto &f : v.files)
                         tryOpenFileInExplorer(f);
-                });
+                }));
 
             // Enable adding handlers to the explorer externally
-            eventBus->register_handler<ExplorerAddHandlerEvent>([this](const ExplorerAddHandlerEvent &e) { addHandler(e.h, e.open, e.is_processing); });
+            handler_ids.push_back(eventBus->register_handler<ExplorerAddHandlerEvent>([this](const ExplorerAddHandlerEvent &e) { addHandler(e.h, e.open, e.is_processing); }));
 
             // Enable adding handlers to the explorer externally
-            eventBus->register_handler<ExplorerSelectHandlerEvent>([this](const ExplorerSelectHandlerEvent &e) { curr_handler = e.h; });
+            handler_ids.push_back(eventBus->register_handler<ExplorerSelectHandlerEvent>([this](const ExplorerSelectHandlerEvent &e) { curr_handler = e.h; }));
 
             // Returns all handlers of a specific type if available
-            eventBus->register_handler<GetAllOfTypeEvent>(
+            handler_ids.push_back(eventBus->register_handler<GetAllOfTypeEvent>(
                 [this](const GetAllOfTypeEvent &v)
                 {
                     std::function<void(std::shared_ptr<handlers::Handler> &)> recf;
@@ -79,10 +79,10 @@ namespace satdump
                     for (auto &sh : groups_handlers)
                         recf(sh.second);
                     recf(master_handler);
-                });
+                }));
 
             // Returns parent of handler if available
-            eventBus->register_handler<GetParentOfHandlerEvent>(
+            handler_ids.push_back(eventBus->register_handler<GetParentOfHandlerEvent>(
                 [this](const GetParentOfHandlerEvent &v)
                 {
                     v.p = nullptr;
@@ -102,10 +102,10 @@ namespace satdump
                     for (auto &sh : groups_handlers)
                         recf(sh.second);
                     recf(master_handler);
-                });
+                }));
 
             // Returns all handlers of a specific type if available
-            eventBus->register_handler<ExplorerLoadFileEvent>([this](const ExplorerLoadFileEvent &v) { tryOpenFileInExplorer(v.path); });
+            handler_ids.push_back(eventBus->register_handler<ExplorerLoadFileEvent>([this](const ExplorerLoadFileEvent &v) { tryOpenFileInExplorer(v.path); }));
 
 // Load tip of the day if we can, "randomly"
 #ifdef BUILD_IS_DEBUG
@@ -149,7 +149,11 @@ namespace satdump
             }
         }
 
-        ExplorerApplication::~ExplorerApplication() {}
+        ExplorerApplication::~ExplorerApplication()
+        {
+            for (uint64_t id : handler_ids)
+                eventBus->unregister_handler(id);
+        }
 
         void ExplorerApplication::addHandler(std::shared_ptr<handlers::Handler> h, bool open, bool is_processing)
         {

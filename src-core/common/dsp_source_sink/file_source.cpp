@@ -19,8 +19,14 @@ FileSource::~FileSource()
     stop();
     close();
     should_run = false;
+
+    // Wake a writer parked in swap() before joining, or the UI thread blocks forever.
+    logger->debug("FileSource teardown: waiting for work thread");
+    if (output_stream)
+        output_stream->stopWriter();
     if (work_thread.joinable())
         work_thread.join();
+    logger->debug("FileSource teardown: work thread stopped");
 }
 
 void FileSource::set_settings(nlohmann::json settings)
@@ -49,8 +55,6 @@ void FileSource::run_thread()
         if (is_started)
         {
             int read = baseband_reader.read_samples(output_stream->writeBuf, buffer_size);
-
-            output_stream->getDataSize();
 
             if (iq_swap)
                 for (int i = 0; i < read; i++)
@@ -103,10 +107,11 @@ void FileSource::start()
     start_time_point = std::chrono::steady_clock::now();
     total_samples = 0;
 
+    logger->debug("FileSource reading " + file_path + " as " + (std::string)baseband_type);
     baseband_reader.set_file(file_path, baseband_type);
     baseband_reader.should_repeat = true;
 
-    logger->debug("Opening %s filesize " PRIu64, file_path.c_str(), baseband_reader.filesize);
+    logger->debug("Opening %s filesize %" PRIu64, file_path.c_str(), baseband_reader.filesize);
 
     is_started = true;
 }
@@ -117,7 +122,15 @@ void FileSource::stop()
         return;
 
     is_started = false;
-    output_stream->flush();
+
+    // Wake a parked writer; start() allocates a fresh stream anyway.
+    if (output_stream)
+    {
+        output_stream->flush();
+        output_stream->stopWriter();
+    }
+
+    logger->debug("FileSource stopped");
 }
 
 void FileSource::close()

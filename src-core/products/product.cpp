@@ -51,7 +51,14 @@ namespace satdump
                 in_file.close();
                 cbor_data.pop_back();
             }
-            contents = nlohmann::json::from_cbor(cbor_data);
+            try
+            {
+                contents = nlohmann::json::from_cbor(cbor_data);
+            }
+            catch (std::exception &e)
+            {
+                throw satdump_exception("Could not parse product data from : " + file + " (" + e.what() + ")");
+            }
 
             instrument_name = contents["instrument"].get<std::string>();
             type = contents["type"].get<std::string>();
@@ -75,6 +82,19 @@ namespace satdump
                 final_products->load(path);
                 return final_products;
             }
+        }
+
+        std::shared_ptr<Product> loadProduct(std::string path, bool load_images)
+        {
+            if (load_images)
+                return loadProduct(path);
+
+            if (std::filesystem::is_directory(path) || (path.find("http") == 0 && path.find(".cbor") == std::string::npos))
+                path = path + "/product.cbor";
+
+            std::shared_ptr<Product> p = std::make_shared<Product>();
+            p->load(path);
+            return p;
         }
 
         std::map<std::string, RegisteredProduct> product_loaders;

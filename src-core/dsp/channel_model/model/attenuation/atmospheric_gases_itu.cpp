@@ -193,7 +193,7 @@ double AtmosphericGasesITU::F(size_t index, atmo_element_t element)
         break;
     case WATER_VAPOUR:
         f0 = d_table2[index][0];
-        df = d_table2[index][3] * 1e-4 * (d_oxygen_pressure * std::pow(theta, d_table1[index][4]) + d_table2[index][5] * d_water_pressure * std::pow(theta, d_table2[index][6]));
+        df = d_table2[index][3] * 1e-4 * (d_oxygen_pressure * std::pow(theta, d_table2[index][4]) + d_table2[index][5] * d_water_pressure * std::pow(theta, d_table2[index][6]));
         // TODO: Equation 6b
         delta = 0;
         break;

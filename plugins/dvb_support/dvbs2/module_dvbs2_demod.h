@@ -18,6 +18,7 @@
 
 #include "common/widgets/constellation_s2.h"
 #include "common/widgets/value_plot.h"
+#include <atomic>
 
 namespace satdump
 {
@@ -57,7 +58,17 @@ namespace satdump
                 bool d_pilots = false;
                 float d_sof_thresold = 0.6;
                 int d_max_ldpc_trials = 10;
+                bool d_ldpc_early_term = false;
+                int d_ldpc_min_iterations = 1;
                 bool d_multithread_bch = false;
+                // Adaptive LDPC iteration cap. The iteration count that is "plenty" scales
+                // with SNR: a clean signal converges in a couple of passes, a faded one
+                // needs the full cap. Set d_ldpc_adaptive=false to pin d_max_ldpc_trials.
+                bool d_ldpc_adaptive = true;
+                int d_ldpc_trials_good = 3;    // cap at/above this SNR
+                int d_ldpc_trials_bad = 20;    // cap at/below this SNR
+                float d_ldpc_snr_good = 12.0f; // dB
+                float d_ldpc_snr_bad = 8.0f;   // dB
 
                 // Running stuff
                 bool should_stop = false;
@@ -68,8 +79,9 @@ namespace satdump
                 int detected_modcod = -1;
                 bool detected_shortframes = false;
                 bool detected_pilots = false;
-                float ldpc_trials;
-                float bch_corrections;
+                float ldpc_trials = 0;
+                std::atomic<float> d_snr_shared{0.0f}; // SNR published by process() for process_s2()
+                float bch_corrections = 0;
                 widgets::ValuePlotViewer ldpc_viewer;
                 widgets::ValuePlotViewer bch_viewer;
 
@@ -90,7 +102,7 @@ namespace satdump
 
                 // Adaptive LLR scaling
                 int frame_counter = 0;
-                static constexpr int LLR_UPDATE_INTERVAL = 10;  // Update LUT every N frames
+                static constexpr int LLR_UPDATE_INTERVAL = 100;  // Update LUT every N frames
 
             public:
                 DVBS2DemodModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);

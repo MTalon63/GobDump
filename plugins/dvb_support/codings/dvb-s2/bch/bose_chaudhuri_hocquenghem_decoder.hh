@@ -39,18 +39,77 @@ namespace dvbs2
 
         private:
             ReedSolomonErrorCorrection<NR, FCR, GF> algorithm;
-            void
-            update_syndromes(uint8_t *poly, ValueType *syndromes, int begin, int end)
+            struct SyndByteTables
             {
-                for (int j = begin; j < end; ++j)
-                {
-                    ValueType coeff(get_be_bit(poly, j));
+                IndexType r8[NR];
+                ValueType T[256][NR];
+            };
+
+            static const SyndByteTables &synd_byte_tables()
+            {
+                static const SyndByteTables t = [] {
+                    SyndByteTables t;
                     IndexType root(FCR), pe(1);
                     for (int i = 0; i < NR; ++i)
                     {
-                        syndromes[i] = fma(root, syndromes[i], coeff);
+                        IndexType rp(0);
+                        ValueType rpow[8];
+                        for (int m = 0; m < 8; ++m)
+                        {
+                            rpow[m] = value(rp);
+                            rp *= root;
+                        }
+                        t.r8[i] = rp;
+                        for (int v = 0; v < 256; ++v)
+                        {
+                            ValueType acc = ValueType::zero();
+                            for (int m = 0; m < 8; ++m)
+                                if ((v >> m) & 1)
+                                    acc = acc + rpow[m];
+                            t.T[v][i] = acc;
+                        }
                         root *= pe;
                     }
+                    return t;
+                }();
+                return t;
+            }
+
+            void
+            update_syndromes(uint8_t *poly, ValueType *syndromes, int begin, int end)
+            {
+                IndexType roots[NR];
+                {
+                    IndexType root(FCR), pe(1);
+                    for (int i = 0; i < NR; ++i)
+                    {
+                        roots[i] = root;
+                        root *= pe;
+                    }
+                }
+
+                int j = begin;
+                for (; j < end && (j & 7) != 0; ++j)
+                {
+                    ValueType coeff(get_be_bit(poly, j));
+                    for (int i = 0; i < NR; ++i)
+                        syndromes[i] = fma(roots[i], syndromes[i], coeff);
+                }
+
+                // 8 bits per step: s_i <- s_i * r_i^8 + T[v][i]
+                const SyndByteTables &bt = synd_byte_tables();
+                for (; j + 8 <= end; j += 8)
+                {
+                    const ValueType *tv = bt.T[poly[j >> 3]];
+                    for (int i = 0; i < NR; ++i)
+                        syndromes[i] = fma(bt.r8[i], syndromes[i], tv[i]);
+                }
+
+                for (; j < end; ++j)
+                {
+                    ValueType coeff(get_be_bit(poly, j));
+                    for (int i = 0; i < NR; ++i)
+                        syndromes[i] = fma(roots[i], syndromes[i], coeff);
                 }
             }
 

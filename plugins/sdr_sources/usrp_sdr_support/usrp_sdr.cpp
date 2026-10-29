@@ -100,7 +100,7 @@ void USRPSource::open_channel()
         }
     }
 
-    samplerate_widget.set_list(available_samplerates, false);
+    samplerate_widget.set_list(available_samplerates, true);
 
     // Restore the previously selected samplerate if it's still available
     samplerate_widget.set_value(current_samplerate, 0);

@@ -20,6 +20,19 @@
                 "value": -1,
                 "name": "Year Override",
                 "description": "Override of the year used for timestamps.\nRequired when you are processing your file\nin a different year than the data was created."
+            },
+            "satellite_number": {
+                "type": "options",
+                "value": "Auto",
+                "name": "METEOR Satellite",
+                "options": [
+                    "Auto",
+                    "M2",
+                    "M2-2",
+                    "M2-3",
+                    "M2-4"
+                ],
+                "description": "Overrides the transmitted satellite ID"
             }
         },
         "work": {

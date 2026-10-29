@@ -50,6 +50,7 @@ namespace satdump
                 else if (raw_shift == true)
                 {
                     phase_delta = complex_t(cosf(freq_shift), sinf(freq_shift));
+                    phase = complex_t(1, 0);
                 }
             }
 

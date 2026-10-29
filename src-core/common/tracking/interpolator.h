@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <vector>
 #include <cstdint>
 
@@ -64,12 +65,8 @@ public:
         while (start_pos < (int)xy.size() && xvalue > xy[start_pos].first)
             start_pos++;
 
-        if (start_pos + 1 == (int)xy.size() )
-            start_pos--;
-        if (start_pos >= (int)xy.size() )
-            start_pos = xy.size()-2;
-        if (start_pos == 0)
-            start_pos++;
+        if (xy.size() > 1)
+            start_pos = std::min<int>(std::max(start_pos, 0), xy.size() - 2);
 
         double x1 = xy[start_pos].first;
         double x2 = xy[start_pos + 1].first;

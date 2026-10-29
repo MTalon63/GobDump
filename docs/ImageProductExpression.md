@@ -13,7 +13,7 @@ An expression is split into 2 parts, one of them optional. The first part is the
 | ch1, ch2, ch3      | RGB             |
 | ch1, ch2, ch3, ch4 | RGB Alpha       |
 
-![AVHRR ch2, ch2, ch1 Expression Example](img_exp/simple.png)
+![AVHRR ch2, ch2, ch1 Expression Example](images/img_exp/simple.png)
 
 The only variables available by default are raw channel values, named `chCHNAME`, with `CHNAME` being the instrument channel name, as displayed in the explorer under "Channels" (eg, `Channel 3a` becomes `ch3a`).
 
@@ -35,7 +35,7 @@ ch2, ch2, ch1
 
 This allows getting calibrated channels values as a variable.
 
-![Calibration Example](img_exp/cal.png)
+![Calibration Example](images/img_exp/cal.png)
 
 ```
 variable_name=(CHNAME, CALIBRATION_UNIT, MINCALVAL, MAXCALVAL);
@@ -52,7 +52,7 @@ If `CALIBRATION_UNIT` is set to `equalized`, this will return the raw channel eq
 
 This lets you loading and utilizing a Look-Up Table in the expression.
 
-![LUT Example](img_exp/lut.png)
+![LUT Example](images/img_exp/lut.png)
 
 ```
 lut_name=lut(path/to/lut.png)
@@ -82,7 +82,7 @@ lut(ch1, 0, 0), lut(ch1, 0, 1), lut(ch1, 0, 2)
 
 Loads an equirectangular image (such as a NASA Blue Marble) and (given the instrument has projection information) will return its pixel value so it can be used just like any other channel.
 
-![EquP Example](img_exp/equ.png)
+![EquP Example](images/img_exp/equ.png)
 
 ```
 equ_name=equp(path/to/image.png)
@@ -110,7 +110,7 @@ ch4 * (ch4) + (1-ch4) * bm(2)
 
 Since some equations can become relatively complex, this allows having a simple concept of macros to simplify them. **Do note that macros cannot be nested!**
 
-![Alignement Example, made obvious by some missing lines in AWS MWR Data](img_exp/macro.png)
+![Alignement Example, made obvious by some missing lines in AWS MWR Data](images/img_exp/macro.png)
 
 ```
 macro_name = equation
@@ -120,7 +120,7 @@ macro_name = equation
 
 For several instruments, channels are not actually aligned with one or the other, or may be of different resolutions. GobDump will automatically deal with this.
 
-![Macro Example](img_exp/align.png)
+![Macro Example](images/img_exp/align.png)
 
 The output alignment and size will be dictated by the first channel found in the equation. Therefore `ch2, ch2, ch1` will lead to `ch2` being used as the output size/offset, while `ch1 * 0 + ch2, ch2, ch1` will generate the same output but using `ch1` as an output reference. This behaviour can be overwritten by explicitely specifying `ref_channel=1` if necessary. Do note said channel *must* be part of the expression still.
 

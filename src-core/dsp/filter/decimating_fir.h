@@ -29,7 +29,7 @@ namespace satdump
             size_t in_buffer;
 
             int decimation = 1;
-            int decim_pos = 1;
+            int decim_pos = 0;
 
         public:
             uint32_t process(T *input, uint32_t nsamples, T *output);

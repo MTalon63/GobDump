@@ -49,31 +49,35 @@ namespace satdump
                 if (y2 < y1)
                     std::swap(y1, y2);
 
-                logger->critical("CROPPING %d %d, %d %d, %d %d", x1, y1, x2, y2, getImage().width(), getImage().height());
+                auto img_snap = getImage();
+                logger->critical("CROPPING %d %d, %d %d, %d %d", x1, y1, x2, y2, img_snap->width(), img_snap->height());
 
-                auto img = getImage().crop_to(x1, y1, x2, y2);
-                auto proj_cfg = image::get_metadata_proj_cfg(getImage());
-                if (proj_cfg.contains("transform2"))
+                auto img = img_snap->crop_to(x1, y1, x2, y2);
+                if (image::has_metadata_proj_cfg(*img_snap))
                 {
-                    x1 += proj_cfg["transform2"]["bx"].get<double>();
-                    y1 += proj_cfg["transform2"]["by"].get<double>();
-                    proj_cfg["transform2"]["bx"] = x1;
-                    proj_cfg["transform2"]["by"] = y1;
+                    auto proj_cfg = image::get_metadata_proj_cfg(*img_snap);
+                    if (proj_cfg.contains("transform2"))
+                    {
+                        x1 += proj_cfg["transform2"]["bx"].get<double>();
+                        y1 += proj_cfg["transform2"]["by"].get<double>();
+                        proj_cfg["transform2"]["bx"] = x1;
+                        proj_cfg["transform2"]["by"] = y1;
+                    }
+                    else
+                    {
+                        proj_cfg["width"] = img.width();
+                        proj_cfg["height"] = img.height();
+                        proj_cfg["transform2"] = ChannelTransform().init_affine(1, 1, x1, y1);
+                    }
+                    image::set_metadata_proj_cfg(img, proj_cfg);
                 }
-                else
-                {
-                    proj_cfg["width"] = img.width();
-                    proj_cfg["height"] = img.height();
-                    proj_cfg["transform2"] = ChannelTransform().init_affine(1, 1, x1, y1);
-                }
-                image::set_metadata_proj_cfg(img, proj_cfg);
                 geocorrect_image = false;
+
+                if (removeProjectionInfoFromCrop && image::has_metadata_proj_cfg(img))
+                    image::get_metadata(img).erase("proj_cfg");
 
                 auto sh = std::make_shared<ImageHandler>(img);
                 sh->image_name = image_name + _(" Crop");
-
-                if (removeProjectionInfoFromCrop)
-                    image::set_metadata_proj_cfg(img, {});
 
                 if (sendCropToRoot)
                 {
@@ -121,17 +125,26 @@ namespace satdump
                 if (ImGui::RadioButton(_("Rotate 270°"), rotate_image == 270))
                     needs_to_update = 1, rotate_image = 270;
 
-                if (image_proj_valid)
+                bool proj_valid_ui = false, calib_valid_ui = false;
+                image::ImgCalibHandler calib_ui;
+                {
+                    std::lock_guard<std::mutex> l(state_mtx);
+                    proj_valid_ui = image_proj_valid;
+                    calib_valid_ui = image_calib_valid;
+                    calib_ui = image_calib;
+                }
+
+                if (proj_valid_ui)
                     needs_to_update |= ImGui::Checkbox(_("Geo Correct"), &geocorrect_image); // TODOREWORK Disable if it can't be?
 
                 if (needs_to_be_disabled)
                     style::endDisabled();
 
-                if (image_calib_valid)
+                if (calib_valid_ui)
                 {
-                    ImGui::Text(_("Calibration Unit %s"), image_calib.unit.c_str());
-                    ImGui::Text(_("Calibration Min %f"), image_calib.min);
-                    ImGui::Text(_("Calibration Max %f"), image_calib.max);
+                    ImGui::Text(_("Calibration Unit %s"), calib_ui.unit.c_str());
+                    ImGui::Text(_("Calibration Min %f"), calib_ui.min);
+                    ImGui::Text(_("Calibration Max %f"), calib_ui.max);
                 }
 
                 if (needs_to_update)
@@ -284,7 +297,8 @@ namespace satdump
                     std::string save_type = "png";
                     satdump_cfg.tryAssignValueFromSatDumpGeneral(save_type, "image_format");
                     std::string default_path = satdump_cfg.getValueFromSatDumpDirectories<std::string>("default_image_output_directory");
-                    std::string saved_at = save_image_dialog(getSaneName(), default_path, _("Save Image"), &getImage(), &save_type);
+                    auto img_snap = getImage();
+                    std::string saved_at = save_image_dialog(getSaneName(), default_path, _("Save Image"), img_snap.get(), &save_type);
                     if (saved_at == "")
                         logger->info(_("Save cancelled"));
                     else
@@ -326,7 +340,12 @@ namespace satdump
             image_view.autoFitNextFrame |= widgets::MenuItemTooltip(u8"\uF69E", _("Fit"));
             image_view.select_crop_next |= widgets::MenuItemTooltip(u8"\uF69D", _("Crop"), NULL, image_view.select_crop_next);
 
-            if (image_proj_valid)
+            bool proj_valid_menu = false;
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                proj_valid_menu = image_proj_valid;
+            }
+            if (proj_valid_menu)
             {
                 if (rotate_image) // Projs do not work with rotated imagery
                     style::beginDisabled();
@@ -342,7 +361,7 @@ namespace satdump
                     {
                         std::string id = h->getName() + " (" + std::to_string(++n) + ")" + "##addtoproj";
                         if (ImGui::MenuItem(id.c_str()))
-                            h->addSubHandler(std::make_shared<ImageHandler>(getImage(), getName()), true);
+                            h->addSubHandler(std::make_shared<ImageHandler>(*getImage(), getName()), true);
                     }
 
                     if (n > 0)
@@ -351,7 +370,7 @@ namespace satdump
                     if (ImGui::MenuItem(_("New Projection")))
                     {
                         auto p = std::make_shared<ProjectionHandler>();
-                        p->addSubHandler(std::make_shared<ImageHandler>(getImage(), getName()), true);
+                        p->addSubHandler(std::make_shared<ImageHandler>(*getImage(), getName()), true);
                         eventBus->fire_event<explorer::ExplorerAddHandlerEvent>({p});
                     }
 
@@ -395,21 +414,40 @@ namespace satdump
             {
                 if (imgview_needs_update)
                 {
-                    image_view.update(getImage());
+                    {
+                        std::lock_guard<std::mutex> l(state_mtx);
+                        auto img_snap = getImage();
+                        image_view.update(*img_snap);
+                    }
                     imgview_needs_update = false;
 
                     image_view.mouseCallback = [this](float x, float y)
                     {
-                        auto &img = getImage();
+                        auto img = getImage();
                         ImGui::BeginTooltip();
 
-                        for (int i = 0; i < img.channels(); i++)
-                            ImGui::Text(_("Raw %d : %d F %f"), i + 1, img.get(i, x, y), img.getf(i, x, y));
-
-                        if (image_calib_valid && image.channels() == 1 && x >= 0 && y >= 0 && x < img.width() && y < img.height())
+                        projection::Projection proj_snap;
+                        image::ImgCalibHandler calib_snap;
+                        std::vector<float> fwd_lut_snap;
+                        bool proj_valid_snap = false, calib_valid_snap = false;
                         {
-                            double val = image_calib.getVal(img.getf(0, x, y));
-                            ImGui::Text(_("Unit : %f %s"), val, image_calib.unit.c_str());
+                            std::lock_guard<std::mutex> l(state_mtx);
+                            proj_valid_snap = image_proj_valid;
+                            if (proj_valid_snap)
+                                proj_snap = image_proj;
+                            calib_valid_snap = image_calib_valid;
+                            if (calib_valid_snap)
+                                calib_snap = image_calib;
+                            fwd_lut_snap = correct_fwd_lut;
+                        }
+
+                        for (int i = 0; i < img->channels(); i++)
+                            ImGui::Text(_("Raw %d : %d F %f"), i + 1, img->get(i, x, y), img->getf(i, x, y));
+
+                        if (calib_valid_snap && img->channels() == 1 && x >= 0 && y >= 0 && x < img->width() && y < img->height())
+                        {
+                            double val = calib_snap.getVal(img->getf(0, x, y));
+                            ImGui::Text(_("Unit : %f %s"), val, calib_snap.unit.c_str());
                         }
 
                         // Handle rotations
@@ -417,27 +455,27 @@ namespace satdump
                         {
                             if (rotate_image == 180)
                             {
-                                x = (img.width() - 1) - x;
-                                y = (img.height() - 1) - y;
+                                x = (img->width() - 1) - x;
+                                y = (img->height() - 1) - y;
                             }
                             else if (rotate_image == 90)
                             {
                                 auto x1 = y;
-                                y = (img.width() - 1) - x;
+                                y = (img->width() - 1) - x;
                                 x = x1;
                             }
                             else if (rotate_image == 270)
                             {
-                                auto x1 = (img.height() - 1) - y;
+                                auto x1 = (img->height() - 1) - y;
                                 y = x;
                                 x = x1;
                             }
                         }
 
-                        if (correct_fwd_lut.size() > 0)
+                        if (fwd_lut_snap.size() > 0)
                         {
-                            if (x >= 0 && x < correct_fwd_lut.size())
-                                x = correct_fwd_lut[x];
+                            if (x >= 0 && x < fwd_lut_snap.size())
+                                x = fwd_lut_snap[x];
                             else
                             {
                                 ImGui::Text(_("Error in geo-correction!"));
@@ -445,10 +483,10 @@ namespace satdump
                             }
                         }
 
-                        if (image_proj_valid)
+                        if (proj_valid_snap)
                         {
                             geodetic::geodetic_coords_t pos;
-                            if (image_proj.inverse(x, y, pos))
+                            if (proj_snap.inverse(x, y, pos))
                             {
                                 ImGui::Text(_("Lat : Invalid!"));
                                 ImGui::Text(_("Lon : Invalid!"));
@@ -497,7 +535,7 @@ namespace satdump
 
         void ImageHandler::setConfig(nlohmann::json p)
         {
-            rotate_image = getValueOrDefault(p["rotate180"], rotate_image);
+            rotate_image = getValueOrDefault(p["rotate"], rotate_image);
             geocorrect_image = getValueOrDefault(p["geocorrect"], geocorrect_image);
 
             try
@@ -524,8 +562,10 @@ namespace satdump
 
         void ImageHandler::setImage(image::Image &img) // TODOREWORK
         {
-            image::set_metadata(image, {});
-            image = img;
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                std::atomic_store(&image, std::make_shared<image::Image>(img));
+            }
             process();
         }
 
@@ -541,8 +581,9 @@ namespace satdump
         // TODOREWORK?
         bool ImageHandler::saveResult(std::string directory)
         {
-            image::save_img_safe(getImage(), directory + "/" + getSaneName());
-            return getImage().size();
+            auto img_snap = getImage();
+            image::save_img_safe(*img_snap, directory + "/" + getSaneName());
+            return img_snap->size();
         }
 
         void ImageHandler::do_process()
@@ -552,9 +593,11 @@ namespace satdump
             correct_fwd_lut.clear();
             correct_rev_lut.clear();
 
+            std::shared_ptr<image::Image> work;
+
             if (image_needs_processing)
             {
-                curr_image = image;
+                work = std::make_shared<image::Image>(*std::atomic_load(&image));
 
                 try
                 {
@@ -567,7 +610,7 @@ namespace satdump
                             if (image_filters.count(f.first))
                             {
                                 logger->info("Applying filter : " + f.first);
-                                image_filters[f.first].perform(curr_image, f.second.cfg, &f.second.progress);
+                                image_filters[f.first].perform(*work, f.second.cfg, &f.second.progress);
                             }
                             else
                             {
@@ -581,7 +624,7 @@ namespace satdump
                     if (geocorrect_image)
                     { // TODOREWORK handle disabling projs, etc
                         bool success = false;
-                        curr_image = image::earth_curvature::perform_geometric_correction(curr_image, success, &correct_rev_lut, &correct_fwd_lut);
+                        work = std::make_shared<image::Image>(image::earth_curvature::perform_geometric_correction(*work, success, &correct_rev_lut, &correct_fwd_lut));
                         if (!success)
                         {
                             logger->error(_("Failed Geo-Correcting image!"));
@@ -595,20 +638,18 @@ namespace satdump
                     logger->error(_("Error processing image! %s"), e.what());
                 }
             }
-            else
-                curr_image.clear();
 
             for (auto &f : active_filters)
                 f.second.progress = 0;
 
-            int pre_proj_w = curr_image.size() ? curr_image.width() : image.width();
-            int pre_proj_h = curr_image.size() ? curr_image.height() : image.height();
+            int pre_proj_w = work && work->size() ? work->width() : std::atomic_load(&image)->width();
+            int pre_proj_h = work && work->size() ? work->height() : std::atomic_load(&image)->height();
 
             // Special case for rotations
             try
             {
                 if (rotate_image)
-                    image::rotate(curr_image, rotate_image);
+                    image::rotate(*work, rotate_image);
             }
             catch (std::exception &e)
             {
@@ -616,19 +657,19 @@ namespace satdump
             }
 
             ////////////////////////
-            subhandlers_mtx.lock();
+            auto overlay_handlers = getAllSubHandlers();
             bool image_has_overlays = false;
 
-            for (auto &h : subhandlers)
+            for (auto &h : overlay_handlers)
                 if (h->getID() == "shapefile_handler")
                     image_has_overlays = true;
 
             if (image_has_overlays)
             {
-                if (curr_image.size() == 0)
-                    curr_image = image;
+                if (!work || work->size() == 0)
+                    work = std::make_shared<image::Image>(*std::atomic_load(&image));
 
-                nlohmann::json cfg = image::get_metadata_proj_cfg(curr_image);
+                nlohmann::json cfg = image::get_metadata_proj_cfg(*work);
                 cfg["width"] = pre_proj_w;
                 cfg["height"] = pre_proj_h;
                 std::unique_ptr<projection::Projection> p = std::make_unique<projection::Projection>();
@@ -659,38 +700,47 @@ namespace satdump
                         return {x2, y2};
                 };
 
-                for (int i = subhandlers.size() - 1; i >= 0; i--)
+                for (int i = overlay_handlers.size() - 1; i >= 0; i--)
                 {
-                    auto &h = subhandlers[i];
+                    auto &h = overlay_handlers[i];
                     if (h->getID() == "shapefile_handler")
                     {
                         ShapefileHandler *sh_h = (ShapefileHandler *)h.get();
                         logger->critical("Drawing OVERLAY!");
-                        sh_h->draw_to_image(curr_image, pfunc);
+                        sh_h->draw_to_image(*work, pfunc);
                     }
                 }
             }
 
-            subhandlers_mtx.unlock();
             ////////////////////////
 
+            std::atomic_store(&curr_image, work);
+
             // Update ImgView
-            has_second_image = image_needs_processing | image_has_overlays;
             imgview_needs_update = true;
 
-            image_proj_valid = false;
-            if (image::has_metadata_proj_cfg(image))
+            projection::Projection new_proj;
+            bool new_proj_valid = false;
+            if (image::has_metadata_proj_cfg(*std::atomic_load(&image)))
             {
-                image_proj = image::get_metadata_proj_cfg(image);
-                if (image_proj.init(0, 1))
-                    image_proj_valid = true;
+                new_proj = image::get_metadata_proj_cfg(*std::atomic_load(&image));
+                new_proj_valid = new_proj.init(0, 1);
             }
 
-            image_calib_valid = false;
-            if (image::has_metadata_calib_cfg(image))
+            image::ImgCalibHandler new_calib;
+            bool new_calib_valid = false;
+            if (image::has_metadata_calib_cfg(*std::atomic_load(&image)))
             {
-                image_calib = image::get_metadata_calib_cfg(image);
-                image_calib_valid = true;
+                new_calib = image::get_metadata_calib_cfg(*std::atomic_load(&image));
+                new_calib_valid = true;
+            }
+
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                image_proj = std::move(new_proj);
+                image_proj_valid = new_proj_valid;
+                image_calib = new_calib;
+                image_calib_valid = new_calib_valid;
             }
         }
     } // namespace handlers

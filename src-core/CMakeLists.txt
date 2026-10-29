@@ -16,8 +16,11 @@ endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx ${PROJECT_BINARY_DIR}/satdump_varst.cpp @ONLY)
 
+# NOTE: the generated satdump_varst.cpp is added explicitly below. Do NOT pass its absolute
+# path to GLOB_RECURSE: an absolute path makes CMake walk the whole binary tree, so any nested
+# CMake build under build/ (scratch/repro dirs) contributes a second copy and the link fails
+# with "multiple definition of satdump::SATDUMP_VERSION".
 file(GLOB_RECURSE GobDump_core_CPPS *.cpp
-    ${PROJECT_BINARY_DIR}/satdump_varst.cpp
     libs/aec/*.c
     libs/predict/*.c
     libs/bzlib/*.c
@@ -40,6 +43,10 @@ file(GLOB_RECURSE GobDump_core_CPPS *.cpp
 
 list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cpp)
 list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_BINARY_DIR}/src-core/satdump_varst.cpp)
+
+# The configured version TU must be listed explicitly, and only once. It cannot go through
+# GLOB_RECURSE (see above) and it cannot be left to the *.cpp glob, which runs in src-core/.
+list(APPEND GobDump_core_CPPS ${PROJECT_BINARY_DIR}/satdump_varst.cpp)
 
 ################################################################
 ####### AngelScript START
@@ -145,6 +152,34 @@ if(UNIX OR MINGW)
 endif()
 
 add_library(gobdump_core SHARED ${GobDump_core_CPPS})
+
+# Probe, don't hardcode: "-mavx2" is invalid off x86, and MSVC wants "/arch:AVX2".
+# fir.cpp dispatches to its AVX2 kernel at run time (target attribute), so only the M&M kernel
+# needs the build-time gate - it is inlined once per symbol.
+include(FindAVX)
+if(CXX_AVX2_FOUND)
+    set_source_files_properties(common/dsp/clock_recovery/clock_recovery_mm.cpp
+        PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS} -funroll-loops -ffast-math"
+                   COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+    if(MSVC AND NOT(CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+        set_source_files_properties(common/dsp/filter/fir.cpp
+            PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS}"
+                       COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+    endif()
+endif()
+
+# NEON twin of the two kernels above. FindNEON fails cleanly on x86, so this is inert there.
+# Deliberately no -ffast-math on the M&M TU: FMA contraction is already a rounding change and
+# that loop is a feedback loop.
+include(FindNEON)
+if(NEON_FOUND)
+    set_source_files_properties(common/dsp/filter/fir.cpp
+        PROPERTIES COMPILE_FLAGS "${NEON_C_FLAGS}"
+                   COMPILE_DEFINITIONS "DSP_HAVE_NEON_ISA=1")
+    set_source_files_properties(common/dsp/clock_recovery/clock_recovery_mm.cpp
+        PROPERTIES COMPILE_FLAGS "${NEON_C_FLAGS}"
+                   COMPILE_DEFINITIONS "DSP_HAVE_NEON_ISA=1")
+endif()
 target_include_directories(gobdump_core PUBLIC .)
 #target_precompile_headers(gobdump_core PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/nlohmann/json.hpp>")
 
@@ -319,13 +354,11 @@ else()
 
     include(CheckCXXSourceCompiles)
 
-    if(NOT APPLE)
-        # Check system has volk_32fc_x2_add_32fc
-        check_cxx_source_compiles("#include <volk/volk.h>\n int main() { volk_32fc_x2_add_32fc(nullptr,nullptr,nullptr,0); return 0; }" VOLK_HAS_volk_32fc_x2_add_32fc)
+    # Check system has volk_32fc_x2_add_32fc
+    check_cxx_source_compiles("#include <volk/volk.h>\n int main() { volk_32fc_x2_add_32fc(nullptr,nullptr,nullptr,0); return 0; }" VOLK_HAS_volk_32fc_x2_add_32fc)
 
-        if(NOT VOLK_HAS_volk_32fc_x2_add_32fc)
-            target_compile_definitions(gobdump_core PUBLIC VOLK_NO_volk_32fc_x2_add_32fc="1")
-        endif()
+    if(NOT VOLK_HAS_volk_32fc_x2_add_32fc)
+        target_compile_definitions(gobdump_core PUBLIC VOLK_NO_volk_32fc_x2_add_32fc="1")
     endif()
 endif()
 
@@ -344,3 +377,10 @@ endif()
 
 install(DIRECTORY . DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gobdump FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY . DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gobdump FILES_MATCHING PATTERN "*.hpp")
+
+# Scratch perf tools (build/perf): built by the real build system so they can never drift from
+# gobdump_core's class layout. Off by default; -DBUILD_PERF_SCRATCH=1 to enable.
+option(BUILD_PERF_SCRATCH "Build scratch perf tools from build/perf" OFF)
+if(BUILD_PERF_SCRATCH)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/build/perf ${CMAKE_BINARY_DIR}/scratch-perf)
+endif()

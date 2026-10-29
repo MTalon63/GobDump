@@ -1185,7 +1185,7 @@ static inline SIMD<int64_t, WIDTH> vsign(SIMD<int64_t, WIDTH> a, SIMD<int64_t, W
 	return tmp;
 }
 
-#ifdef __AVX2__OFF
+#ifdef DVB_HAS_AVX2
 #include "avx2.hh"
 #else
 #ifdef __SSE4_1__

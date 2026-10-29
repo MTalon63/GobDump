@@ -92,12 +92,13 @@ namespace satdump
             void asyncProcess()
             {
                 is_processing_mtx.lock();
-                if (is_processing && async_thread.joinable())
+                if (is_processing)
                 {
                     printf("ALREADY PROCESSING!!!!\n"); // TODOREWORK
                     is_processing_mtx.unlock();
                     return;
                 }
+                is_processing = true;
                 is_processing_mtx.unlock();
 
                 try
@@ -108,9 +109,6 @@ namespace satdump
                 {
                 }
 
-                is_processing_mtx.lock();
-                is_processing = true;
-                is_processing_mtx.unlock();
                 auto fun = [this]() { process(); };
                 async_thread = std::thread(fun);
             }

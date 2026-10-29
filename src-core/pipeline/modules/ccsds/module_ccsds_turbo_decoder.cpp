@@ -243,7 +243,7 @@ namespace satdump
                     if (input_data_type == DATA_FILE)
                         progress = data_in.tellg();
 
-                    if (time(NULL) % 10 == 0 && lastTime != time(NULL))
+                    if (input_data_type == DATA_FILE && time(NULL) % 10 == 0 && lastTime != time(NULL))
                     {
                         lastTime = time(NULL);
                         std::string lock_state = locked ? "SYNCED" : "NOSYNC";

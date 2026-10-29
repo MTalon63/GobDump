@@ -64,11 +64,13 @@ void rotate_soft(int8_t *soft, int size, phase_t phase, bool iqswap)
 
 int8_t clamp(float x)
 {
-    if (x < -128.0)
+    if (!std::isfinite(x))
+        return 0;
+    if (x <= -127.0f)
         return -127;
-    if (x > 127.0)
+    if (x >= 127.0f)
         return 127;
-    return x;
+    return (int8_t)std::round(x);
 }
 
 void rotate_soft_arbitrary(int8_t *soft, int size, float phase)

@@ -3,6 +3,7 @@
 #include "common/dsp/io/baseband_type.h"
 #include "core/config.h"
 #include "core/exception.h"
+#include "logger.h"
 #include <complex.h>
 #include <cstddef>
 #include <cstdint>
@@ -84,7 +85,7 @@ namespace satdump
             }
             else if (format == CS32)
             {
-                volk_32f_s32f_convert_32i((int32_t *)buffer_convert, (float *)ibuf, 2147483648 /*-1, but float*/, nsam * 2);
+                volk_32f_s32f_convert_32i((int32_t *)buffer_convert, (float *)ibuf, 2147483520.0f /*-1, but float*/, nsam * 2);
                 write_ptr = buffer_convert;
                 write_sz = nsam * 2 * sizeof(int32_t);
             }
@@ -103,11 +104,9 @@ namespace satdump
 
             size_t written = fwrite(write_ptr, write_sz, 1, file_stream);
             if (written == 0)
-            {
-                printf("Error writing!\n"); // TODOREWORK Better info
-            }
-
-            total_written_raw += write_sz;
+                logger->error("Error writing %d bytes to %s", (int)write_sz, filepath.c_str());
+            else
+                total_written_raw += write_sz;
 
             inputs[0].fifo->free(iblk);
 

@@ -19,8 +19,6 @@ QPSK only.
 This is meant to automatically detect the
 utilized puncturing rate, automatically lock
 and start decoding input data.
-
-TODO : Cleanup!!!!
 */
 namespace viterbi
 {

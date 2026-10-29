@@ -33,6 +33,8 @@ namespace satdump
                 bool d_post_costas_dc_blocking = false;
                 bool d_has_carrier = false;
 
+                float d_sym_pow = 1.0f;
+
                 float d_clock_gain_omega = pow(8.7e-3, 2) / 4.0;
                 float d_clock_mu = 0.5f;
                 float d_clock_gain_mu = 8.7e-3;

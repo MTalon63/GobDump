@@ -33,6 +33,7 @@ namespace satdump
             // Huge thanks to https://gist.github.com/PhirePhly/3080633
             jpeg_error_struct jerr;
             jpeg_decompress_struct cinfo;
+            memset(&cinfo, 0, sizeof(cinfo));
 
             // Init
             cinfo.err = jpeg_std_error(&jerr.pub);
@@ -42,6 +43,7 @@ namespace satdump
             {
                 // Free memory
                 delete[] jpeg_decomp;
+                jpeg_destroy_decompress(&cinfo);
                 return img;
             }
 
@@ -53,13 +55,13 @@ namespace satdump
             jpeg_start_decompress(&cinfo);
 
             // Init output buffer
-            jpeg_decomp = new unsigned char[cinfo.image_width * cinfo.image_height];
+            jpeg_decomp = new unsigned char[cinfo.image_width * cinfo.image_height * cinfo.output_components];
 
             // Decompress
             while (cinfo.output_scanline < cinfo.output_height)
             {
                 unsigned char *buffer_array[1];
-                buffer_array[0] = jpeg_decomp + (cinfo.output_scanline) * cinfo.image_width;
+                buffer_array[0] = jpeg_decomp + (cinfo.output_scanline) * cinfo.image_width * cinfo.output_components;
                 jpeg_read_scanlines(&cinfo, buffer_array, 1);
             }
 

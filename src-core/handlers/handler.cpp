@@ -22,6 +22,8 @@ namespace satdump
 
         bool Handler::isParent(const std::shared_ptr<Handler> &dragged, const std::shared_ptr<Handler> &potential_child)
         {
+            std::lock_guard<std::recursive_mutex> l(dragged->subhandlers_mtx);
+
             for (auto &s : dragged->subhandlers)
             {
                 if (s == potential_child)
@@ -34,6 +36,8 @@ namespace satdump
 
         bool Handler::drawTreeMenu(std::shared_ptr<Handler> &h)
         {
+            std::lock_guard<std::recursive_mutex> l(subhandlers_mtx);
+
             bool handler_contained = false;
 
             struct DragDropWip

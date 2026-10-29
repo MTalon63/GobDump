@@ -19,7 +19,7 @@ namespace satdump
         satellite_observer_station = predict_create_observer("Main", 0, 0, 0);
 
         // Updates on registry updates
-        eventBus->register_handler<TLEsUpdatedEvent>(
+        tle_updated_handler_id = eventBus->register_handler<TLEsUpdatedEvent>(
             [this](TLEsUpdatedEvent)
             {
                 general_mutex.lock();
@@ -42,6 +42,8 @@ namespace satdump
 
     ObjectTracker::~ObjectTracker()
     {
+        eventBus->unregister_handler(tle_updated_handler_id);
+
         backend_should_run = false;
         if (backend_thread.joinable())
             backend_thread.join();

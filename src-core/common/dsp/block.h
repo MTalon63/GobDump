@@ -20,15 +20,26 @@ namespace dsp
     {
     protected:
         std::thread d_thread;
-        // Written by the control thread, polled by the worker: as a plain bool at -O3 the load could be
-        // hoisted out of the loop below, so stop() was free to never be observed.
+        // Polled by the worker thread, so it must be atomic.
         std::atomic<bool> should_run{false};
+        std::atomic<bool> stop_called{false};
         virtual void work() = 0;
         bool d_got_input;
         void run()
         {
+            // Only natural end-of-stream may stop our writer; stop() handles teardown.
+            bool natural_eof = false;
             while (should_run)
+            {
                 work();
+                if (input_stream && input_stream->exhausted())
+                {
+                    natural_eof = true;
+                    break;
+                }
+            }
+            if (natural_eof && output_stream)
+                output_stream->stopWriter();
         }
 
     public:
@@ -51,11 +62,27 @@ namespace dsp
         }
         virtual void start()
         {
+            stop_called = false;
+
+            // Clear stale stop flags so the pipeline can restart.
+            if (d_got_input && input_stream)
+            {
+                input_stream->clearReadStop();
+                input_stream->clearWriteStop();
+            }
+            if (output_stream)
+            {
+                output_stream->clearWriteStop();
+                output_stream->clearReadStop();
+            }
+
             should_run = true;
             d_thread = std::thread(&Block::run, this);
         }
         virtual void stop()
         {
+            if (stop_called.exchange(true) || !should_run)
+                return;
             should_run = false;
 
             if (d_got_input)

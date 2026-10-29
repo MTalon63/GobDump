@@ -36,7 +36,7 @@ namespace satdump
             else if constexpr (std::is_same_v<T, float>)
             {
                 for (uint32_t i = 0; i < nsamples; i++)
-                    mag_buf[i] = fabsf(out[i]);
+                    mag_buf[i] = fabsf(in[i]);
             }
 
             // Calculate with gain

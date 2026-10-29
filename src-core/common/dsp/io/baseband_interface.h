@@ -77,8 +77,9 @@ namespace dsp
                 filesize = getFilesize(file_path);
                 progress = 0;
 
-                is_wav |= wav::isValidWav(wav::parseHeaderFromFileWav(file_path));
-                is_rf64 |= wav::isValidRF64(wav::parseHeaderFromFileWav(file_path));
+                // Reset per file: a stale WAV flag mis-parsed later raw files.
+                is_wav = wav::isValidWav(wav::parseHeaderFromFileWav(file_path));
+                is_rf64 = wav::isValidRF64(wav::parseHeaderFromFileWav(file_path));
             }
 
             if (this->format != format)
@@ -232,10 +233,6 @@ namespace dsp
             if (buffer_size < 0)
                 buffer_size = 0;
 
-            // if (is_wav)
-            //     for (int i = 0; i < buffer_size; i++)
-            //         output_buffer[i] = complex_t(output_buffer[i].imag, output_buffer[i].real);
-
             progress = input_file.tellg();
 
             main_mtx.unlock();
@@ -311,7 +308,10 @@ namespace dsp
 
         inline void close()
         {
+            // Don't close the file under an in-flight read.
+            main_mtx.lock();
             input_file.close();
+            main_mtx.unlock();
         }
 
         inline bool is_eof()

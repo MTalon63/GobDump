@@ -1,6 +1,8 @@
 #define SATDUMP_DLL_EXPORT 1
 #include "satdump_vars.h"
 
+#include <filesystem>
+
 #if defined(__APPLE__)
 #include <filesystem>
 #include <libgen.h>
@@ -13,6 +15,9 @@
 #include <shlwapi.h>
 #define LIBRARIES_SEARCH_PATH "\\..\\lib\\gobdump\\"
 #define RESOURCES_SEARCH_PATH "\\..\\"
+#else
+#include <limits.h>
+#include <unistd.h>
 #endif
 
 namespace satdump
@@ -71,11 +76,89 @@ namespace satdump
     std::string init_res_path() { return "./"; }
     std::string init_lib_path() { return "./"; }
 #else
-    std::string init_res_path() { return std::string(RESOURCES_PATH); }
-    std::string init_lib_path() { return std::string(LIBRARIES_PATH); }
+    std::string ensure_slash(std::string path)
+    {
+        if (!path.empty() && path.back() != '/')
+            path += '/';
+        return path;
+    }
+
+    bool is_resources_dir(const std::string &path)
+    {
+        std::error_code ec;
+        return std::filesystem::is_directory(path + "resources", ec);
+    }
+
+    bool is_libraries_dir(const std::string &path)
+    {
+        std::error_code ec;
+        return std::filesystem::is_directory(path + "plugins", ec);
+    }
+
+    std::string init_res_path()
+    {
+        // Prefer exe-relative paths so build trees and portable copies work.
+        const std::string exe_dir = getExecutableDir();
+        if (!exe_dir.empty())
+        {
+            const std::string candidates[] = {
+                ensure_slash(exe_dir),
+                ensure_slash(exe_dir + "/.."),
+                ensure_slash(exe_dir + "/../share/gobdump"),
+            };
+            for (const std::string &candidate : candidates)
+                if (is_resources_dir(candidate))
+                    return candidate;
+        }
+
+        return ensure_slash(std::string(RESOURCES_PATH));
+    }
+
+    std::string init_lib_path()
+    {
+        const std::string exe_dir = getExecutableDir();
+        if (!exe_dir.empty())
+        {
+            const std::string candidates[] = {
+                ensure_slash(exe_dir),
+                ensure_slash(exe_dir + "/../lib/gobdump"),
+                ensure_slash(exe_dir + "/../lib64/gobdump"),
+            };
+            for (const std::string &candidate : candidates)
+                if (is_libraries_dir(candidate))
+                    return candidate;
+        }
+
+        return ensure_slash(std::string(LIBRARIES_PATH));
+    }
 #endif
     std::string RESPATH = init_res_path();
     std::string LIBPATH = init_lib_path();
 
     std::string getSatDumpVersionName() { return "GobDump v" + (std::string)SATDUMP_VERSION + (satdump::SATDUMP_VERSION_TAG.size() ? " (" + satdump::SATDUMP_VERSION_TAG + ")" : ""); }
+
+    std::string getExecutableDir()
+    {
+#if defined(__APPLE__)
+        uint32_t bufsize = 0;
+        _NSGetExecutablePath(nullptr, &bufsize);
+        std::string exec_path(bufsize, '\0');
+        if (_NSGetExecutablePath(exec_path.data(), &bufsize) != 0)
+            return "";
+        return std::filesystem::path(exec_path.c_str()).parent_path().string();
+#elif defined(_WIN32)
+        char exe_path[MAX_PATH];
+        if (GetModuleFileNameA(NULL, exe_path, MAX_PATH) == 0)
+            return "";
+        PathRemoveFileSpecA(exe_path);
+        return std::string(exe_path);
+#else
+        char exe_path[PATH_MAX];
+        ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+        if (len <= 0)
+            return "";
+        exe_path[len] = '\0';
+        return std::filesystem::path(exe_path).parent_path().string();
+#endif
+    }
 } // namespace satdump

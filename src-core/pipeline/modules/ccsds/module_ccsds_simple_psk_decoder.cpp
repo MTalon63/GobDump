@@ -3,9 +3,11 @@
 #include "common/codings/differential/qpsk_diff.h"
 #include "common/codings/randomization.h"
 #include "common/codings/soft_reader.h"
+#include "common/widgets/constellation.h"
 #include "core/exception.h"
 #include "imgui/imgui.h"
 #include "logger.h"
+#include <algorithm>
 
 // Return filesize
 uint64_t getFilesize(std::string filepath);
@@ -42,10 +44,8 @@ namespace satdump
                   d_rs_type(parameters.count("rs_type") > 0 ? parameters["rs_type"].get<std::string>() : "none"),
                   d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false)
             {
-                bits_out = new uint8_t[d_buffer_size * 2];
-                soft_buffer = new int8_t[d_buffer_size];
-                qpsk_diff_buffer = new uint8_t[d_cadu_size * 2];
-                frame_buffer = new uint8_t[d_cadu_size * 2]; // Larger by safety
+                if (d_rs_interleaving_depth > 10)
+                    throw satdump_exception("CCSDS Simple PSK Decoder : rs_i must be <= 10!");
 
                 // Get constellation
                 if (d_constellation_str == "bpsk")
@@ -74,6 +74,21 @@ namespace satdump
 
                 deframer = std::make_shared<deframing::BPSK_CCSDS_Deframer>(d_cadu_size, asm_sync);
                 deframer_qpsk = std::make_shared<deframing::BPSK_CCSDS_Deframer>(d_cadu_size, asm_sync); // For QPSK without NRZ-M which gets split into 2 BPSK deframers
+                if (parameters.count("asm_acquire_errors") > 0)
+                {
+                    deframer->SYNC_ACQUIRE_ERRORS = parameters["asm_acquire_errors"].get<int>();
+                    deframer_qpsk->SYNC_ACQUIRE_ERRORS = deframer->SYNC_ACQUIRE_ERRORS;
+                }
+                if (parameters.count("asm_good_frames") > 0)
+                {
+                    deframer->SYNC_GOOD_FRAMES = parameters["asm_good_frames"].get<int>();
+                    deframer_qpsk->SYNC_GOOD_FRAMES = deframer->SYNC_GOOD_FRAMES;
+                }
+                if (parameters.count("asm_confirm") > 0)
+                {
+                    deframer->SYNC_CONFIRM = parameters["asm_confirm"].get<bool>();
+                    deframer_qpsk->SYNC_CONFIRM = deframer->SYNC_CONFIRM;
+                }
                 if (d_rs_interleaving_depth != 0)
                     reed_solomon = std::make_shared<reedsolomon::ReedSolomon>(rstype, d_rs_fill_bytes);
 
@@ -85,6 +100,10 @@ namespace satdump
                     logger->info("Frames will be padded!");
                 }
 
+                bits_out = new uint8_t[d_buffer_size * 2];
+                soft_buffer = new int8_t[d_buffer_size];
+                qpsk_diff_buffer = new uint8_t[d_cadu_size * 2];
+                frame_buffer = new uint8_t[d_cadu_size * 2]; // Larger by safety
                 if (d_constellation == dsp::QPSK && (d_oqpsk_method_2 || d_oqpsk_method_3))
                     soft_buffer2 = new int8_t[d_buffer_size];
             }
@@ -345,25 +364,11 @@ namespace satdump
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
+                    // Bounded by the buffer size, not a fixed 2048.
                     if (d_constellation == dsp::BPSK)
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i] / 127.0) * 130 * ui_scale) % int(200 * ui_scale),
-                                                              ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + rng.gasdev() * 14 * ui_scale) % int(200 * ui_scale)),
-                                                       2 * ui_scale, style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_buffer_size, 2048), 1, &rng, 0.8f, 2 * ui_scale);
                     else
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            draw_list->AddCircleFilled(
-                                ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0) * 100 * ui_scale) % int(200 * ui_scale),
-                                       ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0) * 100 * ui_scale) % int(200 * ui_scale)),
-                                2 * ui_scale, style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_buffer_size / 2, 2048), 2, &rng, 0.8f, 2 * ui_scale);
 
                     draw_list->PopClipRect();
                     ImGui::Dummy(ImVec2(200 * ui_scale + 3, 200 * ui_scale + 3));

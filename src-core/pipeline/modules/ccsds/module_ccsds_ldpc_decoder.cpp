@@ -5,6 +5,7 @@
 #include "common/codings/rotation.h"
 #include "common/dsp/complex.h"
 #include "common/utils.h"
+#include "common/widgets/constellation.h"
 #include "common/widgets/themed_widgets.h"
 #include "core/exception.h"
 #include "logger.h"
@@ -135,12 +136,6 @@ namespace satdump
                     }
                 }
 
-                soft_buffer = new int8_t[d_ldpc_frame_size];
-                frames_in_ldpc_buffer = 0;
-                ldpc_input_buffer = new int8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
-                ldpc_output_buffer = new uint8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
-                deframer_buffer = new uint8_t[d_ldpc_frame_size * 64];
-
                 memset(llr_scale_history, 0, sizeof(llr_scale_history));
                 memset(ldpc_iter_history, 0, sizeof(ldpc_iter_history));
 
@@ -182,6 +177,12 @@ namespace satdump
 
                 logger->info("LDPC algorithm: %s (alpha %.3f, offset-beta %.3f), %d iterations", codings::ldpc::ldpc_algorithm_to_string(d_ldpc_algorithm).c_str(),
                              d_ldpc_nms_alpha_q8 / 256.0f, d_ldpc_offset_beta_q8 / 256.0f, d_ldpc_cap_iterations);
+
+                soft_buffer = new int8_t[d_ldpc_frame_size];
+                frames_in_ldpc_buffer = 0;
+                ldpc_input_buffer = new int8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
+                ldpc_output_buffer = new uint8_t[(d_ldpc_frame_size - d_ldpc_asm_size) * d_ldpc_simd];
+                deframer_buffer = new uint8_t[d_ldpc_frame_size * 64];
 
                 is_started = true;
 
@@ -554,26 +555,13 @@ namespace satdump
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
+                    // Bounded by the frame size, not a fixed 2048.
                     if (d_constellation == dsp::BPSK)
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i] / 127.0f) * col_w * 0.65f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (float)rng.gasdev() * col_w * 0.07f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_ldpc_frame_size, 2048), 1,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
                     else
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_ldpc_frame_size / 2, 2048), 2,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
 
                     draw_list->PopClipRect();
                     ImGui::Dummy(ImVec2(col_w, col_w));

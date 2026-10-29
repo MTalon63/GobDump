@@ -2,6 +2,7 @@
 #include "imgui/imgui.h"
 #include "logger.h"
 
+#include "handlers/product/product_handler.h"
 #include "products/dataset.h"
 #include "products/product_process.h"
 
@@ -29,20 +30,41 @@ namespace satdump
             {
                 logger->add_sink(logger_sink);
 
+                try
+                {
 #if 0 // TODOREWORK Make a process_dataset again?
         satdump::process_dataset(d_input_file);
 #else
                 satdump::products::DataSet dataset;
                 dataset.load(d_input_file);
 
+                std::string pro_dir = std::filesystem::path(d_input_file).parent_path().string();
+
                 for (auto d : dataset.products_list)
                 {
-                    std::string pro_path = std::filesystem::path(d_input_file).parent_path().string() + "/" + d;
+                    std::string pro_path = pro_dir + "/" + d;
                     logger->warn("Processing product at " + pro_path);
+
+                    // Skip no-autogen products; image load costs ~197 MiB and is discarded.
+                    {
+                        auto meta = satdump::products::loadProduct(pro_path, false);
+                        if (!satdump::handlers::has_autogen_preset_for(meta->instrument_name))
+                        {
+                            logger->debug("No autogen preset for " + meta->instrument_name + ", skipping image load");
+                            continue;
+                        }
+                    }
+
                     auto prod = satdump::products::loadProduct(pro_path);
-                    satdump::products::process_product_with_handler(prod, pro_path);
+                    satdump::products::process_product_with_handler(prod, pro_dir);
                 }
 #endif
+                }
+                catch (...)
+                {
+                    logger->del_sink(logger_sink);
+                    throw;
+                }
 
                 logger->del_sink(logger_sink);
             }
