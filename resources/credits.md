@@ -1,9 +1,13 @@
 # GobDump
 
-This is a fork of SatDump. It should function exactly same, below are links for the original project and credits.
+GobDump is a fork of SatDump. It should function exactly the same; the original project is credited below.
 
-First time here? See the reference documents below to get started using GobDump.
-[About](https://www.satdump.org/about/) | [Basic Usage](https://www.satdump.org/posts/basic-usage/) | [Docs](https://docs.satdump.org/)
+**GobDump maintainer:** MTalon63
+
+- [GobDump documentation](https://mtalon63.github.io/GobDump/)
+- [Report a GobDump issue](https://github.com/MTalon63/GobDump/issues)
+
+Please report GobDump problems to the GobDump issue tracker, not to the original SatDump authors.
 
 # Libraries
 
@@ -93,7 +97,9 @@ _Those libraries above are included directly as they are either header-only, not
 - [PX Sans Nouveaux](https://www.dafont.com/px-sans-nouveaux.font), for Windows 98 theme
   _3270 Nerd Font and Roboto have been merged into a single font.ttf_
 
-# Developers
+# Original SatDump Authors
+
+GobDump is based on SatDump. The people below authored the original project and are credited here for their work. GobDump-specific issues belong on the GobDump issue tracker above.
 
 **Lead Developer:** Aang23 (F4LAU)
 

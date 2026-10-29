@@ -9,11 +9,11 @@ Code quality of new features will be abysmal compared to SatDump, but as long as
 
 A generic satellite data processing software.
 
-There now also is a [Matrix](https://matrix.to/#/#satdump:altillimity.com) room if you want to chat! Otherwise, a [Discord](https://discord.gg/ctt3M8pRYG) bridge to the Matrix is also available.
+If something is broken, please report it on the [GobDump issue tracker](https://github.com/MTalon63/GobDump/issues). GobDump reports should go there, not to the original SatDump project.
 
 # Introduction
 
-_Note : This is a very basic "how-to" skipping details and assuming some knowledge of what you are doing. For more details and advanced use cases, please see the [detailed documentation](https://docs.satdump.org)._
+_Note : This is a very basic "how-to" skipping details and assuming some knowledge of what you are doing. For more details and advanced use cases, please see the [GobDump documentation](https://mtalon63.github.io/GobDump/)._
 
 ## GUI Version
 
@@ -58,7 +58,7 @@ Sample command :
 gobdump pipeline metop_ahrpt baseband /home/user/metop_baseband.cs16 metop_output_directory --samplerate 6e6 --baseband_format cs16
 ```
 
-You can find a list of Satellite pipelines and their parameters [Here](https://docs.satdump.org/pipelines.html).
+You can find a list of Satellite pipelines and their parameters [Here](https://mtalon63.github.io/GobDump/Pipelines/).
 
 ### MSU-GS layer alignment (Elektro-L / Arktika-M)
 
@@ -94,7 +94,7 @@ Sample command :
 gobdump legacy live metop_ahrpt metop_output_directory --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780
 ```
 
-You can find a list of all SDR Options [Here](https://docs.satdump.org/sdr_options.html). Run `gobdump sdr_probe` to get a list of available SDRs and their IDs.
+You can find a list of all SDR Options [Here](https://mtalon63.github.io/GobDump/SDR_Options/). Run `gobdump sdr_probe` to get a list of available SDRs and their IDs.
 
 ### Recording
 
@@ -107,6 +107,17 @@ As well as --timeout in seconds
 Sample command :
 gobdump legacy record baseband_name --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780 --baseband_format cf32
 ```
+
+# Documentation
+
+The documentation is self-hosted from this repository and published at <https://mtalon63.github.io/GobDump/>. To preview it locally:
+
+```bash
+python -m pip install -r docs/requirements.txt
+mkdocs serve
+```
+
+Then open <http://127.0.0.1:8000>. `make docs` builds the site and `make docs-serve` starts the preview server.
 
 # Building / Installing
 
@@ -124,8 +135,7 @@ make run          # build, then run the CLI
 
 The **`-b ports`** branch matters: `master` does not contain the current work,
 including the arm64/NEON support and the built-in RDAS layer alignment. No
-submodules are needed for a normal build (`docs/res` is only used for the
-documentation).
+submodules are needed for a normal build or for the documentation.
 
 Useful `make` variables and targets (`make help` lists everything):
 
@@ -415,13 +425,7 @@ Same as the Linux instructions above. On a Raspberry Pi 3 (any revision) or olde
 
 ### Android
 
-On Android, the preferred source is F-Droid.
-
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
-    alt="Get it on F-Droid"
-    height="80">](https://f-droid.org/packages/org.satdump.SatDump)
-
-If this is not an option for you, APKs are also available on the [Release](https://github.com/altillimity/SatDump/releases) page.
+Android APKs are built by the GobDump CI and attached to the [GobDump Releases](https://github.com/MTalon63/GobDump/releases) page (including nightly builds).
 
 Do keep in mind that while pretty much all features perfectly function on Android, there may be some limitations (either due to the hardware) in some places. For example, not all SDR Devices can be used.
 Supported SDR devices are :
