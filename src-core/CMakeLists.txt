@@ -311,8 +311,12 @@ else()
     pkg_check_modules(FFTW3 REQUIRED fftw3f)
     target_link_libraries(gobdump_core PUBLIC ${FFTW3_LIBRARIES})
 
-    # NNG
-    find_library(NNG_LIBRARY nng REQUIRED)
+    if(APPLE)
+        find_library(NNG_LIBRARY nng PATHS ${CMAKE_SOURCE_DIR}/deps/lib NO_DEFAULT_PATH)
+    endif()
+    if(NOT NNG_LIBRARY)
+        find_library(NNG_LIBRARY nng REQUIRED)
+    endif()
     target_link_libraries(gobdump_core PUBLIC ${NNG_LIBRARY})
 
     if(BUILD_ZIQ)

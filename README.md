@@ -223,7 +223,7 @@ General build instructions (Homebrew is required):
 ```bash
 # Install build tools and dependencies
 brew install cmake ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib \
-             portaudio boost nng volk libomp glfw fftw jemalloc zstd armadillo hdf5 \
+             portaudio boost volk libomp glfw fftw jemalloc zstd armadillo hdf5 \
              sqlite3 pkg-config protobuf grpc
 
 # Clone GobDump
@@ -232,6 +232,7 @@ cd GobDump
 
 # Build the dependencies GobDump builds from source (not from Homebrew)
 macOS/build_deps.sh
+macOS/build_nng.sh   # NNG 1.x; Homebrew's nng 2.x removed the 1.x headers
 
 # Build
 make build        # or: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON && cmake --build build --parallel
