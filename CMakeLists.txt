@@ -404,6 +404,8 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
         install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources DESTINATION share/gobdump)
         install(FILES ${CMAKE_SOURCE_DIR}/gobdump_cfg.json DESTINATION share/gobdump)
         install(FILES ${CMAKE_SOURCE_DIR}/icon.png DESTINATION share/gobdump)
+        # Square app icon for the desktop icon theme / AppImage (.DirIcon).
+        install(FILES ${CMAKE_SOURCE_DIR}/gobdump.png DESTINATION share/icons/hicolor/256x256/apps)
     endif()
     configure_file(${CMAKE_SOURCE_DIR}/satdump.desktop ${CMAKE_CURRENT_BINARY_DIR}/gobdump.desktop @ONLY)
 
