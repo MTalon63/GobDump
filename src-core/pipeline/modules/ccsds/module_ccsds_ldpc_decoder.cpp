@@ -397,7 +397,11 @@ namespace satdump
                             if (d_ldpc_asm_size == 32)
                             {
                                 const uint32_t sync = 0x1acffc1d;
-                                write_data((uint8_t *)&sync, 4);
+                                for (int b = 3; b >= 0; b--) // big-endian: a raw uint32_t store is host-endian
+                                {
+                                    uint8_t v = (sync >> (b * 8)) & 0xFF;
+                                    write_data(&v, 1);
+                                }
                             }
                             else if (d_ldpc_asm_size == 64)
                             {
@@ -454,7 +458,11 @@ namespace satdump
                                     if (d_ldpc_asm_size == 32)
                                     {
                                         const uint32_t sync = 0x1acffc1d;
-                                        write_data((uint8_t *)&sync, 4);
+                                        for (int b = 3; b >= 0; b--) // big-endian: a raw uint32_t store is host-endian
+                                        {
+                                            uint8_t v = (sync >> (b * 8)) & 0xFF;
+                                            write_data(&v, 1);
+                                        }
                                     }
                                     else if (d_ldpc_asm_size == 64)
                                     {

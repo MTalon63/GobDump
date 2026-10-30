@@ -762,3 +762,44 @@ jobs:
 
             - name: Update Nightly
               run: gh release upload nightly gobdump_out/* -R ${{github.repository}} --clobber
+
+    # Publish the same artifacts to the GitHub Release whenever a tag is pushed.
+    # The release may already exist (created by hand); we only create it if missing.
+    publish_release:
+        needs: ["build_windows_msys2", "build_windows_x64", "build_windows_arm64", "build_ubuntu_2204", "build_ubuntu_2404", "build_macos_intel", "build_macos_silicon", "build_linux_arm64", "build_android"]
+        runs-on: ubuntu-latest
+        if: startsWith(github.ref, 'refs/tags/')
+
+        steps:
+            - name: Download Artifacts
+              uses: actions/download-artifact@v4
+
+            - name: Install zip
+              run: sudo apt install -y zip
+
+            - name: Prepare release assets
+              run: |
+                  set -euo pipefail
+                  mkdir -p gobdump_out
+                  cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb
+                  cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb
+                  cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb
+                  cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/
+                  cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/
+                  cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe
+                  cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe
+                  cp GobDump-release.apk/app-release-signed.apk gobdump_out/GobDump-Android.apk
+                  cp GobDump-AppImage/*.AppImage gobdump_out/GobDump.AppImage
+                  # MSYS2 portable is intentionally not published to releases or nightly.
+                  (cd GobDump-Windows_x64_Portable && zip -qr ../gobdump_out/GobDump-Windows_x64_Portable.zip .)
+                  (cd GobDump-Windows_arm64_Portable && zip -qr ../gobdump_out/GobDump-Windows_arm64_Portable.zip .)
+
+            - name: Publish release assets
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  if gh release view "${{ github.ref_name }}" -R "${{ github.repository }}" >/dev/null 2>&1; then
+                      gh release upload "${{ github.ref_name }}" gobdump_out/* -R "${{ github.repository }}" --clobber
+                  else
+                      gh release create "${{ github.ref_name }}" -R "${{ github.repository }}" --generate-notes gobdump_out/*
+                  fi
