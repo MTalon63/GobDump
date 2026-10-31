@@ -117,7 +117,7 @@ git clone https://github.com/sjinks/sqlite3-cmake --depth 1 -b master sqlite
 cd sqlite
 mkdir build
 cd build
-cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON  -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON
+cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON  -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -Dsqlite3_ENABLE_THREADSAFE=ON
 ninja install
 cd ../..
 

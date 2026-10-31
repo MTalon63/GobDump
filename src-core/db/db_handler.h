@@ -3,6 +3,7 @@
 #include "nlohmann/json.hpp"
 #include <exception>
 #include <memory>
+#include <mutex>
 #include <sqlite3.h>
 #include <string>
 #include <vector>
@@ -25,10 +26,12 @@ namespace satdump
     {
     public:
         sqlite3 *db = nullptr;
+        std::recursive_mutex db_mutex;
         std::vector<std::shared_ptr<DBHandlerBase>> subhandlers;
 
         bool run_sql(std::string sql)
         {
+            std::lock_guard<std::recursive_mutex> lock(db_mutex);
             char *err = NULL;
             if (sqlite3_exec(db, sql.c_str(), NULL, 0, &err))
             {

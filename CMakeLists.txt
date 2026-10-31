@@ -243,10 +243,11 @@ set(GOBDUMP_VERSION_TYPE "alpha")
 
 # Check if the current commit has a tag
 execute_process(
-    COMMAND git name-rev --name-only --tags HEAD
+    COMMAND git describe --tags --exact-match HEAD
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     OUTPUT_VARIABLE GIT_HAS_TAG
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
 )
 
 # Get the current branch
@@ -265,8 +266,13 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# GitHub Actions tag builds can have a shallow checkout without the tag ref.
+if(GIT_HAS_TAG STREQUAL "" AND "$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")
+    set(GIT_HAS_TAG "$ENV{GITHUB_REF_NAME}")
+endif()
+
 # Set version
-if(GIT_HAS_TAG STREQUAL "undefined" OR GIT_HAS_TAG STREQUAL "nightly")
+if(GIT_HAS_TAG STREQUAL "undefined" OR GIT_HAS_TAG STREQUAL "nightly" OR GIT_HAS_TAG STREQUAL "")
     message("-- Commit has no tag/nightly tag (${GIT_HAS_TAG}). Assume dev build")
     if(NOT GOBDUMP_VERSION_TYPE STREQUAL "")
         set(GOBDUMP_VERSION "${PROJECT_VERSION}-${GOBDUMP_VERSION_TYPE}-${GIT_HASH}")
@@ -275,11 +281,10 @@ if(GIT_HAS_TAG STREQUAL "undefined" OR GIT_HAS_TAG STREQUAL "nightly")
     endif()
 else()
     message("-- Commit has tag (${GIT_HAS_TAG}). Assume release build")
-    if(NOT GOBDUMP_VERSION_TYPE STREQUAL "")
-        set(GOBDUMP_VERSION "${PROJECT_VERSION}")
-    else()
-        set(GOBDUMP_VERSION "${PROJECT_VERSION}-${GOBDUMP_VERSION_TYPE}")
-    endif()
+    # Use the actual tag for release builds instead of the development PROJECT_VERSION.
+    set(GOBDUMP_VERSION "${GIT_HAS_TAG}")
+    string(REGEX REPLACE "^tags/" "" GOBDUMP_VERSION "${GOBDUMP_VERSION}")
+    string(REGEX REPLACE "^v" "" GOBDUMP_VERSION "${GOBDUMP_VERSION}")
 endif()
 
 # Set branch
