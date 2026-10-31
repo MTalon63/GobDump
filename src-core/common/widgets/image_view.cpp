@@ -225,6 +225,7 @@ void ImageViewWidget::draw(ImVec2 win_size)
         {
             updateMMImageTexture(chunk.texture_id, chunk.texture_buffer.data(), chunk.img_width, chunk.img_height);
             chunk.texture_buffer.clear();
+            chunk.texture_buffer.shrink_to_fit();
         }
         has_to_update = false;
     }
