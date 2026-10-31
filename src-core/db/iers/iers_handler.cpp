@@ -105,6 +105,7 @@ namespace satdump
 
             if (!entries.empty())
             {
+                std::lock_guard<std::recursive_mutex> lock(h->db_mutex);
                 h->tr_begin();
                 for (auto &entry : entries)
                 {
@@ -175,6 +176,7 @@ namespace satdump
 
             if (!leap_entries.empty())
             {
+                std::lock_guard<std::recursive_mutex> lock(h->db_mutex);
                 h->tr_begin();
                 for (auto &entry : leap_entries)
                 {
@@ -204,10 +206,11 @@ namespace satdump
 
     IERSInfo IersDBHandler::getBestIERSInfo(double time)
     {
+        std::lock_guard<std::recursive_mutex> lock(h->db_mutex);
         IERSInfo r;
-        sqlite3_stmt *res;
+        sqlite3_stmt *res = nullptr;
 
-        if (sqlite3_prepare_v2(h->db, ("select a_pole_x,a_pole_y,ut1_utc from iers order by abs(" + std::to_string(time) + ") asc limit 1").c_str(), -1, &res, 0))
+        if (sqlite3_prepare_v2(h->db, ("select a_pole_x,a_pole_y,ut1_utc from iers order by abs(" + std::to_string(time) + ") asc limit 1").c_str(), -1, &res, 0) != SQLITE_OK)
             logger->error("Couldn't fetch IERS data from DB! " + std::string(sqlite3_errmsg(h->db)));
         else if (sqlite3_step(res) == SQLITE_ROW)
         {
@@ -216,16 +219,19 @@ namespace satdump
             r.ut1_utc = sqlite3_column_double(res, 2);
         }
 
-        sqlite3_finalize(res);
+        if (res != nullptr)
+            sqlite3_finalize(res);
 
-        if (sqlite3_prepare_v2(h->db, ("select leap_seconds from leap_seconds where " + std::to_string(time) + " >= time order by time desc limit 1").c_str(), -1, &res, 0))
+        res = nullptr;
+        if (sqlite3_prepare_v2(h->db, ("select leap_seconds from leap_seconds where " + std::to_string(time) + " >= time order by time desc limit 1").c_str(), -1, &res, 0) != SQLITE_OK)
             logger->error("Couldn't fetch Leap Seconds data from DB! " + std::string(sqlite3_errmsg(h->db)));
         else if (sqlite3_step(res) == SQLITE_ROW)
         {
             r.leap_seconds = sqlite3_column_int(res, 0);
         }
 
-        sqlite3_finalize(res);
+        if (res != nullptr)
+            sqlite3_finalize(res);
 
         return r;
     }
