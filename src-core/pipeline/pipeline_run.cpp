@@ -127,6 +127,14 @@ namespace satdump
                     continue;
                 }
 
+                // Levels such as "products" can be markers with no module attached.
+                // Trying to look those up used to throw "Module  is not registered".
+                if (step.module.empty())
+                {
+                    logger->debug("Skipping level " + step.level + " (no processing module)");
+                    continue;
+                }
+
                 logger->info("Processing data to level " + step.level);
 
                 std::vector<std::string> files;
