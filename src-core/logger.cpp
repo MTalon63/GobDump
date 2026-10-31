@@ -265,6 +265,10 @@ namespace slog
 
 void initLogger()
 {
+    // Never replace an existing logger; that would silently drop sinks added by initSatDump().
+    if (logger)
+        return;
+
     try
     {
 // Initialize everything

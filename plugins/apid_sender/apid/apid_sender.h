@@ -30,6 +30,10 @@ namespace apid
         int history_idx = 0;
         std::chrono::steady_clock::time_point last_history_update = std::chrono::steady_clock::now();
 
+        uint64_t size_rej = 0;
+        int size_last = -1;
+        std::chrono::steady_clock::time_point size_warn_last = std::chrono::steady_clock::now();
+
         ApidConfig() = default;
         ApidConfig(const ApidConfig& other) {
             apid = other.apid;
@@ -48,6 +52,11 @@ namespace apid
         bool fecf_strict;
         int cadu_size;
         int mpdu_data_size;
+        int d_fecf_warn_secs = 10;
+        uint64_t fecf_total = 0, fecf_ok = 0, fecf_fail = 0;
+        uint64_t framing_fail = 0;
+        int fecf_suppressed = 0;
+        std::chrono::steady_clock::time_point fecf_last_warn = std::chrono::steady_clock::now();
 
         bool save_to_cadu;
 

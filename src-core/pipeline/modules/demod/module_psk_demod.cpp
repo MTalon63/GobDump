@@ -23,6 +23,12 @@ namespace satdump
                 else
                     throw satdump_exception("Constellation type parameter must be present!");
 
+                // Reject unknown constellations before init() derefs pll.
+                if (constellation_type != "bpsk" && constellation_type != "qpsk" &&
+                    constellation_type != "oqpsk" && constellation_type != "8psk")
+                    throw satdump_exception("PSKDemod : unknown constellation \"" + constellation_type +
+                                            "\" (use bpsk, qpsk, oqpsk or 8psk)");
+
                 if (parameters.count("rrc_alpha") > 0)
                     d_rrc_alpha = parameters["rrc_alpha"].get<float>();
                 else

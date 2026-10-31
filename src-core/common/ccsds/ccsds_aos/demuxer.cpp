@@ -66,11 +66,26 @@ namespace ccsds
         {
             ccsdsBuffer.clear(); // Clear buffer from previous run
 
+            // LDPC failures still carry a raw ASM; only accept version-1 VCDUs.
+            if (((cadu[4] >> 6) & 0x3) != 1)
+                return ccsdsBuffer;
+
             MPDU mpdu = parseMPDU(cadu, HAS_INSERT_ZONE, INSERT_ZONE_SIZE); // Parse M-PDU Header
+
+            // 0x7FE = idle-only; parse from 0 instead of discarding the frame.
+            if (mpdu.first_header_pointer == 0x7FE)
+                mpdu.first_header_pointer = 0;
 
             // Sanity check, if the first header point points outside the data payload
             if (mpdu.first_header_pointer < 2047 && mpdu.first_header_pointer >= MPDU_DATA_SIZE)
             {
+                return ccsdsBuffer;
+            }
+
+            // FHP must point at a version-0 packet header.
+            if (mpdu.first_header_pointer < 2047 && (mpdu.data[mpdu.first_header_pointer] >> 5) != 0)
+            {
+                abortPacket();
                 return ccsdsBuffer;
             }
 

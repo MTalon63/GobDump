@@ -100,7 +100,8 @@ namespace satdump
                     temp_soft_buffer = new int8_t[d_buffer_size * 2]; // Enough space
                     d_current_phase = 0;
                     if (d_constellation == dsp::PSK8)
-                        d_num_phases = 8;
+                        // Costas locks on the 22.5+k*45 lattice, so step 22.5 deg.
+                        d_num_phases = 16;
                     else
                         d_num_phases = 4;
                     
@@ -146,20 +147,23 @@ namespace satdump
                     // Store params so reinit() can recreate the object with a clean trellis
                     s.ber_threshold = d_viterbi_ber_threasold;
                     s.outsync_after = d_viterbi_outsync_after;
-                    s.buffer_size   = d_buffer_size;
+                    // bits_per_sym inputs per symbol, so size the Viterbi for that.
+                    s.buffer_size   = d_is_higher_order
+                                          ? (d_buffer_size / 2) * d_constellation_obj->getBitsCnt()
+                                          : d_buffer_size;
                     s.phases        = d_phases;
                     s.oqpsk_mode    = d_oqpsk_mode;
                     if (rate == PUNCRATE_1_2)
-                        s.v12 = std::make_shared<viterbi::Viterbi1_2>(d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.v12 = std::make_shared<viterbi::Viterbi1_2>(d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_2_3)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc23>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc23>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_3_4)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc34>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc34>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_5_6)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_7_8)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
-                    s.out = new uint8_t[d_buffer_size * 8];
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
+                    s.out = new uint8_t[s.buffer_size * 8];
                     return s;
                 };
 
@@ -225,8 +229,8 @@ namespace satdump
 
                 while (should_run())
                 {
-                    // Read a buffer
-                    read_data((uint8_t *)soft_buffer, d_buffer_size);
+                    const int rx_bytes = d_is_higher_order ? (d_buffer_size & ~1) : d_buffer_size;
+                    read_data((uint8_t *)soft_buffer, rx_bytes);
 
                     if (d_bpsk_90 || d_iq_invert) // Symbols are swapped for some Q/BPSK sats
                         rotate_soft((int8_t *)soft_buffer, d_buffer_size, PHASE_0, true);
@@ -270,9 +274,11 @@ namespace satdump
                                 {
                                     int8_t r = soft_buffer[i * 2];
                                     int8_t c = soft_buffer[i * 2 + 1];
-                                    int8_t vr = clamp_8((r * c_p) - (c * s_p));
-                                    int8_t vc = clamp_8((c * c_p) + (r * s_p));
-                                    d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                                    // Map RMS 100 to radius 1.
+                                    complex_t rot(((float)r * c_p - (float)c * s_p) * 0.01f,
+                                                  ((float)c * c_p + (float)r * s_p) * 0.01f);
+                                    int8_t *db = &temp_soft_buffer[i * bits_per_sym];
+                                    d_constellation_obj->demod_soft_lut(rot, db);
                                 }
                                 temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
 
@@ -311,9 +317,11 @@ namespace satdump
                             {
                                 int8_t r = soft_buffer[i * 2];
                                 int8_t c = soft_buffer[i * 2 + 1];
-                                int8_t vr = clamp_8((r * c_p) - (c * s_p));
-                                int8_t vc = clamp_8((c * c_p) + (r * s_p));
-                                d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                                // Map RMS 100 to radius 1.
+                                complex_t rot(((float)r * c_p - (float)c * s_p) * 0.01f,
+                                              ((float)c * c_p + (float)r * s_p) * 0.01f);
+                                int8_t *db = &temp_soft_buffer[i * bits_per_sym];
+                                d_constellation_obj->demod_soft_lut(rot, db);
                             }
                             temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
 
