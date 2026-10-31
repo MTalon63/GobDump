@@ -94,7 +94,7 @@ namespace satdump
             image_filters = getImageFilters();
         }
 
-        ImageHandler::ImageHandler(image::Image img) : ImageHandler::ImageHandler() { setImage(img); }
+        ImageHandler::ImageHandler(image::Image img) : ImageHandler::ImageHandler() { setImage(std::move(img)); }
 
         ImageHandler::ImageHandler(image::Image img, std::string name) : ImageHandler::ImageHandler(img) { image_name = name; }
 
@@ -576,6 +576,24 @@ namespace satdump
             {
                 std::lock_guard<std::mutex> l(state_mtx);
                 std::atomic_store(&image, std::make_shared<image::Image>(img));
+            }
+            process();
+        }
+
+        void ImageHandler::setImage(image::Image &&img)
+        {
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                std::atomic_store(&image, std::make_shared<image::Image>(std::move(img)));
+            }
+            process();
+        }
+
+        void ImageHandler::setImage(std::shared_ptr<image::Image> img)
+        {
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                std::atomic_store(&image, std::move(img));
             }
             process();
         }
