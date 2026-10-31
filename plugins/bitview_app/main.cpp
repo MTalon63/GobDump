@@ -47,9 +47,18 @@ public:
         }
 
         if (fopen_menu.update())
-            evt.master_handler->addSubHandler(std::make_shared<satdump::BitViewHandler>(std::make_shared<satdump::BitContainer>(                //
-                std::filesystem::path(fopen_menu.getPath()).stem().string() + std::filesystem::path(fopen_menu.getPath()).extension().string(), //
-                fopen_menu.getPath())));
+        {
+            try
+            {
+                evt.master_handler->addSubHandler(std::make_shared<satdump::BitViewHandler>(std::make_shared<satdump::BitContainer>(                //
+                    std::filesystem::path(fopen_menu.getPath()).stem().string() + std::filesystem::path(fopen_menu.getPath()).extension().string(), ///
+                    fopen_menu.getPath())));
+            }
+            catch (std::exception &e)
+            {
+                logger->error(_("Could not open \"%s\" : %s"), fopen_menu.getPath().c_str(), e.what());
+            }
+        }
     }
 };
 

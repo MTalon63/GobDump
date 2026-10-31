@@ -37,3 +37,4 @@ live_output/*
 *.cs8
 
 imgui.ini
+plugins/external
