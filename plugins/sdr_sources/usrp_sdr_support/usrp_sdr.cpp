@@ -1,12 +1,33 @@
 #include "usrp_sdr.h"
+#include <utility>
+
+namespace
+{
+    template <typename T>
+    void abandon_handle(T &handle)
+    {
+        if (handle)
+            (void)new T(std::move(handle));
+    }
+} // namespace
 
 void USRPSource::set_gains()
 {
-    if (!is_started)
+    if (!is_started || device_lost)
         return;
 
-    usrp_device->set_rx_gain(gain, channel);
-    logger->debug("Set USRP gain to %f", gain);
+    try
+    {
+        usrp_device->set_rx_gain(gain, channel);
+        logger->debug("Set USRP gain to %f", gain);
+    }
+    catch (const std::exception &e)
+    {
+        if (!thread_should_run)
+            throw;
+        device_lost = true;
+        logger->error("USRP gain change failed: %s", e.what());
+    }
 }
 
 void USRPSource::open_sdr()
@@ -100,7 +121,7 @@ void USRPSource::open_channel()
         }
     }
 
-    samplerate_widget.set_list(available_samplerates, false);
+    samplerate_widget.set_list(available_samplerates, true);
 
     // Restore the previously selected samplerate if it's still available
     samplerate_widget.set_value(current_samplerate, 0);
@@ -152,6 +173,7 @@ void USRPSource::open()
 {
     open_sdr();
     is_open = true;
+    device_lost = false;
     open_channel();
     usrp_device.reset();
 }
@@ -159,6 +181,8 @@ void USRPSource::open()
 void USRPSource::start()
 {
     DSPSampleSource::start();
+    thread_should_run = false;
+    device_lost = false;
     open_sdr();
     open_channel();
 
@@ -191,39 +215,73 @@ void USRPSource::start()
         sargs.otw_format = "sc16";
 
     usrp_streamer = usrp_device->get_rx_stream(sargs);
+    if (!usrp_streamer)
+        throw satdump_exception("Could not create USRP RX stream!");
+
+    usrp_streamer->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
     thread_should_run = true;
     work_thread = std::thread(&USRPSource::mainThread, this);
-
-    usrp_streamer->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 }
 
 void USRPSource::stop()
 {
     thread_should_run = false;
     logger->info("Waiting for the thread...");
-    if (is_started)
+    if (output_stream)
         output_stream->stopWriter();
     if (work_thread.joinable())
         work_thread.join();
     logger->info("Thread stopped");
-    if (is_started)
+
+    bool uhd_ok = !device_lost;
+    if (usrp_streamer && uhd_ok)
     {
-        usrp_streamer->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+        try
+        {
+            usrp_streamer->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+        }
+        catch (const std::exception &e)
+        {
+            logger->error("Could not stop USRP stream: %s", e.what());
+            uhd_ok = false;
+        }
+    }
+
+    if (uhd_ok)
+    {
         usrp_streamer.reset();
         usrp_device.reset();
     }
+    else
+    {
+        logger->warn("USRP device lost, skipping USB teardown");
+        abandon_handle(usrp_streamer);
+        abandon_handle(usrp_device);
+    }
+
     is_started = false;
+    device_lost = false;
 }
 
 void USRPSource::close() { is_open = false; }
 
 void USRPSource::set_frequency(uint64_t frequency)
 {
-    if (is_started)
+    if (is_started && !device_lost)
     {
-        usrp_device->set_rx_freq(frequency, channel);
-        logger->debug("Set USRP frequency to %d", frequency);
+        try
+        {
+            usrp_device->set_rx_freq(frequency, channel);
+            logger->debug("Set USRP frequency to %d", frequency);
+        }
+        catch (const std::exception &e)
+        {
+            if (!thread_should_run)
+                throw;
+            device_lost = true;
+            logger->error("USRP frequency change failed: %s", e.what());
+        }
     }
     DSPSampleSource::set_frequency(frequency);
 }

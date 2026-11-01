@@ -11,6 +11,7 @@
 
 #define CURL_TIMEOUT 5000
 #define CURL_CONNECT_TIMEOUT 5
+#define CURL_MAX_REDIRS 10
 
 namespace satdump
 {
@@ -70,6 +71,21 @@ namespace satdump
         return len;
     }
 
+    // Printable prefix of an error body, for logs.
+    static std::string http_body_snippet(const std::string &body, size_t max_len = 160)
+    {
+        std::string out;
+        out.reserve(std::min(body.size(), max_len));
+        for (char c : body)
+        {
+            if (out.size() >= max_len)
+                break;
+            unsigned char uc = (unsigned char)c;
+            out.push_back((uc >= 0x20 && uc < 0x7F) ? c : ' ');
+        }
+        return out;
+    }
+
     // Rate-limits the host, performs the request with bounded 429 retries, and reports
     // results so the limiter can back off.
     static int perform_http_request_internal(std::string url_str, std::string &result, std::string added_header,
@@ -96,6 +112,12 @@ namespace satdump
 
             result.clear();
 
+            // Follow bounded redirects; many mirrors and load balancers use them.
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(curl, CURLOPT_MAXREDIRS, (long)CURL_MAX_REDIRS);
+            // Never let cURL use signals: this helper is called from worker threads.
+            curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+
             curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error_buffer);
             curl_easy_setopt(curl, CURLOPT_USERAGENT, std::string((std::string) "GobDump/v" + satdump::SATDUMP_VERSION).c_str());
             curl_easy_setopt(curl, CURLOPT_URL, url_str.c_str());
@@ -118,7 +140,11 @@ namespace satdump
             }
 
             if (is_post)
+            {
                 curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_req.c_str());
+                // Keep POST across redirects; cURL's default downgrades it to GET.
+                curl_easy_setopt(curl, CURLOPT_POSTREDIR, (long)CURL_REDIR_POST_ALL);
+            }
 
             if (progress != nullptr)
             {
@@ -155,10 +181,20 @@ namespace satdump
                 continue; // re-acquire (blocks for the penalty) and retry
             }
 
-            // Non-429: report and return as today (includes non-2xx, which previously returned
-            // success on CURLE_OK).
             HttpRateLimiter::get().reportResult(host, http_code, retry_after.value);
-            ret = 0;
+
+            // Only 2xx (or no HTTP status) is success; error bodies must not reach parsers.
+            if (http_code == 0 || (http_code >= 200 && http_code < 300))
+            {
+                ret = 0;
+            }
+            else
+            {
+                logger->error("HTTP request to %s failed with status %ld", url_str.c_str(), http_code);
+                if (!result.empty())
+                    logger->error("Response body starts with: %s", http_body_snippet(result).c_str());
+                ret = 1;
+            }
             break;
         }
 

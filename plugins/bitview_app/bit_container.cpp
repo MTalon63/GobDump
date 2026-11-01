@@ -33,13 +33,10 @@ namespace satdump
         for (size_t i = 0; i < 15; i++)
             unique_id[i] = check(rng);
 
-        // Buffer for creating textures
-        wip_texture_buffer = new uint32_t[d_chunk_size * d_chunk_size];
-
-        // Init mmap pointers
+        // Open before allocating (exception safety).
         d_file_memory_size = getFilesize(file_path);
         if (d_file_memory_size == 0)
-            throw satdump_exception("Empty File!");
+            throw satdump_exception("Empty File! (" + file_path + ")");
         fd = open(file_path.c_str(), O_RDONLY | O_BINARY);
         if (fd < 0)
             throw satdump_exception("Could not open file! (" + file_path + ")");
@@ -49,6 +46,8 @@ namespace satdump
             close(fd);
             throw satdump_exception("mmap failed! (" + file_path + ")");
         }
+
+        wip_texture_buffer = new uint32_t[d_chunk_size * d_chunk_size];
 
         d_frame_mode = frames.size();
         logger->critical("Frame mode? %d", d_frame_mode);

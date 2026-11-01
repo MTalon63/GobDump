@@ -9,11 +9,11 @@ Code quality of new features will be abysmal compared to SatDump, but as long as
 
 A generic satellite data processing software.
 
-There now also is a [Matrix](https://matrix.to/#/#satdump:altillimity.com) room if you want to chat! Otherwise, a [Discord](https://discord.gg/ctt3M8pRYG) bridge to the Matrix is also available.
+If something is broken, please report it on the [GobDump issue tracker](https://github.com/MTalon63/GobDump/issues). GobDump reports should go there, not to the original SatDump project.
 
 # Introduction
 
-_Note : This is a very basic "how-to" skipping details and assuming some knowledge of what you are doing. For more details and advanced use cases, please see the [detailed documentation](https://docs.satdump.org)._
+_Note : This is a very basic "how-to" skipping details and assuming some knowledge of what you are doing. For more details and advanced use cases, please see the [GobDump documentation](https://mtalon63.github.io/GobDump/)._
 
 ## GUI Version
 
@@ -58,7 +58,29 @@ Sample command :
 gobdump pipeline metop_ahrpt baseband /home/user/metop_baseband.cs16 metop_output_directory --samplerate 6e6 --baseband_format cs16
 ```
 
-You can find a list of Satellite pipelines and their parameters [Here](https://docs.satdump.org/pipelines.html).
+You can find a list of Satellite pipelines and their parameters [Here](https://mtalon63.github.io/GobDump/Pipelines/).
+
+### MSU-GS layer alignment (Elektro-L / Arktika-M)
+
+MSU-GS VIS layers are aligned in-process at the end of the `elektro_rdas` and
+`arktika_rdas` pipelines - no separate binary or OpenCV dependency. The three
+detector layers are staggered along the scan, so the calibration seeds an ECC fit
+with the 3606 / 1804 px offsets and refines the residual. It is kept in GobDump's
+configuration directory (`rdas_aligner/<satellite>/config.json`), migrated from
+older `rdas_aligner` files when present, and reused on later decodes; pass
+`--recalibrate_aligner true` (or tick the checkbox in the MSU-GS decoder window)
+to redo it.
+
+An existing output directory can be (re)aligned without decoding again:
+
+```
+gobdump rdas_align [output_directory] --satellite L2 [--recalibrate]
+```
+
+This writes `MSUGS_VIS_Aligned` (or `MSUGS_VIS-1_Aligned` / `MSUGS_VIS-2_Aligned`
+when the merge ROIs are unavailable), restores the raw products' channel
+transforms in their `product.cbor` if they were lost, and updates the directory's
+`dataset.json`.
 
 ### Live processing
 
@@ -72,7 +94,7 @@ Sample command :
 gobdump legacy live metop_ahrpt metop_output_directory --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780
 ```
 
-You can find a list of all SDR Options [Here](https://docs.satdump.org/sdr_options.html). Run `gobdump sdr_probe` to get a list of available SDRs and their IDs.
+You can find a list of all SDR Options [Here](https://mtalon63.github.io/GobDump/SDR_Options/). Run `gobdump sdr_probe` to get a list of available SDRs and their IDs.
 
 ### Recording
 
@@ -86,6 +108,17 @@ Sample command :
 gobdump legacy record baseband_name --source airspy --samplerate 6e6 --frequency 1701.3e6 --general_gain 18 --bias --timeout 780 --baseband_format cf32
 ```
 
+# Documentation
+
+The documentation is self-hosted from this repository and published at <https://mtalon63.github.io/GobDump/>. To preview it locally:
+
+```bash
+python -m pip install -r docs/requirements.txt
+mkdocs serve
+```
+
+Then open <http://127.0.0.1:8000>. `make docs` builds the site and `make docs-serve` starts the preview server.
+
 # Building / Installing
 
 ### Quick start (any platform)
@@ -94,19 +127,15 @@ There is a `Makefile` that wraps the whole CMake flow. On a machine with the
 dependencies already installed, building is:
 
 ```bash
-git clone --recursive -b ports https://github.com/MTalon63/GobDump.git
+git clone -b ports https://github.com/MTalon63/GobDump.git
 cd GobDump
 make build        # configure (if needed) + build
 make run          # build, then run the CLI
 ```
 
-Two things matter in that command:
-
-- **`-b ports`** - the default branch (`master`) does not contain the current
-  work, including the RDAS submodule and the arm64/NEON support. Build `ports`.
-- **`--recursive`** - `external/rdas_layer_aligner` is a git submodule and the
-  RDAS layer aligner is built by default. If you cloned without it, run
-  `git submodule update --init --recursive`.
+The **`-b ports`** branch matters: `master` does not contain the current work,
+including the arm64/NEON support and the built-in RDAS layer alignment. No
+submodules are needed for a normal build or for the documentation.
 
 Useful `make` variables and targets (`make help` lists everything):
 
@@ -132,7 +161,6 @@ wants the plugins.
 | `BUILD_OPENCL` | `ON` | GPU accelerations |
 | `BUILD_OPENMP` | `ON` | OpenMP |
 | `BUILD_ZIQ` | `ON` | ZIQ recording compression |
-| `BUILD_RDAS_ALIGNER` | `ON` | Needs OpenCV **and** jsoncpp. If either is missing the aligner is skipped with a warning, not an error. |
 | `BUILD_TESTING` | `OFF` | `ctest` test programs |
 | `BUILD_TOOLS` | `OFF` | Extra tools programs |
 | `BUILD_DOCS` | `OFF` | Doxygen docs |
@@ -190,21 +218,21 @@ _Note : the SDDC (RX666/RX888) plugin is unavailable on MinGW, as it depends on 
 
 Dependency-free macOS builds are on the [Releases](https://github.com/MTalon63/GobDump/releases) page.
 
-General build instructions (Homebrew is required). Note `jsoncpp` and `opencv` - the
-RDAS layer aligner needs both:
+General build instructions (Homebrew is required):
 
 ```bash
 # Install build tools and dependencies
 brew install cmake ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib \
-             portaudio boost nng volk libomp glfw3 fftw jemalloc zstd armadillo hdf5 \
-             sqlite3 opencv jsoncpp pkg-config protobuf grpc
+             portaudio boost volk libomp glfw fftw jemalloc zstd armadillo hdf5 \
+             sqlite3 pkg-config protobuf grpc cpptrace
 
-# Clone GobDump, including the submodules
-git clone --recursive -b ports https://github.com/MTalon63/GobDump.git
+# Clone GobDump
+git clone -b ports https://github.com/MTalon63/GobDump.git
 cd GobDump
 
 # Build the dependencies GobDump builds from source (not from Homebrew)
 macOS/build_deps.sh
+macOS/build_nng.sh   # NNG 1.x; Homebrew's nng 2.x removed the 1.x headers
 
 # Build
 make build        # or: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON && cmake --build build --parallel
@@ -232,9 +260,6 @@ sudo apt install git build-essential cmake ninja-build pkgconf libfftw3-dev libp
 sudo apt install libvolk-dev       # If this package is not found, use libvolk2-dev or libvolk1-dev
 sudo apt install libnng-dev        # If this package is not found, follow the NNG instructions below
 
-# Required for the RDAS layer aligner, which is built by default.
-# Skip these only if you configure with -DBUILD_RDAS_ALIGNER=OFF.
-sudo apt install libopencv-dev libjsoncpp-dev
 sudo apt install ocl-icd-opencl-dev opencl-headers
 
 # (Optional)
@@ -253,7 +278,7 @@ sudo apt install libarmadillo-dev
 # One-liner to install all dependencies:
 sudo apt install git build-essential cmake ninja-build pkgconf libfftw3-dev libpng-dev \
                  libtiff-dev libjemalloc-dev libcurl4-openssl-dev libvolk-dev libnng-dev \
-                 libopencv-dev libjsoncpp-dev ocl-icd-opencl-dev opencl-headers \
+                 ocl-icd-opencl-dev opencl-headers \
                  libglfw3-dev zenity portaudio19-dev libzstd-dev libhdf5-dev librtlsdr-dev \
                  libhackrf-dev libairspy-dev libairspyhf-dev libad9361-dev libiio-dev \
                  libbladerf-dev libomp-dev intel-opencl-icd mesa-opencl-icd \
@@ -268,7 +293,7 @@ sudo apt install git build-essential cmake ninja-build pkgconf libfftw3-dev libp
 ```bash
 sudo dnf install git cmake ninja-build g++ fftw-devel volk-devel libpng-devel jemalloc-devel \
                  libtiff-devel nng-devel curl-devel sqlite-devel
-sudo dnf install opencv-devel jsoncpp-devel ocl-icd opencl-headers   # RDAS aligner (built by default)
+sudo dnf install ocl-icd opencl-headers
 
 # (Optional)
 sudo dnf install glfw-devel zenity dbus-devel                       # Only if you want to build the GUI Version
@@ -290,7 +315,7 @@ sudo dnf install intel-opencl                                       # Enables Op
 # You need to build libnng from source, see below.
 sudo apk add git cmake ninja make g++ pkgconf fftw-dev libvolk-dev libpng-dev \
              jemalloc-dev tiff-dev curl-dev sqlite-dev
-sudo apk add opencv-dev jsoncpp-dev opencl-dev   # RDAS aligner (community repo for OpenCL)
+sudo apk add opencl-dev
 
 # (Optional)
 sudo apk add glfw-dev zenity dbus-dev                  # Only if you want to build the GUI Version
@@ -314,7 +339,6 @@ sudo apk add librtlsdr-dev hackrf-dev airspyone-host-dev airspyhf-dev  # Librari
 
 sudo emerge --ask dev-vcs/git sci-libs/fftw dev-libs/jemalloc sci-libs/volk \
                   media-libs/libpng media-libs/tiff net-misc/curl dev-db/sqlite
-sudo emerge --ask media-libs/opencv dev-libs/jsoncpp   # RDAS aligner (built by default)
 
 sudo emerge --ask media-libs/glfw gnome-extra/zenity sys-apps/dbus          # Only if you want to build the GUI Version
 sudo emerge --ask media-libs/portaudio                                      # Only if you want audio output
@@ -336,7 +360,7 @@ sudo emerge --ask dev-libs/opencl-icd-loader                                # Op
 sudo zypper install git gcc-c++ cmake ninja pkgconf fftw3-devel libpng-devel \
                     libtiff-devel jemalloc-devel libcurl-devel volk-devel \
                     nng-devel sqlite3-devel
-sudo zypper install opencv-devel jsoncpp-devel opencl-headers libOpenCL1   # RDAS aligner (built by default)
+sudo zypper install opencl-headers libOpenCL1
 
 # (Optional)
 sudo zypper install libglfw-devel zenity dbus-1-devel                       # Only if you want to build the GUI Version
@@ -373,7 +397,7 @@ rm -rf nng
 #### Build GobDump (Linux)
 
 ```bash
-git clone --recursive -b ports https://github.com/MTalon63/GobDump.git
+git clone -b ports https://github.com/MTalon63/GobDump.git
 cd GobDump
 
 make build   # or: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPLUGINS_ALL=ON && cmake --build build --parallel
@@ -392,8 +416,8 @@ sudo make install
 make run     # CLI;  make ui  for the GUI
 ```
 
-Add `-DBUILD_GUI=OFF` if you do not want the GUI. To skip the RDAS aligner
-without installing OpenCV/jsoncpp, use `-DBUILD_RDAS_ALIGNER=OFF`.
+Add `-DBUILD_GUI=OFF` if you do not want the GUI. MSU-GS layer alignment is
+built into GobDump - no external binary or OpenCV dependency.
 
 ### Raspberry Pi
 
@@ -402,13 +426,7 @@ Same as the Linux instructions above. On a Raspberry Pi 3 (any revision) or olde
 
 ### Android
 
-On Android, the preferred source is F-Droid.
-
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
-    alt="Get it on F-Droid"
-    height="80">](https://f-droid.org/packages/org.satdump.SatDump)
-
-If this is not an option for you, APKs are also available on the [Release](https://github.com/altillimity/SatDump/releases) page.
+Android APKs are built by the GobDump CI and attached to the [GobDump Releases](https://github.com/MTalon63/GobDump/releases) page (including nightly builds).
 
 Do keep in mind that while pretty much all features perfectly function on Android, there may be some limitations (either due to the hardware) in some places. For example, not all SDR Devices can be used.
 Supported SDR devices are :

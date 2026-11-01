@@ -43,12 +43,14 @@ namespace satdump
 
     DBHandler::~DBHandler()
     {
-        if (sqlite3_close(db))
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
+        if (db != nullptr && sqlite3_close(db))
             logger->error("Error closing SQLite database!");
     }
 
     void DBHandler::set_meta(std::string id, std::string val)
     {
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
         char *err = NULL;
         replaceAllStr(val, "'", "''");
         std::string sql = "INSERT INTO meta (id, val) VALUES ('" + id + "', '" + val + "') ON CONFLICT(id) DO UPDATE SET val='" + val + "';";
@@ -61,12 +63,23 @@ namespace satdump
 
     std::string DBHandler::get_meta(std::string id, std::string def)
     {
-        sqlite3_stmt *res;
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
+        if (db == nullptr)
+            return def;
+        sqlite3_stmt *res = nullptr;
 
-        if (sqlite3_prepare_v2(db, ("SELECT val from meta where id='" + id + "'").c_str(), -1, &res, 0))
-            logger->warn(sqlite3_errmsg(db));
-        else if (sqlite3_step(res) == SQLITE_ROW)
-            def = (char *)sqlite3_column_text(res, 0);
+        if (sqlite3_prepare_v2(db, ("SELECT val from meta where id='" + id + "'").c_str(), -1, &res, 0) != SQLITE_OK)
+        {
+            logger->warn("%s", sqlite3_errmsg(db));
+            return def;
+        }
+
+        if (sqlite3_step(res) == SQLITE_ROW)
+        {
+            const unsigned char *val = sqlite3_column_text(res, 0);
+            if (val != nullptr)
+                def = (const char *)val;
+        }
 
         sqlite3_finalize(res);
 
@@ -75,6 +88,7 @@ namespace satdump
 
     void DBHandler::set_user(std::string id, std::string val)
     {
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
         char *err = NULL;
         replaceAllStr(val, "'", "''");
         std::string sql = "INSERT INTO user (id, val) VALUES ('" + id + "', '" + val + "') ON CONFLICT(id) DO UPDATE SET val='" + val + "';";
@@ -87,12 +101,23 @@ namespace satdump
 
     std::string DBHandler::get_user(std::string id, std::string def)
     {
-        sqlite3_stmt *res;
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
+        if (db == nullptr)
+            return def;
+        sqlite3_stmt *res = nullptr;
 
-        if (sqlite3_prepare_v2(db, ("SELECT val from user where id='" + id + "'").c_str(), -1, &res, 0))
-            logger->warn(sqlite3_errmsg(db));
-        else if (sqlite3_step(res) == SQLITE_ROW)
-            def = (char *)sqlite3_column_text(res, 0);
+        if (sqlite3_prepare_v2(db, ("SELECT val from user where id='" + id + "'").c_str(), -1, &res, 0) != SQLITE_OK)
+        {
+            logger->warn("%s", sqlite3_errmsg(db));
+            return def;
+        }
+
+        if (sqlite3_step(res) == SQLITE_ROW)
+        {
+            const unsigned char *val = sqlite3_column_text(res, 0);
+            if (val != nullptr)
+                def = (const char *)val;
+        }
 
         sqlite3_finalize(res);
 
@@ -116,12 +141,19 @@ namespace satdump
 
     int DBHandler::get_table_size(std::string table)
     {
-        sqlite3_stmt *res;
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
+        if (db == nullptr)
+            return -1;
+        sqlite3_stmt *res = nullptr;
         int r = -1;
 
-        if (sqlite3_prepare_v2(db, ("SELECT count(*) from " + table).c_str(), -1, &res, 0))
+        if (sqlite3_prepare_v2(db, ("SELECT count(*) from " + table).c_str(), -1, &res, 0) != SQLITE_OK)
+        {
             logger->warn("Error getting table size! %s", sqlite3_errmsg(db));
-        else if (sqlite3_step(res) == SQLITE_ROW)
+            return r;
+        }
+
+        if (sqlite3_step(res) == SQLITE_ROW)
             r = sqlite3_column_int(res, 0);
 
         sqlite3_finalize(res);
@@ -131,6 +163,7 @@ namespace satdump
 
     void DBHandler::tr_begin()
     {
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
         char *err = NULL;
         std::string sql = "BEGIN;";
         if (sqlite3_exec(db, sql.c_str(), NULL, 0, &err))
@@ -142,6 +175,7 @@ namespace satdump
 
     void DBHandler::tr_end()
     {
+        std::lock_guard<std::recursive_mutex> lock(db_mutex);
         char *err = NULL;
         std::string sql = "END;";
         if (sqlite3_exec(db, sql.c_str(), NULL, 0, &err))

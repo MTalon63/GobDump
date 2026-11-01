@@ -48,6 +48,7 @@ namespace dvbs2
             return;
         }
 
+        const NcoTable &nco = nco_table();
         auto _lut = constellation->acquire_lut_view();
         for (int i = 0; i < (frame_slot_count + 1) * 90 + pilot_cnt * 36; i++)
         {
@@ -56,7 +57,6 @@ namespace dvbs2
                 ph += (float)(2.0 * M_PI);
             if (ph >= (float)(2.0 * M_PI))
                 ph -= (float)(2.0 * M_PI);
-            const NcoTable &nco = nco_table();
             float nf = ph * (float)(NCO_SIZE / (2.0 * M_PI));
             int ni = (int)nf;
             if (ni >= NCO_SIZE)

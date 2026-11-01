@@ -47,8 +47,7 @@ namespace dvbs2
             // Parse modcod number
             auto cfg = dvbs2::get_dvbs2_cfg(d_modcod, d_shortframes, d_pilots);
 
-            dvbs2::BBFrameBCH bch_decoder(cfg.framesize, cfg.coderate);
-            bbframe_size = bch_decoder.dataSize();
+            bbframe_size = dvbs2::BBFrameBCH::dataSizeFor(cfg.framesize, cfg.coderate);
         }
     }
 

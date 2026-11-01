@@ -30,26 +30,26 @@ namespace satdump
     size_t curl_write_std_string(void *contents, size_t size, size_t nmemb, std::string *s);
 
     /**
-     * @brief Perform a HTTP Request on the
-     * provided URL and return the result as
-     * a string.
+     * @brief Perform a HTTP request and return the body in result.
+     *
+     * Redirects are bounded and timeouts apply.
      *
      * @param url_str URL to use
      * @param result HTTP response, as a string
      * @param added_header optional additional headers
      * @param progress optional progress float pointer
+     * @return 0 on 2xx/non-HTTP, 1 otherwise; check before parsing.
      */
     int perform_http_request(std::string url, std::string &result, std::string added_header = "", float *progress = nullptr);
 
     /**
-     * @brief Perform a HTTP Request on the
-     * provided URL and return the result as
-     * a string, with POST data.
+     * @brief Perform a HTTP POST request and return the body in result.
      *
      * @param url_str URL to use
      * @param result HTTP response, as a string
      * @param post_req POST payload
      * @param added_header optional additional headers
+     * @return 0 on 2xx/non-HTTP, 1 otherwise; check before parsing.
      */
     int perform_http_request_post(std::string url_str, std::string &result, std::string post_req, std::string added_header = "");
 } // namespace satdump

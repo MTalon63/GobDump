@@ -91,15 +91,31 @@ namespace satdump
             nlohmann::ordered_json _get_cfg_list()
             {
                 std::string res;
-                perform_http_request(ht_add + "/list", res);
-                return nlohmann::ordered_json::parse(res);
+                if (perform_http_request(ht_add + "/list", res))
+                    return nlohmann::ordered_json();
+                try
+                {
+                    return nlohmann::ordered_json::parse(res);
+                }
+                catch (std::exception &)
+                {
+                    return nlohmann::ordered_json();
+                }
             }
 
             nlohmann::ordered_json _get_cfg(std::string key)
             {
                 std::string res;
-                perform_http_request_post(ht_add + "/get", res, key);
-                return nlohmann::ordered_json::parse(res);
+                if (perform_http_request_post(ht_add + "/get", res, key))
+                    return nlohmann::ordered_json();
+                try
+                {
+                    return nlohmann::ordered_json::parse(res);
+                }
+                catch (std::exception &)
+                {
+                    return nlohmann::ordered_json();
+                }
             }
 
             cfg_res_t _set_cfg(std::string key, nlohmann::ordered_json v)
@@ -107,8 +123,16 @@ namespace satdump
                 std::string res;
                 nlohmann::json vs;
                 vs[key] = v;
-                perform_http_request_post(ht_add + "/set", res, vs.dump());
-                return nlohmann::ordered_json::parse(res)["res"];
+                if (perform_http_request_post(ht_add + "/set", res, vs.dump()))
+                    return nlohmann::ordered_json();
+                try
+                {
+                    return nlohmann::ordered_json::parse(res)["res"];
+                }
+                catch (std::exception &)
+                {
+                    return nlohmann::ordered_json();
+                }
             }
         };
     } // namespace handlers

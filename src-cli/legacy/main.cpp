@@ -13,9 +13,6 @@
 
 int main_old(int argc, char *argv[])
 {
-    // Init logger
-    initLogger();
-
     if (argc < 2)
     {
         logger->error("Please specify either live/record or pipeline name!");

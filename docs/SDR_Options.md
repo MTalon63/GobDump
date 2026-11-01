@@ -109,9 +109,8 @@ know what you are looking for.
 
 ## SDDC (RX888, RX999, etc)
 
-> [!note]
-> Support for those is experimental. Things may not work as
-expected!
+!!! note
+    Support for those is experimental. Things may not work as expected!
 
 *   `mode` : 0 for HF, 1 for VHF
 *   `rf_gain` : RF Gain in dBs
@@ -120,8 +119,8 @@ expected!
 
 ## SDRPlay
 
-> [!note]
-> Some options are device-specific!
+!!! note
+    Some options are device-specific!
 
 *   `lna_gain` : LNA Gain in dBs
 
@@ -156,10 +155,8 @@ expected!
 
 ## SDR++ Server
 
-> [!warning]
-> Using SDR++ in CLI mode as a source is possible, but all
-settings have to be setup from an UI connecting to the server
-beforehand, including samplerate!
+!!! warning
+    Using SDR++ in CLI mode as a source is possible, but all settings have to be setup from an UI connecting to the server beforehand, including samplerate!
 
 *   `ip_address` : IPv4 Server address
 *   `port` : Server port. Usually 5259
@@ -191,10 +188,8 @@ beforehand, including samplerate!
 
 ## File
 
-> [!note]
->  It is not recommended to use the file source for
-live/autotrack - use offline decoding instead - but it may be useful for
-testing purposes.
+!!! note
+    It is not recommended to use the file source for live/autotrack - use offline decoding instead - but it may be useful for testing purposes.
 
 *   `file_path` : Path to the baseband file (can be `/dev/stdin` on
     Linux/macOS)

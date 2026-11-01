@@ -80,6 +80,8 @@ namespace satdump
              * @param img image to set
              */
             void setImage(image::Image &img);
+            void setImage(image::Image &&img);
+            void setImage(std::shared_ptr<image::Image> img);
 
             /**
              * @brief Get current image. Either

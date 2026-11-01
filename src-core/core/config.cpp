@@ -10,15 +10,34 @@
 #elif defined(_WIN32)
 #include <Shlobj.h>
 #include <direct.h>
+#else
+#include <unistd.h>
 #endif
+
+#include <cstdlib>
 
 namespace satdump
 {
     SATDUMP_DLL SatDumpConfigHandler satdump_cfg;
 
+#if !defined(__APPLE__) && !defined(__ANDROID__)
+    static bool isPathWritable(const char *path)
+    {
+#if defined(_WIN32)
+        HANDLE test_handle = CreateFile(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, NULL);
+        if (test_handle == INVALID_HANDLE_VALUE)
+            return false;
+        CloseHandle(test_handle);
+        return true;
+#else
+        return access(path, W_OK | X_OK) == 0;
+#endif
+    }
+#endif
+
     void SatDumpConfigHandler::checkOutputDirs()
     {
-        std::string documents_dir = "";
+        std::string fallback_dir = "";
 #if defined(__APPLE__)
         // Always overwrite . on macOS since inside the app bundle can be writable
         char documents_glob[PATH_MAX];
@@ -26,57 +45,72 @@ namespace satdump
         sysdir_search_path_enumeration_state search_state = sysdir_start_search_path_enumeration(SYSDIR_DIRECTORY_DOCUMENT, SYSDIR_DOMAIN_MASK_USER);
         sysdir_get_next_search_path_enumeration(search_state, documents_glob);
         glob(documents_glob, GLOB_TILDE, nullptr, &globbuf);
-        documents_dir = std::string(globbuf.gl_pathv[0]);
+        fallback_dir = std::string(globbuf.gl_pathv[0]);
         globfree(&globbuf);
 
 #elif defined(_WIN32)
         // Only set output to Documents if the current dir is not writable
-        HANDLE test_handle = CreateFile(".", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, NULL);
-        if (test_handle == INVALID_HANDLE_VALUE)
+        if (!isPathWritable("."))
         {
             PWSTR documents_wide;
             SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, NULL, &documents_wide);
             std::wstring documents_widestr = std::wstring(documents_wide);
             int len = WideCharToMultiByte(CP_UTF8, 0, documents_widestr.c_str(), (int)documents_widestr.size(), nullptr, 0, nullptr, nullptr);
-            documents_dir = std::string(len, '\0');
-            WideCharToMultiByte(CP_UTF8, 0, documents_widestr.c_str(), (int)documents_widestr.size(), (LPSTR)documents_dir.data(), (int)documents_dir.size(), nullptr, nullptr);
+            fallback_dir = std::string(len, '\0');
+            WideCharToMultiByte(CP_UTF8, 0, documents_widestr.c_str(), (int)documents_widestr.size(), (LPSTR)fallback_dir.data(), (int)fallback_dir.size(), nullptr, nullptr);
         }
-        else
-            CloseHandle(test_handle);
+#elif !defined(__ANDROID__)
+        // AppImages are mounted read-only and some launchers start the binary with
+        // the mount as its working directory, so creating ./live_output fails with
+        // "Read-only file system". Fall back to $HOME, which is what the relative
+        // defaults resolve to when an installed build is started from the desktop.
+        // A writable working directory is still honored, so running from a terminal
+        // keeps writing where the program was started.
+        if (!isPathWritable("."))
+        {
+            const char *home = getenv("HOME");
+            if (home != nullptr && home[0] == '/' && isPathWritable(home))
+            {
+                fallback_dir = home;
+                logger->info("Current directory is not writable, using $HOME for default output directories");
+            }
+            else
+                logger->warn("Current directory is not writable and no usable $HOME was found for output directories");
+        }
 #endif
-        if (documents_dir == "")
+        if (fallback_dir == "")
             return;
 
         bool bad_path = false;
         if (main_cfg["satdump_directories"]["recording_path"]["value"].get<std::string>() == ".")
         {
             bad_path = true;
-            main_cfg["satdump_directories"]["recording_path"]["value"] = documents_dir;
+            main_cfg["satdump_directories"]["recording_path"]["value"] = fallback_dir;
         }
         if (main_cfg["satdump_directories"]["live_processing_path"]["value"].get<std::string>() == "./live_output")
         {
             bad_path = true;
-            main_cfg["satdump_directories"]["live_processing_path"]["value"] = documents_dir + "/live_output";
+            main_cfg["satdump_directories"]["live_processing_path"]["value"] = fallback_dir + "/live_output";
         }
         if (main_cfg["satdump_directories"]["default_input_directory"]["value"].get<std::string>() == ".")
         {
             bad_path = true;
-            main_cfg["satdump_directories"]["default_input_directory"]["value"] = documents_dir;
+            main_cfg["satdump_directories"]["default_input_directory"]["value"] = fallback_dir;
         }
         if (main_cfg["satdump_directories"]["default_output_directory"]["value"].get<std::string>() == ".")
         {
             bad_path = true;
-            main_cfg["satdump_directories"]["default_output_directory"]["value"] = documents_dir;
+            main_cfg["satdump_directories"]["default_output_directory"]["value"] = fallback_dir;
         }
         if (main_cfg["satdump_directories"]["default_image_output_directory"]["value"].get<std::string>() == ".")
         {
             bad_path = true;
-            main_cfg["satdump_directories"]["default_image_output_directory"]["value"] = documents_dir;
+            main_cfg["satdump_directories"]["default_image_output_directory"]["value"] = fallback_dir;
         }
         if (main_cfg["satdump_directories"]["default_projection_output_directory"]["value"].get<std::string>() == ".")
         {
             bad_path = true;
-            main_cfg["satdump_directories"]["default_projection_output_directory"]["value"] = documents_dir;
+            main_cfg["satdump_directories"]["default_projection_output_directory"]["value"] = fallback_dir;
         }
         if (bad_path)
             saveUser();

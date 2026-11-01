@@ -1,9 +1,11 @@
 #include "module_goes_mdl_decoder.h"
 #include "common/codings/correlator32.h"
 #include "common/codings/rotation.h"
+#include "common/widgets/constellation.h"
 #include "common/widgets/themed_widgets.h"
 #include "logger.h"
 #include <cstdint>
+#include <algorithm>
 
 #define FRAME_SIZE 464
 #define ENCODED_FRAME_SIZE 464 * 8
@@ -97,12 +99,7 @@ namespace goes
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
-                    for (int i = 0; i < 2048; i++)
-                    {
-                        draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (((int8_t *)buffer)[i * 2 + 0] / 127.0) * 100 * ui_scale) % int(200 * ui_scale),
-                                                          ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + (((int8_t *)buffer)[i * 2 + 1] / 127.0) * 100 * ui_scale) % int(200 * ui_scale)),
-                                                   2 * ui_scale, style::theme.constellation);
-                    }
+                    satdump::widgets::drawSoftConstellation(draw_list, rect_min, rect_max, (int8_t *)buffer, std::min(ENCODED_FRAME_SIZE / 2, 2048), 2, nullptr, 0.8f, 2 * ui_scale);
 
                     draw_list->PopClipRect();
                     ImGui::Dummy(ImVec2(200 * ui_scale + 3, 200 * ui_scale + 3));

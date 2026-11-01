@@ -50,7 +50,7 @@ namespace satdump
 
         // Without these, the declared copy ctor/dtor suppress the implicit moves, so every `return img`
         // and every vector reallocation deep-copied the whole pixel buffer.
-        Image::Image(Image &&img)
+        Image::Image(Image &&img) noexcept
         {
             d_data = img.d_data;
             data_size = img.data_size;
@@ -68,7 +68,7 @@ namespace satdump
             img.clear();
         }
 
-        Image &Image::operator=(Image &&img)
+        Image &Image::operator=(Image &&img) noexcept
         {
             if (this != &img)
             {

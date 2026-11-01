@@ -62,6 +62,18 @@
         "parameters": {
             "samplerate": {
                 "value": 4e6
+            },
+            "swap_align": {
+                "name": "SWAP: centre sun",
+                "type": "bool",
+                "value": false,
+                "description": "Fit the solar limb, centre the sun and turn solar north up (no calibration; a few seconds per image)"
+            },
+            "swap_gif": {
+                "name": "SWAP: animation GIF",
+                "type": "bool",
+                "value": false,
+                "description": "Only with 'SWAP: centre sun': also write SWAP/SWAP.gif, all frames in time order, gold tint, 10 fps, looping"
             }
         },
         "work": {

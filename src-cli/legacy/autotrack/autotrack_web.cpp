@@ -189,6 +189,13 @@ void AutoTrackApp::stop_webserver()
 
 void AutoTrackApp::web_heartbeat()
 {
+    if (rdas_filler_detected.exchange(false))
+    {
+        logger->warn("RDAS filler detected; stopping pass early");
+        stop_processing();
+        stop_recording();
+    }
+
     if (web_fft_is_enabled)
     {
         if (time(0) - web_last_fft_access > 10)

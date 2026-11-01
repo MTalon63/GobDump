@@ -187,6 +187,8 @@ namespace satdump
             pipeline_params["baseband_format"] = "cf32";
             pipeline_params["buffer_size"] = dsp::STREAM_BUFFER_SIZE; // This is required, as we WILL go over the (usually) default 8192 size
             pipeline_params["start_timestamp"] = (double)time(0);     // Some pipelines need this
+            if (tracking_widget)
+                pipeline_params["filler_timeout"] = tracking_widget->getAutoTrackCfg().rdas_filler_timeout;
 
             try
             {
@@ -235,8 +237,10 @@ namespace satdump
                 logger->critical(input_file);
                 int start_level = pipeline.live_cfg.normal_live[pipeline.live_cfg.normal_live.size() - 1];
                 std::string input_level = pipeline.steps[start_level].level;
+                nlohmann::json offline_params = pipeline_params;
+                offline_params.erase("filler_timeout"); // Tracker-only; do not run it during offline post-processing.
                 eventBus->fire_event<explorer::ExplorerAddHandlerEvent>(
-                    {std::make_shared<handlers::OffProcessingHandler>(pipeline, input_level, input_file, pipeline_output_dir, pipeline_params), false, true});
+                    {std::make_shared<handlers::OffProcessingHandler>(pipeline, input_level, input_file, pipeline_output_dir, offline_params), false, true});
             }
 
             {
@@ -303,14 +307,15 @@ namespace satdump
 #endif
     }
 
-    void RecorderApplication::try_init_tracking_widget()
+    void RecorderApplication::try_init_tracking_widget(nlohmann::json cli_set)
     {
         if (tracking_widget == nullptr)
         {
-            tracking_widget = new TrackingWidget();
+            tracking_widget = new TrackingWidget(cli_set);
 
             tracking_widget->aos_callback = [this](AutoTrackCfg autotrack_cfg, SatellitePass, TrackedObject obj)
             {
+                rdas_filler_detected.store(false);
                 if (autotrack_cfg.multi_mode || obj.downlinks.size() > 1)
                 {
                     if (!autotrack_cfg.multi_mode)

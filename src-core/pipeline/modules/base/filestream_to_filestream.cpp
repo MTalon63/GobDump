@@ -38,8 +38,8 @@ namespace satdump
 
             nlohmann::json FileStreamToFileStreamModule::getModuleStats()
             {
-                nlohmann::json v;
-                if (!d_is_streaming_input)
+                nlohmann::json v = nlohmann::json::object();
+                if (!d_is_streaming_input && filesize > 0)
                     v["progress"] = ((double)progress / (double)filesize) * 100.0f;
                 return v;
             }
@@ -59,7 +59,9 @@ namespace satdump
 
                 if (time(0) - time_)
                 {
-                    logger->trace(getModuleStats().dump(4));
+                    auto stats = getModuleStats();
+                    if (!stats.is_null() && !stats.empty())
+                        logger->trace(stats.dump(4));
                     time_ = time(0);
                 }
             }

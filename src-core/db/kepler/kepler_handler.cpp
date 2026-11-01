@@ -151,6 +151,7 @@ namespace satdump
 
     void KeplerDBHandler::putKepler(KeplerData kep)
     {
+        std::lock_guard<std::recursive_mutex> lock(h->db_mutex);
         replaceAllStr(kep.name, "'", "''");
         std::string sql = "INSERT INTO kepler (id,"         //
                           " satellite_number,"              //
@@ -212,6 +213,7 @@ namespace satdump
 
     bool KeplerDBHandler::getKepler(KeplerData &kep, int norad, time_t time)
     {
+        std::lock_guard<std::recursive_mutex> lock(h->db_mutex);
         bool ret = false;
 
         // If no time is specified we assume current
@@ -278,16 +280,17 @@ namespace satdump
 
     std::vector<KeplerData> KeplerDBHandler::getAllNewestKepler()
     {
+        std::lock_guard<std::recursive_mutex> lock(h->db_mutex);
         std::vector<KeplerData> all_keps;
 
-        sqlite3_stmt *res;
+        sqlite3_stmt *res = nullptr;
 
         if (sqlite3_prepare_v2(
                 h->db,
                 "SELECT c1.satellite_number, c1.element_number, c1.name, c1.designator, c1.epoch, c1.inclination, c1.right_ascension, c1.eccentricity, c1.argument_of_perigee, c1.mean_anomaly, "
                 "c1.mean_motion, c1.derivative_mean_motion, c1.second_derivative_mean_motion, c1.bstar_drag_term, c1.revolutions_at_epoch FROM kepler c1 JOIN (SELECT satellite_number, MAX(epoch) "
                 "AS Maxepoch FROM kepler GROUP BY satellite_number) c2 ON c1.satellite_number = c2.satellite_number AND c1.epoch = c2.Maxepoch;",
-                -1, &res, 0))
+                -1, &res, 0) != SQLITE_OK)
             logger->error("Couldn't fetch Kepler data from DB! " + std::string(sqlite3_errmsg(h->db)));
         else
         {
@@ -315,7 +318,8 @@ namespace satdump
             }
         }
 
-        sqlite3_finalize(res);
+        if (res != nullptr)
+            sqlite3_finalize(res);
 
         return all_keps;
     }

@@ -38,9 +38,9 @@ option(BUILD_MSVC "Build for Windows with MSVC" OFF) # Seems like "MSVC" as a ma
 option(BUILD_OPENCL "Build with OpenCL GPU Accelerations" ON)
 option(BUILD_OPENMP "Build with OpenMP Optimizations" ON)
 option(BUILD_DOCS "Build with Doxygen Documentation" OFF)
-option(BUILD_RDAS_ALIGNER "Build the RDAS layer aligner (requires OpenCV and jsoncpp)" ON)
 option(ENABLE_INSTALL "Enable INSTALL TARGET" ON)
 option(ENABLE_I18N "Enable internationalizaton (allows changing language)" ON)
+option(ENABLE_CRASHDUMP "Enable crashdump feature (requires libcpptrace or libbacktrace)" ON)
 
 # I18N
 if(ENABLE_I18N)
@@ -63,6 +63,17 @@ if(UNIX)
             set(CMAKE_INSTALL_PREFIX /usr CACHE PATH "Set CMAKE Default to /usr" FORCE)
         endif()
     endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+endif()
+
+# $ORIGIN RUNPATH so installed binaries/plugins find the core lib under any prefix.
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    set(CMAKE_INSTALL_RPATH
+        "$ORIGIN"
+        "$ORIGIN/.."
+        "$ORIGIN/../.."
+        "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+        "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}/gobdump"
+    )
 endif()
 
 if(APPLE)
@@ -105,6 +116,10 @@ if(UNIX OR MINGW)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+    if(ENABLE_CRASHDUMP)
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g")
+    endif()
 
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
@@ -233,10 +248,11 @@ set(GOBDUMP_VERSION_TYPE "alpha")
 
 # Check if the current commit has a tag
 execute_process(
-    COMMAND git name-rev --name-only --tags HEAD
+    COMMAND git describe --tags --exact-match HEAD
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     OUTPUT_VARIABLE GIT_HAS_TAG
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
 )
 
 # Get the current branch
@@ -255,8 +271,13 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# GitHub Actions tag builds can have a shallow checkout without the tag ref.
+if(GIT_HAS_TAG STREQUAL "" AND "$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")
+    set(GIT_HAS_TAG "$ENV{GITHUB_REF_NAME}")
+endif()
+
 # Set version
-if(GIT_HAS_TAG STREQUAL "undefined" OR GIT_HAS_TAG STREQUAL "nightly")
+if(GIT_HAS_TAG STREQUAL "undefined" OR GIT_HAS_TAG STREQUAL "nightly" OR GIT_HAS_TAG STREQUAL "")
     message("-- Commit has no tag/nightly tag (${GIT_HAS_TAG}). Assume dev build")
     if(NOT GOBDUMP_VERSION_TYPE STREQUAL "")
         set(GOBDUMP_VERSION "${PROJECT_VERSION}-${GOBDUMP_VERSION_TYPE}-${GIT_HASH}")
@@ -265,11 +286,10 @@ if(GIT_HAS_TAG STREQUAL "undefined" OR GIT_HAS_TAG STREQUAL "nightly")
     endif()
 else()
     message("-- Commit has tag (${GIT_HAS_TAG}). Assume release build")
-    if(NOT GOBDUMP_VERSION_TYPE STREQUAL "")
-        set(GOBDUMP_VERSION "${PROJECT_VERSION}")
-    else()
-        set(GOBDUMP_VERSION "${PROJECT_VERSION}-${GOBDUMP_VERSION_TYPE}")
-    endif()
+    # Use the actual tag for release builds instead of the development PROJECT_VERSION.
+    set(GOBDUMP_VERSION "${GIT_HAS_TAG}")
+    string(REGEX REPLACE "^tags/" "" GOBDUMP_VERSION "${GOBDUMP_VERSION}")
+    string(REGEX REPLACE "^v" "" GOBDUMP_VERSION "${GOBDUMP_VERSION}")
 endif()
 
 # Set branch
@@ -349,38 +369,6 @@ if(BUILD_TOOLS)
     add_subdirectory(tools)
 endif()
 
-if(BUILD_RDAS_ALIGNER)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/rdas_layer_aligner/CMakeLists.txt")
-        # Skip the aligner (not fail the configure) when its dependencies are missing.
-        find_package(OpenCV QUIET)
-        find_package(jsoncpp CONFIG QUIET)
-        if(NOT APPLE AND NOT ANDROID)
-            find_package(OpenCL QUIET)
-        endif()
-
-        set(RDAS_ALIGNER_MISSING "")
-        if(NOT OpenCV_FOUND)
-            list(APPEND RDAS_ALIGNER_MISSING "OpenCV")
-        endif()
-        if(NOT jsoncpp_FOUND)
-            list(APPEND RDAS_ALIGNER_MISSING "jsoncpp")
-        endif()
-        if(NOT APPLE AND NOT ANDROID AND NOT OpenCL_FOUND)
-            list(APPEND RDAS_ALIGNER_MISSING "OpenCL")
-        endif()
-
-        if(RDAS_ALIGNER_MISSING STREQUAL "")
-            message(STATUS "Building the RDAS layer aligner")
-            add_compile_definitions(ENABLE_RDAS_ALIGNER=1)
-            add_subdirectory(external/rdas_layer_aligner)
-        else()
-            message(WARNING "BUILD_RDAS_ALIGNER is ON but ${RDAS_ALIGNER_MISSING} were not found - skipping the aligner")
-        endif()
-    else()
-        message(WARNING "BUILD_RDAS_ALIGNER is ON but external/rdas_layer_aligner is missing - run git submodule update --init")
-    endif()
-endif()
-
 add_subdirectory(plugins)
 
 if(MINGW)
@@ -399,9 +387,6 @@ if(MINGW)
     add_dependencies(copy-runtime-dlls gobdump_core)
     if(TARGET gobdump-ui)
         add_dependencies(copy-runtime-dlls gobdump-ui)
-    endif()
-    if(TARGET rdas_aligner)
-        add_dependencies(copy-runtime-dlls rdas_aligner)
     endif()
 endif()
 
@@ -429,6 +414,8 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
         install(DIRECTORY ${CMAKE_SOURCE_DIR}/resources DESTINATION share/gobdump)
         install(FILES ${CMAKE_SOURCE_DIR}/gobdump_cfg.json DESTINATION share/gobdump)
         install(FILES ${CMAKE_SOURCE_DIR}/icon.png DESTINATION share/gobdump)
+        # Square app icon for the desktop icon theme / AppImage (.DirIcon).
+        install(FILES ${CMAKE_SOURCE_DIR}/gobdump.png DESTINATION share/icons/hicolor/256x256/apps)
     endif()
     configure_file(${CMAKE_SOURCE_DIR}/satdump.desktop ${CMAKE_CURRENT_BINARY_DIR}/gobdump.desktop @ONLY)
 
@@ -547,8 +534,7 @@ if((CMAKE_BUILD_TYPE MATCHES "^[Rr]elease") AND BUILD_DOCS)
                             src-core/dsp \
                             src-core/image \
                             src-core/utils \
-                            docs/pages \
-                            docs/res \
+                            docs \
                             plugins/xrit_support/xrit")
         set(DOXYGEN_FILES  "${DOXYGEN_FILES} \
                             plugins/fengyun2_support/fengyun2/svissr")

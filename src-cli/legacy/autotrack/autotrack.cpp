@@ -1,13 +1,19 @@
 #include "autotrack.h"
 #include "init.h"
 #include "logger.h"
+#include "common/tracking/scheduler/rdas_filler.h"
 #include "common/utils.h"
 #include "core/config.h"
+#include "core/plugin.h"
 #include "utils/time.h"
 
 AutoTrackApp::AutoTrackApp(nlohmann::json settings, nlohmann::json parameters, std::string output_folder)
     : d_settings(settings), d_parameters(parameters), d_output_folder(output_folder)
 {
+    satdump::eventBus->register_handler<satdump::events::RDASFillerEvent>(
+        [this](const satdump::events::RDASFillerEvent &evt)
+        { rdas_filler_detected.store(evt.filler); });
+
     ///////////////////////////////////////////////////////////////////////////////////
     ///////////////// Initial settings parsing
     ///////////////////////////////////////////////////////////////////////////////////
@@ -244,6 +250,7 @@ void AutoTrackApp::setup_schedular_callbacks()
 
     auto_scheduler.aos_callback = [this](satdump::AutoTrackCfg autotrack_cfg, satdump::SatellitePass, satdump::TrackedObject obj)
     {
+        rdas_filler_detected.store(false);
         object_tracker.setObject(object_tracker.TRACKING_SATELLITE, obj.norad);
 
         if (autotrack_cfg.multi_mode || obj.downlinks.size() > 1)

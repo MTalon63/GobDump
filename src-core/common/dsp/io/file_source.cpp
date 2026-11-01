@@ -39,6 +39,7 @@ namespace dsp
         else
         {
             d_eof = true;
+            output_stream->stopWriter();
         }
     }
 

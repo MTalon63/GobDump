@@ -116,12 +116,6 @@ int main(int argc, char *argv[])
     // logger->warn("\n" + parameters.dump(4));
     // exit(0);
 
-#if defined(__linux__) // Wayland GLFW support is frankly broken at the moment, so force X11
-#if defined(GLFW_PLATFORM_X11)
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-#endif
-#endif
-
     // Setup window
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit())

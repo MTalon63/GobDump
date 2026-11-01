@@ -1,12 +1,14 @@
 #include "module_ccsds_conv_concat_decoder.h"
 #include "common/codings/differential/nrzm.h"
 #include "common/codings/randomization.h"
+#include "common/widgets/constellation.h"
 #include "common/widgets/themed_widgets.h"
 #include "core/exception.h"
 #include "imgui/imgui.h"
 #include "logger.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 
 namespace satdump
@@ -40,7 +42,10 @@ namespace satdump
                   d_rs_interleaving_depth(parameters["rs_i"].get<int>()), d_rs_fill_bytes(parameters.count("rs_fill_bytes") > 0 ? parameters["rs_fill_bytes"].get<int>() : -1),
                   d_rs_dualbasis(parameters.count("rs_dualbasis") > 0 ? parameters["rs_dualbasis"].get<bool>() : true),
                   d_rs_type(parameters.count("rs_type") > 0 ? parameters["rs_type"].get<std::string>() : "none"),
-                  d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false)
+                  d_rs_usecheck(parameters.count("rs_usecheck") > 0 ? parameters["rs_usecheck"].get<bool>() : false),
+
+                  d_oqpsk_shift(parameters.count("oqpsk_shift") > 0 ? parameters["oqpsk_shift"].get<bool>()
+                                                                   : (parameters["constellation"].get<std::string>() == "oqpsk"))
             {
                 if (d_rs_interleaving_depth > 10)
                     throw satdump_exception("CCSDS Concatenated Decoder : rs_i must be <= 10!");
@@ -98,7 +103,8 @@ namespace satdump
                     temp_soft_buffer = new int8_t[d_buffer_size * 2]; // Enough space
                     d_current_phase = 0;
                     if (d_constellation == dsp::PSK8)
-                        d_num_phases = 8;
+                        // Costas locks on the 22.5+k*45 lattice, so step 22.5 deg.
+                        d_num_phases = 16;
                     else
                         d_num_phases = 4;
                     
@@ -144,20 +150,23 @@ namespace satdump
                     // Store params so reinit() can recreate the object with a clean trellis
                     s.ber_threshold = d_viterbi_ber_threasold;
                     s.outsync_after = d_viterbi_outsync_after;
-                    s.buffer_size   = d_buffer_size;
+                    // bits_per_sym inputs per symbol, so size the Viterbi for that.
+                    s.buffer_size   = d_is_higher_order
+                                          ? (d_buffer_size / 2) * d_constellation_obj->getBitsCnt()
+                                          : d_buffer_size;
                     s.phases        = d_phases;
                     s.oqpsk_mode    = d_oqpsk_mode;
                     if (rate == PUNCRATE_1_2)
-                        s.v12 = std::make_shared<viterbi::Viterbi1_2>(d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.v12 = std::make_shared<viterbi::Viterbi1_2>(d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_2_3)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc23>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc23>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_3_4)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc34>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc34>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_5_6)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc56>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
                     else if (rate == PUNCRATE_7_8)
-                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, d_buffer_size, d_phases, d_oqpsk_mode);
-                    s.out = new uint8_t[d_buffer_size * 8];
+                        s.vp = std::make_shared<viterbi::Viterbi_Depunc>(std::make_shared<viterbi::puncturing::Depunc78>(), d_viterbi_ber_threasold, d_viterbi_outsync_after, s.buffer_size, d_phases, d_oqpsk_mode);
+                    s.out = new uint8_t[s.buffer_size * 8];
                     return s;
                 };
 
@@ -187,17 +196,32 @@ namespace satdump
                 soft_buffer = new int8_t[d_buffer_size];
                 frame_buffer = new uint8_t[d_buffer_size * 8]; // Larger by safety
 
+                // Mirror the rate pool for the shifted pairing.
+                if (d_oqpsk_shift)
+                {
+                    for (size_t i = 0; i < d_rate_pool.size(); i++)
+                        d_shift_pool.push_back(makeSlot(d_rate_pool[i].rate, d_rate_pool[i].name.c_str()));
+
+                    viterbi_out_shift = d_shift_pool[0].out;
+                    soft_buffer_shift = new int8_t[d_buffer_size];
+                    frame_buffer_shift = new uint8_t[d_buffer_size * 8];
+                }
+
                 d_active_rate_idx = 0;
                 viterbi_rate_str  = d_rate_pool[0].name;
                 viterbi_out       = d_rate_pool[0].out;
 
                 deframer = std::make_shared<deframing::BPSK_CCSDS_Deframer>(d_cadu_size, asm_sync);
+                if (d_oqpsk_shift)
+                    deframer_shift = std::make_shared<deframing::BPSK_CCSDS_Deframer>(d_cadu_size, asm_sync);
                 if (d_rs_interleaving_depth != 0)
                     reed_solomon = std::make_shared<reedsolomon::ReedSolomon>(rstype, d_rs_fill_bytes);
 
                 if (d_cadu_size % 8 != 0) // If this is not a perfect byte length match, pad the frames
                 {
                     deframer->CADU_PADDING = d_cadu_size % 8;
+                    if (deframer_shift)
+                        deframer_shift->CADU_PADDING = d_cadu_size % 8;
                     logger->info("Frames will be padded!");
                 }
 
@@ -208,8 +232,12 @@ namespace satdump
             {
                 for (auto &slot : d_rate_pool)
                     delete[] slot.out; // viterbi_out is a non-owning alias; slots own their buffers
+                for (auto &slot : d_shift_pool)
+                    delete[] slot.out;
                 delete[] soft_buffer;
                 delete[] frame_buffer;
+                delete[] soft_buffer_shift;
+                delete[] frame_buffer_shift;
                 if (temp_soft_buffer != nullptr)
                     delete[] temp_soft_buffer;
             }
@@ -217,30 +245,46 @@ namespace satdump
             void CCSDSConvConcatDecoderModule::process()
             {
                 diff::NRZMDiff diff;
+                diff::NRZMDiff diff_shift;
                 // Measured at the TOP of each iteration so elapsed reflects real wall-clock
                 // time between buffer reads, not decode time.
                 auto d_last_buffer_time = std::chrono::steady_clock::now();
 
                 while (should_run())
                 {
-                    // Read a buffer
-                    read_data((uint8_t *)soft_buffer, d_buffer_size);
+                    const int rx_bytes = d_is_higher_order ? (d_buffer_size & ~1) : d_buffer_size;
+                    read_data((uint8_t *)soft_buffer, rx_bytes);
 
                     if (d_bpsk_90 || d_iq_invert) // Symbols are swapped for some Q/BPSK sats
                         rotate_soft((int8_t *)soft_buffer, d_buffer_size, PHASE_0, true);
+
+                    // Shifted pairing: I delayed by one symbol, built before the slots rotate soft_buffer.
+                    if (d_oqpsk_shift)
+                    {
+                        for (int i = 0; i < d_buffer_size / 2; i++)
+                        {
+                            int8_t cur_i = soft_buffer[i * 2];
+                            soft_buffer_shift[i * 2]     = last_shift_i;
+                            last_shift_i                 = cur_i;
+                            soft_buffer_shift[i * 2 + 1] = soft_buffer[i * 2 + 1];
+                        }
+                    }
 
                     // Run all viterbi decoders in the pool (1 slot for fixed rate, 5 for auto)
                     if (!d_is_higher_order)
                     {
                         for (auto &slot : d_rate_pool)
                             slot.work((int8_t *)soft_buffer, d_buffer_size);
+                        for (auto &slot : d_shift_pool)
+                            slot.work((int8_t *)soft_buffer_shift, d_buffer_size);
                     }
                     else
                     {
                         auto clamp_8 = [](float x) -> int8_t {
-                            if (x < -127.0f) return -127;
-                            if (x > 127.0f) return 127;
-                            return (int8_t)x;
+                            if (!std::isfinite(x)) return 0;
+                            if (x <= -127.0f) return -127;
+                            if (x >= 127.0f) return 127;
+                            return (int8_t)(x < 0.0f ? x - 0.5f : x + 0.5f);
                         };
 
                         bool any_synced = false;
@@ -267,9 +311,11 @@ namespace satdump
                                 {
                                     int8_t r = soft_buffer[i * 2];
                                     int8_t c = soft_buffer[i * 2 + 1];
-                                    int8_t vr = clamp_8((r * c_p) - (c * s_p));
-                                    int8_t vc = clamp_8((c * c_p) + (r * s_p));
-                                    d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                                    // Map RMS 100 to radius 1.
+                                    complex_t rot(((float)r * c_p - (float)c * s_p) * 0.01f,
+                                                  ((float)c * c_p + (float)r * s_p) * 0.01f);
+                                    int8_t *db = &temp_soft_buffer[i * bits_per_sym];
+                                    d_constellation_obj->demod_soft_lut(rot, db);
                                 }
                                 temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
 
@@ -308,9 +354,11 @@ namespace satdump
                             {
                                 int8_t r = soft_buffer[i * 2];
                                 int8_t c = soft_buffer[i * 2 + 1];
-                                int8_t vr = clamp_8((r * c_p) - (c * s_p));
-                                int8_t vc = clamp_8((c * c_p) + (r * s_p));
-                                d_constellation_obj->demod_soft_lut(complex_t(vr / 50.0f, vc / 50.0f), &temp_soft_buffer[i * bits_per_sym]);
+                                // Map RMS 100 to radius 1.
+                                complex_t rot(((float)r * c_p - (float)c * s_p) * 0.01f,
+                                              ((float)c * c_p + (float)r * s_p) * 0.01f);
+                                int8_t *db = &temp_soft_buffer[i * bits_per_sym];
+                                d_constellation_obj->demod_soft_lut(rot, db);
                             }
                             temp_bits_len = (d_buffer_size / 2) * bits_per_sym;
 
@@ -359,6 +407,28 @@ namespace satdump
                         if (viterbi_rate_str != active_slot.name)
                             viterbi_rate_str = active_slot.name;
 
+                        viterbi_out_shift = nullptr;
+                        int vitout_shift = 0;
+                        viterbi_shift_lock = 0;
+                        if (d_oqpsk_shift)
+                        {
+                            int best = -1;
+                            float best_ber = 999.0f;
+                            for (int i = 0; i < (int)d_shift_pool.size(); i++)
+                                if (d_shift_pool[i].getState() != 0 && d_shift_pool[i].ber() < best_ber)
+                                {
+                                    best_ber = d_shift_pool[i].ber();
+                                    best = i;
+                                }
+                            if (best < 0)
+                                best = 0; // unlocked, keep the deframer in step
+
+                            viterbi_out_shift = d_shift_pool[best].out;
+                            vitout_shift      = d_shift_pool[best].last_vitout;
+                            viterbi_shift_ber = d_shift_pool[best].ber();
+                            viterbi_shift_lock = d_shift_pool[best].getState();
+                        }
+
                         // Update MER when Viterbi is locked.
                         // EVMSNREstimator is decision-directed: MER = P_signal / P_error
                         // where error = received symbol - nearest ideal constellation point.
@@ -392,10 +462,36 @@ namespace satdump
                         }
 
                         if (d_diff_decode) // Diff decoding if required
+                        {
                             diff.decode_bits(viterbi_out, vitout_cur);
+                            if (d_oqpsk_shift)
+                                diff_shift.decode_bits(viterbi_out_shift, vitout_shift);
+                        }
 
-                        // Run deframer
+                        // Second deframer on the shifted pairing; whichever is locked wins.
                         int frames = deframer->work(viterbi_out, vitout_cur, frame_buffer);
+                        int frames_shift = 0;
+                        uint8_t *frames_buf = frame_buffer;
+                        int frames_count = frames;
+                        d_shift_selected = false;
+                        if (d_oqpsk_shift)
+                        {
+                            frames_shift = deframer_shift->work(viterbi_out_shift, vitout_shift, frame_buffer_shift);
+                            const bool main_synced  = deframer->getState() == deframer->STATE_SYNCED;
+                            const bool shift_synced = deframer_shift->getState() == deframer_shift->STATE_SYNCED;
+                            if (shift_synced && !main_synced)
+                            {
+                                frames_buf = frame_buffer_shift;
+                                frames_count = frames_shift;
+                                d_shift_selected = true;
+                            }
+                            else if (!main_synced && frames_shift > frames)
+                            {
+                                frames_buf = frame_buffer_shift;
+                                frames_count = frames_shift;
+                                d_shift_selected = true;
+                            }
+                        }
 
                         // Deframer nosync timeout with exponential backoff.
                         //
@@ -446,9 +542,14 @@ namespace satdump
                                     // the deframer not to sync in the first place.
                                     for (auto &slot : d_rate_pool)
                                         slot.reinit();
+                                    for (auto &slot : d_shift_pool)
+                                        slot.reinit();
                                     d_active_rate_idx = 0;
                                     deframer->reset();
+                                    if (deframer_shift)
+                                        deframer_shift->reset();
                                     viterbi_lock = d_rate_pool[0].getState();
+                                    viterbi_shift_lock = 0;
 
                                     mer_db = 0;
                                     avg_mer = 0;
@@ -463,9 +564,9 @@ namespace satdump
                         }
 
 
-                        for (int i = 0; i < frames; i++)
+                        for (int i = 0; i < frames_count; i++)
                         {
-                            uint8_t *cadu = &frame_buffer[i * d_cadu_bytes];
+                            uint8_t *cadu = &frames_buf[i * d_cadu_bytes];
 
                             if (d_derand && !d_derand_after_rs) // Derand if required, before RS
                             {
@@ -506,21 +607,45 @@ namespace satdump
             nlohmann::json CCSDSConvConcatDecoderModule::getModuleStats()
             {
                 auto v = satdump::pipeline::base::FileStreamToFileStreamModule::getModuleStats();
-                v["deframer_lock"] = deframer->getState() == deframer->STATE_SYNCED;
-                v["viterbi_ber"] = viterbi_ber;
-                v["viterbi_lock"] = viterbi_lock;
+
+                auto state_str = [](const std::shared_ptr<deframing::BPSK_CCSDS_Deframer> &d) -> std::string {
+                    return d->getState() == d->STATE_NOSYNC ? "NOSYNC" : (d->getState() == d->STATE_SYNCING ? "SYNCING" : "SYNCED");
+                };
+
+                const bool main_vit  = viterbi_lock != 0;
+                const bool shift_vit = d_oqpsk_shift && viterbi_shift_lock != 0;
+                const bool main_def  = deframer->getState() == deframer->STATE_SYNCED;
+                const bool shift_def = d_oqpsk_shift && deframer_shift->getState() == deframer_shift->STATE_SYNCED;
+
+                // Headline fields follow the branch that produced the last output.
+                const bool use_shift = d_oqpsk_shift && d_shift_selected;
+
+                v["deframer_lock"] = main_def || shift_def;
+                v["viterbi_lock"] = (main_vit || shift_vit) ? 1 : 0;
+                v["viterbi_ber"] = use_shift ? viterbi_shift_ber : viterbi_ber;
                 v["viterbi_rate"] = viterbi_rate_str;
+
+                if (d_oqpsk_shift)
+                {
+                    v["oqpsk_shift"] = true;
+                    v["oqpsk_shift_active"] = d_shift_selected;
+                    v["viterbi_main_lock"] = main_vit ? 1 : 0;
+                    v["viterbi_main_ber"] = viterbi_ber;
+                    v["viterbi_shift_lock"] = shift_vit ? 1 : 0;
+                    v["viterbi_shift_ber"] = viterbi_shift_ber;
+                    v["deframer_main_state"] = state_str(deframer);
+                    v["deframer_shift_state"] = state_str(deframer_shift);
+                }
+
                 if (d_rs_interleaving_depth != 0)
                 {
                     int rs_sum = 0;
                     for (int i = 0; i < d_rs_interleaving_depth; i++) rs_sum += errors[i];
                     v["rs_avg"] = rs_sum / d_rs_interleaving_depth;
                 }
-                std::string viterbi_state = viterbi_lock == 0 ? "NOSYNC" : "SYNCED";
-                std::string deframer_state = deframer->getState() == deframer->STATE_NOSYNC ? "NOSYNC" : (deframer->getState() == deframer->STATE_SYNCING ? "SYNCING" : "SYNCED");
-                v["viterbi_state"] = viterbi_state;
-                v["deframer_state"] = deframer_state;
-                if (viterbi_lock != 0)
+                v["viterbi_state"] = (main_vit || shift_vit) ? "SYNCED" : "NOSYNC";
+                v["deframer_state"] = state_str(use_shift ? deframer_shift : deframer);
+                if (main_vit || shift_vit)
                     v["mer_db"] = mer_db;
                 return v;
             }
@@ -530,8 +655,14 @@ namespace satdump
                 std::string window_title = d_auto_rate
                     ? "CCSDS Auto-Rate Concatenated Decoder"
                     : ("CCSDS r=" + d_rate_pool[0].name + " Concatenated Decoder");
+                if (d_oqpsk_shift)
+                    window_title += " [OQPSK shift]";
                 ImGui::Begin(window_title.c_str(), NULL, window ? 0 : NOWINDOW_FLAGS);
-                float &ber = viterbi_ber;
+
+                const bool shift_framed = d_oqpsk_shift && d_shift_selected;
+                std::shared_ptr<deframing::BPSK_CCSDS_Deframer> active_deframer = shift_framed ? deframer_shift : deframer;
+                const bool any_viterbi_lock = viterbi_lock != 0 || (d_oqpsk_shift && viterbi_shift_lock != 0);
+                float &ber = shift_framed ? viterbi_shift_ber : viterbi_ber;
 
                 float avail_x = ImGui::GetContentRegionAvail().x;
                 float spacing = ImGui::GetStyle().ItemSpacing.x;
@@ -551,26 +682,13 @@ namespace satdump
                     draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                     draw_list->PushClipRect(rect_min, rect_max);
 
+                    // Bounded by the buffer size, not a fixed 2048.
                     if (d_constellation == dsp::BPSK)
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i] / 127.0f) * col_w * 0.65f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (float)rng.gasdev() * col_w * 0.07f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_buffer_size, 2048), 1,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
                     else
-                    {
-                        for (int i = 0; i < 2048; i++)
-                        {
-                            float x_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 0] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            float y_off = std::clamp(col_w / 2.0f + (((int8_t *)soft_buffer)[i * 2 + 1] / 127.0f) * col_w * 0.5f, 0.0f, col_w);
-                            draw_list->AddCircleFilled(ImVec2(rect_min.x + x_off, rect_min.y + y_off),
-                                                       std::max(1.0f, col_w * 0.01f), style::theme.constellation);
-                        }
-                    }
+                        widgets::drawSoftConstellation(draw_list, rect_min, rect_max, soft_buffer, std::min(d_buffer_size / 2, 2048), 2,
+                                                       &rng, 0.8f, std::max(1.0f, col_w * 0.01f));
 
                     draw_list->PopClipRect();
                     ImGui::Dummy(ImVec2(col_w, col_w));
@@ -587,14 +705,16 @@ namespace satdump
 
                         ImGui::SameLine();
 
-                        if (viterbi_lock == 0)
+                        if (!any_viterbi_lock)
                             ImGui::TextColored(style::theme.red, "NOSYNC");
+                        else if (shift_framed)
+                            ImGui::TextColored(style::theme.green, "SYNCED (shift)");
                         else
                             ImGui::TextColored(style::theme.green, "SYNCED");
 
                         ImGui::Text("BER   : ");
                         ImGui::SameLine();
-                        ImGui::TextColored(viterbi_lock == 0 ? style::theme.red : style::theme.green, UITO_C_STR(ber));
+                        ImGui::TextColored(!any_viterbi_lock ? style::theme.red : style::theme.green, UITO_C_STR(ber));
 
                         std::memmove(&ber_history[0], &ber_history[1], (200 - 1) * sizeof(float));
                         ber_history[200 - 1] = ber;
@@ -617,16 +737,18 @@ namespace satdump
 
                         ImGui::SameLine();
 
-                        if (viterbi_lock == 0)
+                        if (!any_viterbi_lock)
                         {
                             ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "NOSYNC");
                         }
                         else
                         {
-                            if (deframer->getState() == deframer->STATE_NOSYNC)
+                            if (active_deframer->getState() == active_deframer->STATE_NOSYNC)
                                 ImGui::TextColored(style::theme.red, "NOSYNC");
-                            else if (deframer->getState() == deframer->STATE_SYNCING)
+                            else if (active_deframer->getState() == active_deframer->STATE_SYNCING)
                                 ImGui::TextColored(style::theme.orange, "SYNCING");
+                            else if (shift_framed)
+                                ImGui::TextColored(style::theme.green, "SYNCED (shift)");
                             else
                                 ImGui::TextColored(style::theme.green, "SYNCED");
                         }
@@ -643,7 +765,7 @@ namespace satdump
                             {
                                 ImGui::SameLine();
 
-                                if (viterbi_lock == 0 || deframer->getState() == deframer->STATE_NOSYNC)
+                                if (!any_viterbi_lock || active_deframer->getState() == active_deframer->STATE_NOSYNC)
                                 {
                                     ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%i ", i);
                                 }
@@ -671,7 +793,7 @@ namespace satdump
                     {
                         ImGui::Text("MER     : ");
                         ImGui::SameLine();
-                        if (viterbi_lock == 0)
+                        if (!any_viterbi_lock)
                             ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "---");
                         else
                             ImGui::TextColored(style::theme.green, "%.2f dB", mer_db);
@@ -691,7 +813,7 @@ namespace satdump
                             ImGui::TextColored(style::theme.green, "%.2f dB", avg_mer);
 
                         std::memmove(&mer_history[0], &mer_history[1], (200 - 1) * sizeof(float));
-                        mer_history[200 - 1] = viterbi_lock != 0 ? mer_db : 0.0f;
+                        mer_history[200 - 1] = any_viterbi_lock ? mer_db : 0.0f;
 
                         widgets::ThemedPlotLines(style::theme.plot_bg.Value, "##mer", mer_history, IM_ARRAYSIZE(mer_history), 0, "", 0.0f, 30.0f, ImVec2(col_w, 50 * ui_scale));
                     }

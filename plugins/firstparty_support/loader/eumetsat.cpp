@@ -119,9 +119,20 @@ namespace satdump
         std::string final_token = macaron::Base64::Encode(eumetsat_user_consumer_credential + ":" + eumetsat_user_consumer_secret);
 
         std::string resp = "";
-        if (satdump::perform_http_request_post("https://api.eumetsat.int/token", resp, "grant_type=client_credentials", "Authorization: Basic " + final_token) != 1)
-            resp = nlohmann::json::parse(resp)["access_token"];
-        logger->trace("Token " + resp);
+        if (satdump::perform_http_request_post("https://api.eumetsat.int/token", resp, "grant_type=client_credentials", "Authorization: Basic " + final_token) == 0)
+        {
+            try
+            {
+                resp = nlohmann::json::parse(resp)["access_token"];
+            }
+            catch (std::exception &e)
+            {
+                logger->error("Could not parse EUMETSAT token response! %s", e.what());
+                resp = "";
+            }
+        }
+        else
+            resp = "";
         return resp;
     }
 
@@ -142,7 +153,7 @@ namespace satdump
                               (month < 10 ? "0" : "") + std::to_string(month) + "/" + (day < 10 ? "0" : "") + std::to_string(day) + "/products?format=json";
             std::string resp;
             logger->info(url);
-            if (satdump::perform_http_request(url, resp, "") != 1)
+            if (satdump::perform_http_request(url, resp, "") == 0)
             {
                 eumetsat_list.clear();
 
@@ -232,9 +243,18 @@ namespace satdump
                 if (ImGui::Button(std::string(_("Load##archiveloadertablebutton_") + str.timestamp).c_str()))
                 {
                     std::string resp;
-                    if (satdump::perform_http_request(str.href, resp, "") != 1)
+                    if (satdump::perform_http_request(str.href, resp, "") == 0)
                     {
-                        nlohmann::json respj = nlohmann::json::parse(resp);
+                        nlohmann::json respj;
+                        try
+                        {
+                            respj = nlohmann::json::parse(resp);
+                        }
+                        catch (std::exception &e)
+                        {
+                            logger->error(_("Error parsing EUMETSAT product data! %s"), e.what());
+                            continue;
+                        }
                         // printf("\n%s\n", respj.dump(4).c_str());
 
                         std::string nat_link, file_name;

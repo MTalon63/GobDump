@@ -6,10 +6,11 @@
 void help_general()
 {
     logger->error("");
-    logger->error("Visit: www.satdump.org");
+    logger->error("GobDump documentation: https://mtalon63.github.io/GobDump/");
+    logger->error("Report issues: https://github.com/MTalon63/GobDump/issues");
     logger->error("");
-    logger->info("Many usecases of GobDump CLI are cover at the following link");
-    logger->debug("www.satdump.org/posts/basic-usage/#cli-this-part-was-made-by-aang23");
+    logger->info("Many use cases of the GobDump CLI are covered at the following link");
+    logger->debug("https://mtalon63.github.io/GobDump/QuickStart/");
     logger->info("");
     logger->info("This is GobDump v" + (std::string)satdump::SATDUMP_VERSION);
     logger->info("Live processing");

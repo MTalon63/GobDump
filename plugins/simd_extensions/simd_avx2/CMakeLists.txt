@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 project(simd_avx2)
 
-# FindAVX also defines CXX_HAS_AVX_2, which is the AVX probe, not this one.
+# CXX_AVX2_FOUND is only set when this CPU can execute AVX2 (FindAVX runs its probe).
 if(ANDROID)
     if(ANDROID_ABI STREQUAL "x86" OR ANDROID_ABI STREQUAL "x86_64")
         set(SIMD_HAVE_AVX2 1)
@@ -32,5 +32,5 @@ if(SIMD_HAVE_AVX2)
 
     install(TARGETS simd_avx2 DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins)
 else()
-    message("AVX2 Features not found! This is only an error on x86 CPUs that should support AVX2")
+    message("AVX2 not usable here (CPU or compiler); AVX2 LDPC plugin not built")
 endif()

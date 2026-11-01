@@ -164,12 +164,24 @@ namespace satdump
                 int d_active_rate_idx = 0;            // pool index currently feeding the deframer
                 std::string viterbi_rate_str;         // display name of the active rate
 
+                // OQPSK one-symbol-shifted pairing
+                const bool d_oqpsk_shift;
+                std::vector<ViterbiSlot> d_shift_pool;
+                uint8_t *viterbi_out_shift = nullptr;
+                int8_t *soft_buffer_shift = nullptr;
+                uint8_t *frame_buffer_shift = nullptr;
+                int8_t last_shift_i = 0;
+                float viterbi_shift_ber = 0;
+                int viterbi_shift_lock = 0;
+                bool d_shift_selected = false;
+
                 // Non-owning alias into d_rate_pool[d_active_rate_idx].out, updated every iteration
                 uint8_t *viterbi_out = nullptr;
                 int8_t *soft_buffer;
                 uint8_t *frame_buffer;
 
                 std::shared_ptr<deframing::BPSK_CCSDS_Deframer> deframer;
+                std::shared_ptr<deframing::BPSK_CCSDS_Deframer> deframer_shift;
                 std::shared_ptr<reedsolomon::ReedSolomon> reed_solomon;
 
                 int errors[10] = {0};

@@ -136,6 +136,34 @@
 			"description": "The logger level of SatDump in the console.\nEg, if you wish to only show errors\nor every little thing that's going on",
 			"no_live": true
 		},
+		"notify_level": {
+			"type": "labeled_options",
+			"value": "errors_notices",
+			"name": "Popup Notifications",
+			"options": [
+				[
+					"off",
+					"Off"
+				],
+				[
+					"errors",
+					"Errors only"
+				],
+				[
+					"errors_notices",
+					"Errors and notices"
+				],
+				[
+					"warnings",
+					"Warnings and errors"
+				],
+				[
+					"notices",
+					"Notices, warnings and errors"
+				]
+			],
+			"description": "Which log messages should pop up on screen.\nNotices and warnings are always written to the log."
+		},
 		"log_to_file": {
 			"type": "bool",
 			"value": true,
