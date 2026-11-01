@@ -241,7 +241,8 @@
                     "cadu_size": 9592,
                     "rs_i": 5,
                     "rs_fill_bytes": 16,
-                    "rs_type": "rs223"
+                    "rs_type": "rs223",
+                    "rs_usecheck": true
                 }
             },
             "products": {
