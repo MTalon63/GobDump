@@ -292,6 +292,7 @@
                 "module": "ccsds_conv_concat_decoder",
                 "parameters": {
                     "constellation": "oqpsk",
+                    "oqpsk_shift": true,
                     "cadu_size": 8192,
                     "viterbi_ber_thresold": 0.300,
                     "viterbi_outsync_after": 20,
