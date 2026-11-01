@@ -4,9 +4,32 @@
 #include "libs/predict/predict.h"
 #include "logger.h"
 
+#include <algorithm>
+#include <ctime>
+
 namespace satdump
 {
-    std::vector<SatellitePass> getPassesForSatellite(int norad, double initial_time, double timespan, double qth_lon, double qth_lat, double qth_alt, std::vector<SatellitePass> premade_passes)
+    namespace
+    {
+        bool is_elektro_l_rdas(int norad)
+        {
+            return norad == 41105 || norad == 44903 || norad == 55506 || norad == 67756;
+        }
+
+        std::time_t utc_midnight(std::time_t t)
+        {
+            std::tm tm = *std::gmtime(&t);
+            tm.tm_hour = 0;
+            tm.tm_min = 0;
+            tm.tm_sec = 0;
+#ifdef _WIN32
+            return _mkgmtime(&tm);
+#else
+            return timegm(&tm);
+#endif
+        }
+    }
+    std::vector<SatellitePass> getPassesForSatellite(int norad, double initial_time, double timespan, double qth_lon, double qth_lat, double qth_alt, std::vector<SatellitePass> premade_passes, int rdas_slot_seconds, int rdas_pass_seconds)
     {
         std::vector<SatellitePass> passes;
         predict_observer_t *observer_station = predict_create_observer("Main", qth_lat * DEG_TO_RAD, qth_lon * DEG_TO_RAD, qth_alt * DEG_TO_RAD);
@@ -24,6 +47,44 @@ namespace satdump
         if (predict_is_geosynchronous(satellite_object_))
         {
             logger->debug("NORAD #%d is GEO!", norad);
+
+            // Elektro-L RDAS downlinks use short slots. Treat each slot as a GEO pass
+            // so autotrack records it even though it is visible continuously.
+            if (is_elektro_l_rdas(norad))
+            {
+                const double pass_seconds = std::max(60, rdas_pass_seconds);
+                const double slot_seconds = std::max(60, rdas_slot_seconds);
+
+                double epoch = (double)utc_midnight((std::time_t)initial_time) - 15;
+                while (epoch < initial_time + timespan)
+                {
+                    predict_position satellite_orbit2;
+                    predict_observation observation_pos2;
+                    predict_orbit(satellite_object_, &satellite_orbit2, predict_to_julian_double(epoch));
+                    predict_observe_orbit(observer_station, &satellite_orbit2, &observation_pos2);
+
+                    // Always take precedence over other GEO passes.
+                    observation_pos2.elevation = 90.0 * DEG_TO_RAD;
+
+                    double aos = epoch;
+                    double los = aos + pass_seconds;
+                    if (aos < initial_time)
+                        aos = initial_time;
+                    if (los > initial_time + timespan)
+                        los = initial_time + timespan;
+                    if (aos < los)
+                        passes.push_back({norad, aos, los, (float)(observation_pos2.elevation * RAD_TO_DEG)});
+
+                    epoch += slot_seconds;
+
+                    // Skip the LRIT/HRIT slots every 3 hours.
+                    std::time_t t = (std::time_t)epoch;
+                    std::tm *utc = std::gmtime(&t);
+                    if (utc->tm_hour % 3 == 0 && (utc->tm_min == 14 || utc->tm_min == 44))
+                        epoch += slot_seconds;
+                }
+                return passes;
+            }
 
             predict_position satellite_orbit2;
             predict_observation observation_pos2;

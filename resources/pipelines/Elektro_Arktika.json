@@ -33,6 +33,12 @@
                 "name": "Recalibrate RDAS layer aligner",
                 "description": "Redo the MSU-GS layer alignment calibration on this decode (a few seconds). Leave off to reuse the saved calibration in GobDump's configuration directory."
             },
+            "flip_180": {
+                "type": "bool",
+                "value": false,
+                "name": "Upside down (rotate 180°)",
+                "description": "Rotate the aligned MSU-GS products 180 degrees after layer alignment. Some downlinks arrive upside down; aligning first keeps the pixel-based calibration valid."
+            },
             "decode_ir": {
                 "type": "bool",
                 "value": false,
@@ -122,6 +128,12 @@
                 "value": false,
                 "name": "Recalibrate RDAS layer aligner",
                 "description": "Redo the MSU-GS layer alignment calibration on this decode (a few seconds). Leave off to reuse the saved calibration in GobDump's configuration directory."
+            },
+            "flip_180": {
+                "type": "bool",
+                "value": false,
+                "name": "Upside down (rotate 180°)",
+                "description": "Rotate the aligned MSU-GS products 180 degrees after layer alignment. Some downlinks arrive upside down; aligning first keeps the pixel-based calibration valid."
             },
             "decode_ir": {
                 "type": "bool",

@@ -63,6 +63,7 @@ namespace elektro_arktika
         {
             std::string satellite; ///< "L2", "L3", "M1", ...
             bool recalibrate = false;
+            bool flip_180 = false;
             std::string output_directory;
             std::string product_source = "ELEKTRO-L";
             double vis1_timestamp = 0;

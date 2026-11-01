@@ -180,7 +180,12 @@ namespace satdump
             else
 #endif
             {
-                auto passes = getPassesForSatellite(obj.norad, curr_time, 12 * 3600, qth_lon, qth_lat, qth_alt);
+                int slot_seconds = 900;
+                auto slot_it = autotrack_cfg.rdas_slot_seconds.find(obj.norad);
+                if (slot_it != autotrack_cfg.rdas_slot_seconds.end())
+                    slot_seconds = slot_it->second;
+
+                auto passes = getPassesForSatellite(obj.norad, curr_time, 12 * 3600, qth_lon, qth_lat, qth_alt, {}, slot_seconds, autotrack_cfg.rdas_pass_seconds);
                 for (auto &pass : passes)
                     if (pass.max_elevation > obj.min_elevation)
                         upcoming_satellite_passes_all.push_back(pass);
