@@ -224,7 +224,7 @@ General build instructions (Homebrew is required):
 # Install build tools and dependencies
 brew install cmake ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib \
              portaudio boost volk libomp glfw fftw jemalloc zstd armadillo hdf5 \
-             sqlite3 pkg-config protobuf grpc
+             sqlite3 pkg-config protobuf grpc cpptrace
 
 # Clone GobDump
 git clone -b ports https://github.com/MTalon63/GobDump.git
