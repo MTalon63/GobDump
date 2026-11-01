@@ -75,8 +75,11 @@ public:
         if (setsockopt(serversockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof enable) < 0)
             logger->trace("Problem setting SO_REUSEADDR on TCP socket; ignoring");
 
-        if (setsockopt(serversockfd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof enable) < 0)
-            logger->trace("Problem setting SO_REUSEPORT on TCP socket; ignoring");
+        if (getenv("GOBDUMP_USRP_SERVER") == nullptr)
+        {
+            if (setsockopt(serversockfd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof enable) < 0)
+                logger->trace("Problem setting SO_REUSEPORT on TCP socket; ignoring");
+        }
 #endif
 
         struct sockaddr_in servaddr;
@@ -272,7 +275,7 @@ public:
     bool readOne = false;
 
 public:
-    TCPClient(char *address, int port) : d_port(port)
+    TCPClient(char *address, int port, int timeout_sec = 10) : d_port(port)
     {
 #if defined(_WIN32)
         if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
@@ -284,11 +287,11 @@ public:
             throw std::runtime_error("Socket creation failed");
 
 #ifdef _WIN32
-        int timeout = 10000;
+        int timeout = timeout_sec * 1000;
         const char *timeout_ptr = (const char *)&timeout;
 #else
         struct timeval timeout;
-        timeout.tv_sec = 10;
+        timeout.tv_sec = timeout_sec;
         timeout.tv_usec = 0;
         struct timeval *timeout_ptr = &timeout;
 #endif
@@ -342,7 +345,12 @@ public:
             if (clientsockfd != -1)
             {
                 int lpkt_size = sread(buffer, 4);
-                if (lpkt_size <= 0)
+                if (lpkt_size == 0)
+                {
+                    readOne = true;
+                    break;
+                }
+                if (lpkt_size < 0)
                     continue;
 
                 if (current_pkt_size_exp == -1)

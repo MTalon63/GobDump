@@ -22,6 +22,9 @@
 #include "pkt_handler.h"
 #include "satdump_vars.h"
 
+#include <cstdlib>
+#include <memory>
+
 // The TCP Server
 TCPServer *tcp_server;
 
@@ -50,6 +53,17 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    bool uhd_helper = argc > 2 && std::string(argv[2]) == "--uhd-server";
+#ifdef _WIN32
+    _putenv_s("GOBDUMP_USRP_LOCAL", "1");
+    if (uhd_helper)
+        _putenv_s("GOBDUMP_USRP_SERVER", "1");
+#else
+    setenv("GOBDUMP_USRP_LOCAL", "1", 1);
+    if (uhd_helper)
+        setenv("GOBDUMP_USRP_SERVER", "1", 1);
+#endif
+
     // We don't wanna spam with init this time around
     logger->set_level(slog::LOG_OFF);
     satdump::tle_do_update_on_init = false;
@@ -62,7 +76,9 @@ int main(int argc, char *argv[])
 
     // Start UDP discovery system
     service_discovery::UDPDiscoveryConfig cfg = {REMOTE_NETWORK_DISCOVERY_REQPORT, REMOTE_NETWORK_DISCOVERY_REPPORT, REMOTE_NETWORK_DISCOVERY_REQPKT, REMOTE_NETWORK_DISCOVERY_REPPKT, (uint32_t)port_used};
-    service_discovery::UDPDiscoveryServerRunner runner(cfg);
+    std::unique_ptr<service_discovery::UDPDiscoveryServerRunner> runner;
+    if (!uhd_helper)
+        runner = std::make_unique<service_discovery::UDPDiscoveryServerRunner>(cfg);
 
     // Start the main TCP Server
     tcp_server = new TCPServer(port_used);
