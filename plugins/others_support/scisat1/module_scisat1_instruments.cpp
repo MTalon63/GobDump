@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 
 namespace scisat1
 {
@@ -23,49 +24,58 @@ namespace scisat1
         {
             uint8_t cadu[1199];
 
-            // Demuxers
-            ccsds::ccsds_tm::Demuxer demuxer_vcid0(1016, false, 2, 7);
-            ccsds::ccsds_tm::Demuxer demuxer_vcid1(1016, false, 2, 7);
-            ccsds::ccsds_tm::Demuxer demuxer_vcid4(1016, false, 2, 7);
-
-            // std::ofstream output("file.ccsds");
-
-            // Products dataset
-            // satdump::ProductDataSet dataset;
-            // dataset.satellite_name = "PROBA-1";
-            // dataset.timestamp = time(0); // avg_overflowless(avhrr_reader.timestamps);
+            // One demuxer per VCID, rebuilt when its VC frame count skips
+            std::unique_ptr<ccsds::ccsds_tm::Demuxer> demuxers[8];
+            int last_vc_count[8];
+            for (int v = 0; v < 8; v++)
+            {
+                demuxers[v] = std::make_unique<ccsds::ccsds_tm::Demuxer>(1016, false, 2, 7);
+                last_vc_count[v] = -1;
+            }
 
             while (should_run())
             {
                 // Read buffer
                 read_data((uint8_t *)&cadu, 1199);
 
+                // FECF (CRC-16/CCITT over the 1033 bytes after the ASM)
+                {
+                    uint16_t crc = 0xFFFF;
+                    for (int i = 4; i < 4 + 1033; i++)
+                    {
+                        crc ^= cadu[i] << 8;
+                        for (int b = 0; b < 8; b++)
+                            crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
+                    }
+                    if (crc != (cadu[4 + 1033] << 8 | cadu[4 + 1034]))
+                        continue;
+                }
+
                 // Parse this transport frame
                 ccsds::ccsds_tm::VCDU vcdu = ccsds::ccsds_tm::parseVCDU(cadu);
+                if (vcdu.spacecraft_id != 237)
+                    continue;
 
-                // logger->info(pkt.header.apid);
-                // logger->info(vcdu.vcid);
-
-                if (vcdu.vcid == 0) // FTS
+                // VC frame count is cadu[7]
                 {
-                    std::vector<ccsds::CCSDSPacket> ccsdsFrames = demuxer_vcid1.work(cadu);
-                    for (ccsds::CCSDSPacket &pkt : ccsdsFrames)
-                        if (pkt.header.apid == 101) // FTS I/Q Samples
+                    int vc_count = cadu[7];
+                    int &last = last_vc_count[vcdu.vcid];
+                    if (last != -1 && ((vc_count - last) & 0xFF) != 1)
+                        demuxers[vcdu.vcid] = std::make_unique<ccsds::ccsds_tm::Demuxer>(1016, false, 2, 7);
+                    last = vc_count;
+                }
+
+                if (vcdu.vcid == 0) // ACE-FTS
+                {
+                    for (ccsds::CCSDSPacket &pkt : demuxers[0]->work(cadu))
+                        if (pkt.header.apid == 101)
                             fts_reader.work(pkt);
                 }
-                else if (vcdu.vcid == 1) // MAESTRO? Doesn't seem to be VNIRI spec-wise
+                else if (vcdu.vcid == 1) // MAESTRO
                 {
-                    std::vector<ccsds::CCSDSPacket> ccsdsFrames = demuxer_vcid4.work(cadu);
-                    for (ccsds::CCSDSPacket &pkt : ccsdsFrames)
-                        if (pkt.header.apid == 102) // MAESTRO Spectrometer data? Doesn't seem to be VNIRI spec-wise
+                    for (ccsds::CCSDSPacket &pkt : demuxers[1]->work(cadu))
+                        if (pkt.header.apid == 102)
                             maestro_reader.work(pkt);
-                }
-                else if (vcdu.vcid == 4) // Mainly HK it seems like
-                {
-                    std::vector<ccsds::CCSDSPacket> ccsdsFrames = demuxer_vcid4.work(cadu);
-                    // for (ccsds::CCSDSPacket &pkt : ccsdsFrames)
-                    //{
-                    // }
                 }
             }
 
