@@ -16,8 +16,11 @@ endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx ${PROJECT_BINARY_DIR}/satdump_varst.cpp @ONLY)
 
+# NOTE: the generated satdump_varst.cpp is added explicitly below. Do NOT pass its absolute
+# path to GLOB_RECURSE: an absolute path makes CMake walk the whole binary tree, so any nested
+# CMake build under build/ (scratch/repro dirs) contributes a second copy and the link fails
+# with "multiple definition of satdump::SATDUMP_VERSION".
 file(GLOB_RECURSE GobDump_core_CPPS *.cpp
-    ${PROJECT_BINARY_DIR}/satdump_varst.cpp
     libs/aec/*.c
     libs/predict/*.c
     libs/bzlib/*.c
@@ -40,6 +43,10 @@ file(GLOB_RECURSE GobDump_core_CPPS *.cpp
 
 list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cpp)
 list(REMOVE_ITEM SatDump_core_CPPS ${PROJECT_BINARY_DIR}/src-core/satdump_varst.cpp)
+
+# The configured version TU must be listed explicitly, and only once. It cannot go through
+# GLOB_RECURSE (see above) and it cannot be left to the *.cpp glob, which runs in src-core/.
+list(APPEND GobDump_core_CPPS ${PROJECT_BINARY_DIR}/satdump_varst.cpp)
 
 ################################################################
 ####### AngelScript START
@@ -147,14 +154,18 @@ endif()
 add_library(gobdump_core SHARED ${GobDump_core_CPPS})
 
 # Probe, don't hardcode: "-mavx2" is invalid off x86, and MSVC wants "/arch:AVX2".
+# fir.cpp dispatches to its AVX2 kernel at run time (target attribute), so only the M&M kernel
+# needs the build-time gate - it is inlined once per symbol.
 include(FindAVX)
 if(CXX_AVX2_FOUND)
-    set_source_files_properties(common/dsp/filter/fir.cpp
-        PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS}"
-                   COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
     set_source_files_properties(common/dsp/clock_recovery/clock_recovery_mm.cpp
         PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS} -funroll-loops -ffast-math"
                    COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+    if(MSVC AND NOT(CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+        set_source_files_properties(common/dsp/filter/fir.cpp
+            PROPERTIES COMPILE_FLAGS "${CXX_AVX2_FLAGS}"
+                       COMPILE_DEFINITIONS "DSP_HAVE_AVX2_ISA=1")
+    endif()
 endif()
 
 # NEON twin of the two kernels above. FindNEON fails cleanly on x86, so this is inert there.
@@ -204,6 +215,23 @@ endif()
 # OpenMP Linking for macOS
 if(APPLE AND BUILD_OPENMP)
     target_link_libraries(gobdump_core PUBLIC omp)
+endif()
+
+# CrashDump
+find_path(CPPTRACE_INCLUDE_DIR cpptrace/cpptrace.hpp)
+find_library(CPPTRACE_LIBRARY cpptrace)
+find_path(BACKTRACE_INCLUDE_DIR backtrace.h)
+find_library(BACKTRACE_LIBRARY backtrace)
+if(ENABLE_CRASHDUMP AND CPPTRACE_LIBRARY AND CPPTRACE_INCLUDE_DIR)
+    message("-- Building CrashDump with libcpptrace!")
+    target_link_libraries(gobdump_core PUBLIC ${CPPTRACE_LIBRARY})
+    target_include_directories(gobdump_core PUBLIC ${CPPTRACE_INCLUDE_DIR})
+    target_compile_definitions(gobdump_core PUBLIC SATDUMP_CRASHDUMP=1 SATDUMP_CRASHDUMP_CPPTRACE=1)
+elseif(ENABLE_CRASHDUMP AND BACKTRACE_LIBRARY AND BACKTRACE_INCLUDE_DIR)
+    message("-- Building CrashDump with libbacktrace!")
+    target_link_libraries(gobdump_core PUBLIC ${BACKTRACE_LIBRARY})
+    target_include_directories(gobdump_core PUBLIC ${BACKTRACE_INCLUDE_DIR})
+    target_compile_definitions(gobdump_core PUBLIC SATDUMP_CRASHDUMP=1)
 endif()
 
 if(BUILD_ZIQ2)
@@ -300,8 +328,12 @@ else()
     pkg_check_modules(FFTW3 REQUIRED fftw3f)
     target_link_libraries(gobdump_core PUBLIC ${FFTW3_LIBRARIES})
 
-    # NNG
-    find_library(NNG_LIBRARY nng REQUIRED)
+    if(APPLE)
+        find_library(NNG_LIBRARY nng PATHS ${CMAKE_SOURCE_DIR}/deps/lib NO_DEFAULT_PATH)
+    endif()
+    if(NOT NNG_LIBRARY)
+        find_library(NNG_LIBRARY nng REQUIRED)
+    endif()
     target_link_libraries(gobdump_core PUBLIC ${NNG_LIBRARY})
 
     if(BUILD_ZIQ)

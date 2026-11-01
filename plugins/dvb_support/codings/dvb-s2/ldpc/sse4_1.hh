@@ -126,7 +126,7 @@ template <>
 inline SIMD<float, 4> vreinterpret(SIMD<uint32_t, 4> a)
 {
 	SIMD<float, 4> tmp;
-	tmp.m = (__m128)a.m;
+	tmp.m = _mm_castsi128_ps(a.m);
 	return tmp;
 }
 
@@ -134,7 +134,7 @@ template <>
 inline SIMD<uint32_t, 4> vreinterpret(SIMD<float, 4> a)
 {
 	SIMD<uint32_t, 4> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = _mm_castps_si128(a.m);
 	return tmp;
 }
 
@@ -142,7 +142,7 @@ template <>
 inline SIMD<double, 2> vreinterpret(SIMD<uint64_t, 2> a)
 {
 	SIMD<double, 2> tmp;
-	tmp.m = (__m128d)a.m;
+	tmp.m = _mm_castsi128_pd(a.m);
 	return tmp;
 }
 
@@ -150,7 +150,7 @@ template <>
 inline SIMD<uint64_t, 2> vreinterpret(SIMD<double, 2> a)
 {
 	SIMD<uint64_t, 2> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = _mm_castpd_si128(a.m);
 	return tmp;
 }
 
@@ -158,7 +158,7 @@ template <>
 inline SIMD<uint8_t, 16> vreinterpret(SIMD<int8_t, 16> a)
 {
 	SIMD<uint8_t, 16> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -166,7 +166,7 @@ template <>
 inline SIMD<int8_t, 16> vreinterpret(SIMD<uint8_t, 16> a)
 {
 	SIMD<int8_t, 16> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -174,7 +174,7 @@ template <>
 inline SIMD<uint16_t, 8> vreinterpret(SIMD<int16_t, 8> a)
 {
 	SIMD<uint16_t, 8> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -182,7 +182,7 @@ template <>
 inline SIMD<int16_t, 8> vreinterpret(SIMD<uint16_t, 8> a)
 {
 	SIMD<int16_t, 8> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -190,7 +190,7 @@ template <>
 inline SIMD<uint32_t, 4> vreinterpret(SIMD<int32_t, 4> a)
 {
 	SIMD<uint32_t, 4> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -198,7 +198,7 @@ template <>
 inline SIMD<int32_t, 4> vreinterpret(SIMD<uint32_t, 4> a)
 {
 	SIMD<int32_t, 4> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -206,7 +206,7 @@ template <>
 inline SIMD<uint64_t, 2> vreinterpret(SIMD<int64_t, 2> a)
 {
 	SIMD<uint64_t, 2> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -214,7 +214,7 @@ template <>
 inline SIMD<int64_t, 2> vreinterpret(SIMD<uint64_t, 2> a)
 {
 	SIMD<int64_t, 2> tmp;
-	tmp.m = (__m128i)a.m;
+	tmp.m = a.m;
 	return tmp;
 }
 
@@ -708,7 +708,7 @@ template <>
 inline SIMD<uint32_t, 4> vceqz(SIMD<float, 4> a)
 {
 	SIMD<uint32_t, 4> tmp;
-	tmp.m = (__m128i)_mm_cmpeq_ps(a.m, _mm_setzero_ps());
+	tmp.m = _mm_castps_si128(_mm_cmpeq_ps(a.m, _mm_setzero_ps()));
 	return tmp;
 }
 
@@ -716,7 +716,7 @@ template <>
 inline SIMD<uint64_t, 2> vceqz(SIMD<double, 2> a)
 {
 	SIMD<uint64_t, 2> tmp;
-	tmp.m = (__m128i)_mm_cmpeq_pd(a.m, _mm_setzero_pd());
+	tmp.m = _mm_castpd_si128(_mm_cmpeq_pd(a.m, _mm_setzero_pd()));
 	return tmp;
 }
 
@@ -756,7 +756,7 @@ template <>
 inline SIMD<uint32_t, 4> vceq(SIMD<float, 4> a, SIMD<float, 4> b)
 {
 	SIMD<uint32_t, 4> tmp;
-	tmp.m = (__m128i)_mm_cmpeq_ps(a.m, b.m);
+	tmp.m = _mm_castps_si128(_mm_cmpeq_ps(a.m, b.m));
 	return tmp;
 }
 
@@ -764,7 +764,7 @@ template <>
 inline SIMD<uint64_t, 2> vceq(SIMD<double, 2> a, SIMD<double, 2> b)
 {
 	SIMD<uint64_t, 2> tmp;
-	tmp.m = (__m128i)_mm_cmpeq_pd(a.m, b.m);
+	tmp.m = _mm_castpd_si128(_mm_cmpeq_pd(a.m, b.m));
 	return tmp;
 }
 
@@ -804,7 +804,7 @@ template <>
 inline SIMD<uint32_t, 4> vcgtz(SIMD<float, 4> a)
 {
 	SIMD<uint32_t, 4> tmp;
-	tmp.m = (__m128i)_mm_cmpgt_ps(a.m, _mm_setzero_ps());
+	tmp.m = _mm_castps_si128(_mm_cmpgt_ps(a.m, _mm_setzero_ps()));
 	return tmp;
 }
 
@@ -812,7 +812,7 @@ template <>
 inline SIMD<uint64_t, 2> vcgtz(SIMD<double, 2> a)
 {
 	SIMD<uint64_t, 2> tmp;
-	tmp.m = (__m128i)_mm_cmpgt_pd(a.m, _mm_setzero_pd());
+	tmp.m = _mm_castpd_si128(_mm_cmpgt_pd(a.m, _mm_setzero_pd()));
 	return tmp;
 }
 
@@ -852,7 +852,7 @@ template <>
 inline SIMD<uint32_t, 4> vcltz(SIMD<float, 4> a)
 {
 	SIMD<uint32_t, 4> tmp;
-	tmp.m = (__m128i)_mm_cmplt_ps(a.m, _mm_setzero_ps());
+	tmp.m = _mm_castps_si128(_mm_cmplt_ps(a.m, _mm_setzero_ps()));
 	return tmp;
 }
 
@@ -860,7 +860,7 @@ template <>
 inline SIMD<uint64_t, 2> vcltz(SIMD<double, 2> a)
 {
 	SIMD<uint64_t, 2> tmp;
-	tmp.m = (__m128i)_mm_cmplt_pd(a.m, _mm_setzero_pd());
+	tmp.m = _mm_castpd_si128(_mm_cmplt_pd(a.m, _mm_setzero_pd()));
 	return tmp;
 }
 

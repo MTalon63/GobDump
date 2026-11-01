@@ -76,11 +76,13 @@ namespace satdump
         }
 
     public:
-        TrackingWidget();
+        TrackingWidget(nlohmann::json cli_set = {});
         ~TrackingWidget();
 
         void render();
         void renderConfig();
         void renderSatfinder();
+
+        AutoTrackCfg getAutoTrackCfg() { return auto_scheduler.getAutoTrackCfg(); }
     };
 } // namespace satdump

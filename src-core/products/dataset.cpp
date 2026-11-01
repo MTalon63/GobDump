@@ -26,7 +26,14 @@ namespace satdump
                 std::string res;
                 if (perform_http_request(path, res))
                     throw satdump_exception("Could not download from : " + path);
-                json_ojb = nlohmann::json::parse(res);
+                try
+                {
+                    json_ojb = nlohmann::json::parse(res);
+                }
+                catch (std::exception &e)
+                {
+                    throw satdump_exception("Invalid JSON received from : " + path + " (" + e.what() + ")");
+                }
             }
             else
             {

@@ -14,6 +14,7 @@
 #define MM_PREFETCH_T0(p) ((void)0)
 #endif
 
+// Build-time gated (this CPU can run AVX2); inlined per symbol, so no target-attribute dispatch.
 #if (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)) && defined(DSP_HAVE_AVX2_ISA)
 #include <immintrin.h>
 
@@ -125,7 +126,7 @@ namespace dsp
 
         mm_i = MM_RING; // re-anchor the predicted position: inc is rebased per block, mm_* was not
 
-        // TED form is chosen outside the loop; an in-body branch measured ~8-10% slower here.
+        // TED form is chosen outside the loop; an in-body branch is slower here.
         if (bpsk_real_ted)
             work_loop<true>(nsamples);
         else

@@ -70,6 +70,14 @@ struct MinSumAlgorithm<SIMD<VALUE, WIDTH>, UPDATE>
 				return true;
 		return false;
 	}
+
+	// Mark the lanes whose check is still unsatisfied (v <= 0), without early-out.
+	static void bad_lanes(TYPE v, bool *lane_bad)
+	{
+		for (int i = 0; i < TYPE::SIZE; ++i)
+			if (v.v[i] <= 0)
+				lane_bad[i] = true;
+	}
 	static void update(TYPE *a, TYPE b)
 	{
 		UPDATE::update(a, b);
@@ -142,6 +150,14 @@ struct MinSumAlgorithm<SIMD<int8_t, WIDTH>, UPDATE>
 				return true;
 		return false;
 	}
+
+	// Mark the lanes whose check is still unsatisfied (v <= 0), without early-out.
+	static void bad_lanes(TYPE v, bool *lane_bad)
+	{
+		for (int i = 0; i < TYPE::SIZE; ++i)
+			if (v.v[i] <= 0)
+				lane_bad[i] = true;
+	}
 	static void update(TYPE *a, TYPE b)
 	{
 		UPDATE::update(a, vmin(vmax(b, vdup<TYPE>(-32)), vdup<TYPE>(31)));
@@ -198,6 +214,14 @@ struct OffsetMinSumAlgorithm<SIMD<VALUE, WIDTH>, UPDATE, FACTOR>
 				return true;
 		return false;
 	}
+
+	// Mark the lanes whose check is still unsatisfied (v <= 0), without early-out.
+	static void bad_lanes(TYPE v, bool *lane_bad)
+	{
+		for (int i = 0; i < TYPE::SIZE; ++i)
+			if (v.v[i] <= 0)
+				lane_bad[i] = true;
+	}
 	static void update(TYPE *a, TYPE b)
 	{
 		UPDATE::update(a, b);
@@ -236,7 +260,8 @@ struct OffsetMinSumAlgorithm<SIMD<int8_t, WIDTH>, UPDATE, FACTOR>
 	static void finalp(TYPE *links, int cnt)
 	{
 		auto beta = vunsigned(vdup<TYPE>(std::nearbyint(0.5 * FACTOR)));
-		std::vector<TYPE> mags(cnt);
+		// See layered_decoder.hh: bounded by links_max_cn(), keeps this off the heap.
+		TYPE mags[64];
 		for (int i = 0; i < cnt; ++i)
 			mags[i] = vsigned(vqsub(vunsigned(vqabs(links[i])), beta));
 
@@ -270,6 +295,14 @@ struct OffsetMinSumAlgorithm<SIMD<int8_t, WIDTH>, UPDATE, FACTOR>
 			if (!tmp.v[i])
 				return true;
 		return false;
+	}
+
+	// Mark the lanes whose check is still unsatisfied (v <= 0), without early-out.
+	static void bad_lanes(TYPE v, bool *lane_bad)
+	{
+		for (int i = 0; i < TYPE::SIZE; ++i)
+			if (v.v[i] <= 0)
+				lane_bad[i] = true;
 	}
 	static void update(TYPE *a, TYPE b)
 	{
@@ -337,6 +370,14 @@ struct MinSumCAlgorithm<SIMD<VALUE, WIDTH>, UPDATE, FACTOR>
 				return true;
 		return false;
 	}
+
+	// Mark the lanes whose check is still unsatisfied (v <= 0), without early-out.
+	static void bad_lanes(TYPE v, bool *lane_bad)
+	{
+		for (int i = 0; i < TYPE::SIZE; ++i)
+			if (v.v[i] <= 0)
+				lane_bad[i] = true;
+	}
 	static void update(TYPE *a, TYPE b)
 	{
 		UPDATE::update(a, b);
@@ -402,6 +443,14 @@ struct MinSumCAlgorithm<SIMD<int8_t, WIDTH>, UPDATE, FACTOR>
 			if (!tmp.v[i])
 				return true;
 		return false;
+	}
+
+	// Mark the lanes whose check is still unsatisfied (v <= 0), without early-out.
+	static void bad_lanes(TYPE v, bool *lane_bad)
+	{
+		for (int i = 0; i < TYPE::SIZE; ++i)
+			if (v.v[i] <= 0)
+				lane_bad[i] = true;
 	}
 	static void update(TYPE *a, TYPE b)
 	{

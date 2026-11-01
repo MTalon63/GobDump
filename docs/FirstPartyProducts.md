@@ -2,8 +2,8 @@
 
 GobDump supports decoding and processing a select portfolio of first party products from space and meteorological agencies.
 
-> [!note]
-> This module is experimental and could contain bugs; users are encouraged to test and report any issues [on the GitHub](https://github.com/SatDump/SatDump/issues).
+!!! note
+    This module is experimental and could contain bugs; users are encouraged to test and report any issues [on the GobDump issue tracker](https://github.com/MTalon63/GobDump/issues).
 
 All products must be decoded with the `Data Stores/Archives Formats (NOAA/EUMETSAT/CMA/NASA), Experimental` pipeline.
 

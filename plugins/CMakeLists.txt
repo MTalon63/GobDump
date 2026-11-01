@@ -548,3 +548,12 @@ if(BUILD_GUI AND PLUGIN_WEBHOOK_APP)
 endif()
 
 add_subdirectory(apid_sender)
+
+# ##############################################################################
+set(EXTERNAL_PLUGINS "" CACHE STRING "Optional external plugins")
+
+foreach (PLUGIN IN LISTS EXTERNAL_PLUGINS)
+  message("External plugin ${PLUGIN}")
+  get_filename_component(PLUGIN_STEM "${PLUGIN}" NAME_WE)
+  add_subdirectory(${PLUGIN} plugins/${PLUGIN_STEM})
+endforeach()

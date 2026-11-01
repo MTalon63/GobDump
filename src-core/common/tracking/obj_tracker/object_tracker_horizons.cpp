@@ -112,7 +112,11 @@ namespace satdump
 
         std::string url = "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND='*'";
         std::string req_result;
-        satdump::perform_http_request(url, req_result);
+        if (satdump::perform_http_request(url, req_result))
+        {
+            logger->error("Could not fetch object list from Horizons!");
+            return horizonsoptions;
+        }
 
         std::istringstream req_results(req_result);
         std::string line;

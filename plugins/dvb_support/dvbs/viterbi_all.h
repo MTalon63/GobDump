@@ -18,7 +18,6 @@ This is meant to automatically detect the
 utilized puncturing rate, automatically lock
 and start decoding input data.
 
-TODO : Cleanup!!!!
 */
 namespace viterbi
 {
@@ -46,11 +45,11 @@ namespace viterbi
         phase_t d_phase;              // Phase the decoder locked onto
         int d_shift;                  // Shift the decoder locked onto
         int d_invalid = 0;            // Number of invalid BER tests
-        float d_bers_12[2][12];       // BERs of all branches, rate 1/2
-        float d_bers_23[2][12];       // BERs of all branches, rate 2/3
-        float d_bers_34[2][12];       // BERs of all branches, rate 3/4
-        float d_bers_56[2][12];       // BERs of all branches, rate 5/6
-        float d_bers_78[2][12];       // BERs of all branches, rate 7/8
+        float d_bers_12[4][12];       // BERs of all branches, rate 1/2
+        float d_bers_23[4][12];       // BERs of all branches, rate 2/3
+        float d_bers_34[4][12];       // BERs of all branches, rate 3/4
+        float d_bers_56[4][12];       // BERs of all branches, rate 5/6
+        float d_bers_78[4][12];       // BERs of all branches, rate 7/8
         float d_ber;                  // Main ber in LOCKED state
 
         // BER Testing
@@ -88,7 +87,6 @@ namespace viterbi
         // Actual decoding buffers
         uint8_t *soft_buffer;
         uint8_t *depunc_buffer;
-        uint8_t *output_buffer;
 
         // Calculate BER between 2 buffers
         float get_ber(uint8_t *raw, uint8_t *rencoded, int len, float ratio);

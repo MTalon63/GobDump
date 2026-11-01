@@ -31,5 +31,10 @@ namespace satdump
             void pushSofttAndGaussian(int8_t *buffer, float scale, int size);
             void draw();
         };
+
+        // Plots int8 soft symbols in rect_min..rect_max; components is 1 (BPSK) or 2 (I/Q).
+        void drawSoftConstellation(ImDrawList *draw_list, const ImVec2 &rect_min, const ImVec2 &rect_max,
+                                   const int8_t *soft, int num_symbols, int components,
+                                   dsp::Random *rng = nullptr, float fill = 0.8f, float dot_radius = 2.0f);
     } // namespace widgets
 } // namespace satdump

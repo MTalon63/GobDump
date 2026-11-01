@@ -59,7 +59,13 @@ namespace satdump
                 curl_easy_setopt(curl, CURLOPT_URL, url_str.c_str());
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_std_ofstream);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, &output_filestream);
+                curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
                 curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 100);
+                curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+                // Abort a stalled transfer without capping how long a large download may take.
+                curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+                curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 60L);
+                curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
 #ifdef CURLSSLOPT_NATIVE_CA
                 curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
@@ -68,7 +74,6 @@ namespace satdump
                 struct curl_slist *chunk = NULL;
                 if (added_header != "")
                 {
-                    /* Remove a header curl would otherwise add by itself */
                     chunk = curl_slist_append(chunk, added_header.c_str());
                     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
                 }
@@ -79,12 +84,20 @@ namespace satdump
 
                 res = curl_easy_perform(curl);
 
+                long http_code = 0;
+                if (res == CURLE_OK)
+                    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
                 if (res != CURLE_OK)
                 {
                     if (strlen(error_buffer))
                         logger->error("curl_easy_perform() failed: %s", error_buffer);
                     else
                         logger->error("curl_easy_perform() failed: %s", curl_easy_strerror(res));
+                }
+                else if (http_code >= 400)
+                {
+                    logger->error("HTTP %ld while downloading %s", http_code, url_str.c_str());
                 }
                 else
                     ret = 0;

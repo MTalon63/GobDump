@@ -6,6 +6,7 @@
 #include <uhd/usrp/multi_usrp.hpp>
 #include "logger.h"
 #include "common/rimgui.h"
+#include <atomic>
 #include <thread>
 #include "common/widgets/double_list.h"
 
@@ -38,21 +39,35 @@ protected:
     void open_channel();
 
     std::thread work_thread;
-    bool thread_should_run = false;
+    std::atomic<bool> thread_should_run{false};
+    std::atomic<bool> device_lost{false};
     void mainThread()
     {
         uhd::rx_metadata_t meta;
 
         int buffer_size = std::min<int>(samplerate_widget.get_value() / 250, dsp::STREAM_BUFFER_SIZE);
+        logger->trace("USRP Buffer size %d", buffer_size);
 
         while (thread_should_run)
         {
-            int cnt = usrp_streamer->recv(output_stream->writeBuf, buffer_size, meta, 1.0);
-            if (cnt > 0)
-                output_stream->swap(cnt);
-            if (meta.error_code != meta.ERROR_CODE_NONE)
-                logger->error("USRP Stream error %s", meta.strerror().c_str());
+            try
+            {
+                int cnt = usrp_streamer->recv(output_stream->writeBuf, buffer_size, meta, 1.0);
+                if (cnt > 0)
+                    output_stream->swap(cnt);
+                if (meta.error_code != meta.ERROR_CODE_NONE && meta.error_code != meta.ERROR_CODE_TIMEOUT)
+                    logger->error("USRP Stream error %s", meta.strerror().c_str());
+            }
+            catch (const std::exception &e)
+            {
+                logger->error("USRP stream stopped: %s", e.what());
+                device_lost = true;
+                break;
+            }
         }
+
+        if (output_stream)
+            output_stream->stopWriter();
     }
 
 public:

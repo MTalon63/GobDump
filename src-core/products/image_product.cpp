@@ -133,9 +133,10 @@ namespace satdump
             {
                 if (file.find("http") == 0)
                 {
+                    std::string url = directory + "/" + contents["images"][0]["file"].get<std::string>();
                     std::string res;
-                    if (perform_http_request(directory + "/" + contents["images"][0]["file"].get<std::string>(), res))
-                        throw std::runtime_error("Could not download from : " + directory + "/" + contents["images"][0]["file"].get<std::string>());
+                    if (perform_http_request(url, res))
+                        throw std::runtime_error("Could not download from : " + url);
                     std::ofstream(tmp_path + "/satdumpdltmp.tmp", std::ios::binary).write((char *)res.data(), res.size());
                     image::load_img(img_matrix, tmp_path + "/satdumpdltmp.tmp");
                     if (std::filesystem::exists(tmp_path + "/satdumpdltmp.tmp"))
@@ -148,6 +149,7 @@ namespace satdump
                 }
             }
 
+            images.reserve(images.size() + contents["images"].size());
             for (size_t c = 0; c < contents["images"].size(); c++)
             {
                 ImageHolder img_holder;
@@ -178,9 +180,10 @@ namespace satdump
                 {
                     if (file.find("http") == 0)
                     {
+                        std::string url = directory + "/" + contents["images"][c]["file"].get<std::string>();
                         std::string res;
-                        if (perform_http_request(directory + "/" + contents["images"][c]["file"].get<std::string>(), res))
-                            throw std::runtime_error("Could not download from : " + directory + "/" + contents["images"][c]["file"].get<std::string>());
+                        if (perform_http_request(url, res))
+                            throw std::runtime_error("Could not download from : " + url);
                         std::ofstream(tmp_path + "/satdumpdltmp.tmp", std::ios::binary).write((char *)res.data(), res.size());
                         image::load_img(img_holder.image, tmp_path + "/satdumpdltmp.tmp");
                         if (std::filesystem::exists(tmp_path + "/satdumpdltmp.tmp"))
@@ -206,7 +209,7 @@ namespace satdump
                     img_holder.image = img_matrix.crop_to(px_pos_x, px_pos_y, px_pos_x + img_width, px_pos_y + img_height);
                 }
 
-                images.push_back(img_holder);
+                images.push_back(std::move(img_holder));
             }
 
             if (images.size() == 0)

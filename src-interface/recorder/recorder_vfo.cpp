@@ -26,6 +26,8 @@ namespace satdump
             vpipeline_params["baseband_format"] = "cf32";
             vpipeline_params["buffer_size"] = dsp::STREAM_BUFFER_SIZE; // This is required, as we WILL go over the (usually) default 8192 size
             vpipeline_params["start_timestamp"] = (double)time(0);     // Some pipelines need this
+        if (tracking_widget)
+            vpipeline_params["filler_timeout"] = tracking_widget->getAutoTrackCfg().rdas_filler_timeout;
 
             std::string output_dir = prepareAutomatedPipelineFolder(time(0), freq, vpipeline.id);
 

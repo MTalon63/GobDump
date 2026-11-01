@@ -228,10 +228,12 @@ done | tee "$WORK/bench.raw.txt"
 # " ms " marker rather than by column index - names contain spaces.
 # Emit: best ms per row, then the speedup of the SIMD row over scalar and over volk.
 c_bold "=== SUMMARY (best observed per row, across all runs) ==="
-# Parse the fixed row format "  <name>  <ms> ms  <ns/pt> ns/pt".
-# Deliberately avoids the 3-argument match(); that is a GNU awk extension and
-# macOS ships BSD awk, where it is an error.
+# Rows are grouped by section, because the SAME row name ("SIMD: ...") appears once per
+# section. Keying on the name alone would collapse the three sections together and
+# produce nonsense cross-section ratios.
+# Portable awk only - no 3-argument match() (GNU extension; BSD awk on macOS rejects it).
 awk '
+  /^--- .* ---$/ { sec = $0; sub(/^--- /, "", sec); sub(/ ---$/, "", sec); next }
   /^  .+ [0-9.]+ ms +[0-9.]+ ns\/pt[ ]*$/ {
     line = $0
     sub(/[ ]+[0-9.]+[ ]+ns\/pt[ ]*$/, "", line)
@@ -241,44 +243,59 @@ awk '
     name = line
     sub(/[ ]+[0-9.]+[ ]*$/, "", name)
     sub(/^[ ]+/, "", name)
-    if (name != "" && (!(name in best) || ms < best[name])) best[name] = ms
-  }
-  END { for (k in best) printf "  %-38s %10.4f ms\n", k, best[k] }
-' "$WORK/bench.raw.txt" | sort
-
-echo ""
-c_bold "=== SPEEDUP: each baseline vs the SIMD row ==="
-awk '
-  /^  .+ [0-9.]+ ms +[0-9.]+ ns\/pt[ ]*$/ {
-    line = $0
-    sub(/[ ]+[0-9.]+[ ]+ns\/pt[ ]*$/, "", line)
-    sub(/[ ]+ms[ ]*$/, "", line)
-    n = split(line, parts, /[ ]+/)
-    ms = parts[n] + 0
-    name = line
-    sub(/[ ]+[0-9.]+[ ]*$/, "", name)
-    sub(/^[ ]+/, "", name)
-    if (name != "" && (!(name in best) || ms < best[name])) best[name] = ms
+    if (name == "") next
+    key = sec SUBSEP name
+    if (!(key in best) || ms < best[key]) best[key] = ms
   }
   END {
-    simd = 0
-    for (k in best) if (k ~ /^SIMD:/ && (simd == 0 || best[k] < simd)) simd = best[k]
-    if (simd <= 0) { print "  (no SIMD row found - nothing to compare)"; exit }
     for (k in best) {
-      if (k ~ /^SIMD:/) continue
-      r = best[k] / simd
-      verdict = (r >= 1.0) ? "SIMD is faster" : "SIMD is SLOWER"
-      printf "  %-38s %7.2fx   %s\n", k, r, verdict
+      split(k, a, SUBSEP)
+      printf "  %-22s %-34s %10.4f ms\n", a[1], a[2], best[k]
     }
   }
 ' "$WORK/bench.raw.txt" | sort
 
 echo ""
-c_bold "NOTE: the SIMD row is the repo kernel for THIS architecture."
+c_bold "=== SPEEDUP: SIMD row vs each baseline, WITHIN each section ==="
+awk '
+  /^--- .* ---$/ { sec = $0; sub(/^--- /, "", sec); sub(/ ---$/, "", sec); next }
+  /^  .+ [0-9.]+ ms +[0-9.]+ ns\/pt[ ]*$/ {
+    line = $0
+    sub(/[ ]+[0-9.]+[ ]+ns\/pt[ ]*$/, "", line)
+    sub(/[ ]+ms[ ]*$/, "", line)
+    n = split(line, parts, /[ ]+/)
+    ms = parts[n] + 0
+    name = line
+    sub(/[ ]+[0-9.]+[ ]*$/, "", name)
+    sub(/^[ ]+/, "", name)
+    if (name == "") next
+    key = sec SUBSEP name
+    if (!(key in best) || ms < best[key]) best[key] = ms
+  }
+  END {
+    for (k in best) {
+      split(k, a, SUBSEP)
+      if (a[2] ~ /^SIMD:/) simd[a[1]] = best[k]
+    }
+    for (k in best) {
+      split(k, a, SUBSEP)
+      if (a[2] ~ /^SIMD:/) continue
+      if (a[1] in simd && simd[a[1]] > 0) {
+        r = best[k] / simd[a[1]]
+        printf "  %-22s %-34s %7.2fx   %s\n", a[1], a[2], r, (r >= 1.0 ? "SIMD faster" : "SIMD SLOWER")
+      }
+    }
+  }
+' "$WORK/bench.raw.txt" | sort
+
+echo ""
+c_bold "NOTE: ratios are computed WITHIN a section - never across sections."
 c_bold "      A ratio below 1.00x means the SIMD kernel LOSES to that baseline."
 
 echo ""
 c_bold "=== what to look for ==="
+
+echo ""
 cat <<'EOF'
   * The "SIMD: ..." row should beat "scalar (auto-vec disabled)".
     If it does not, the kernel is not worth keeping on this CPU.
@@ -286,10 +303,11 @@ cat <<'EOF'
   * Compare the SIMD row against 'libvolk (dispatched)'. That is the real question.
     VOLK's SIMD kernels are already vectorized, so a small win is expected and a LOSS
     is entirely possible. Report it either way - do not assume the port wins.
-  * On arm64 the FIR kernel measured near break-even (~1.0-1.1x) under emulation.
-    If it is at or below 1.0x on real hardware it should be dropped - it is
-    self-contained behind its arch guard and nothing else depends on it.
-  * The M&M kernel is the better bet (measured ~1.5x on arm64). Confirm or refute.
+  * Read the per-section speedups together: the same kernel can win big in one
+    section and barely at all in another. Do not average them.
+  * If a SIMD kernel is at or below 1.00x vs scalar in its section, it is not
+    earning its complexity - each one is self-contained behind its arch guard
+    and can be dropped independently.
   * Absolute ms values are machine-specific. Compare RATIOS across machines, and
     only ever compare rows produced on the same machine.
 EOF

@@ -1,6 +1,8 @@
 #include "task_scheduler.h"
 #include "core/plugin.h"
+#include "logger.h"
 #include <chrono>
+#include <exception>
 #include <limits>
 #include <thread>
 
@@ -65,8 +67,19 @@ namespace satdump
             if (it == scheduled_tasks.end())
                 continue; // Task was removed
 
-            // Run the task that should be due now, and mark it for next run
-            eventBus->fire_event(task_evt.get(), task_evt_name);
+            // A throwing handler must not kill the scheduler.
+            try
+            {
+                eventBus->fire_event(task_evt.get(), task_evt_name);
+            }
+            catch (std::exception &e)
+            {
+                logger->error("Unhandled exception in scheduled task '%s': %s", task_name_to_run.c_str(), e.what());
+            }
+            catch (...)
+            {
+                logger->error("Unhandled unknown exception in scheduled task '%s'", task_name_to_run.c_str());
+            }
             it->second.last_run = time(NULL);
         }
     }

@@ -1,5 +1,6 @@
 .vscode
 build
+site/
 android/local.properties
 android/SatDump/.cxx
 android/.gradle
@@ -30,8 +31,10 @@ src-core/satdump_varst.cpp
 PLANS/
 windows/deps 
 live_output/*
+/pipelines.json
 *.ziq
 
 *.cs8
 
 imgui.ini
+plugins/external

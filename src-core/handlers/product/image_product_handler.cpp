@@ -443,11 +443,14 @@ namespace satdump
                 if (channel_selection_curr_id == -1 || product->images.size() <= channel_selection_curr_id)
                 { // Expression case
                     auto img = products::generate_expression_product_composite(product, expression, &progress);
-                    img_handler->setImage(img);
+                    img_handler->setImage(std::move(img));
                 }
                 else
                 {
-                    image::Image img;
+                    // Set name again!
+                    product_internal_name = "Image";
+                    img_handler->setName(generateFileName());
+
                     if (channel_calibrated)
                     { // Calibrated case
                         std::string &unit = channels_calibrated_curr_unit;
@@ -455,22 +458,23 @@ namespace satdump
                         if (!channels_calibrated_ranges.count(channel_selection_curr_id) ||
                             !channels_calibrated_ranges[channel_selection_curr_id].count(unit))
                             throw satdump_exception("No calibrated range available for unit " + unit);
-                        img = products::generate_calibrated_product_channel(product, product->images[channel_selection_curr_id].channel_name,
-                                                                            channels_calibrated_ranges[channel_selection_curr_id][unit].min,
-                                                                            channels_calibrated_ranges[channel_selection_curr_id][unit].max, unit, &progress);
+                        image::Image img = products::generate_calibrated_product_channel(product, product->images[channel_selection_curr_id].channel_name,
+                                                                                         channels_calibrated_ranges[channel_selection_curr_id][unit].min,
+                                                                                         channels_calibrated_ranges[channel_selection_curr_id][unit].max, unit, &progress);
+                        img_handler->setImage(std::move(img));
                     }
                     else
                     { // Normal case
-                        img = product->images[channel_selection_curr_id].image;
+                        auto &src = product->images[channel_selection_curr_id].image;
                         if (product->has_proj_cfg())
-                            image::set_metadata_proj_cfg(img, product->get_proj_cfg(product->images[channel_selection_curr_id].abs_index));
+                        {
+                            auto img = std::make_shared<image::Image>(src);
+                            image::set_metadata_proj_cfg(*img, product->get_proj_cfg(product->images[channel_selection_curr_id].abs_index));
+                            img_handler->setImage(std::move(img));
+                        }
+                        else
+                            img_handler->setImage(std::shared_ptr<image::Image>(ProductHandler::product, &src));
                     }
-
-                    // Set name again!
-                    product_internal_name = "Image";
-                    img_handler->setName(generateFileName());
-
-                    img_handler->setImage(img);
                 }
             }
             catch (std::exception &e)

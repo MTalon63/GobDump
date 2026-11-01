@@ -84,6 +84,11 @@ namespace satdump
             // In-memory cookie engine: no temp file (Android / no filesystem), cookie reuse.
             curl_easy_setopt(curl_, CURLOPT_COOKIEFILE, "");
             curl_easy_setopt(curl_, CURLOPT_USERAGENT, std::string((std::string) "GobDump/v" + SATDUMP_VERSION).c_str());
+            curl_easy_setopt(curl_, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(curl_, CURLOPT_MAXREDIRS, 10L);
+            curl_easy_setopt(curl_, CURLOPT_CONNECTTIMEOUT, 10L);
+            curl_easy_setopt(curl_, CURLOPT_TIMEOUT, 30L);
+            curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L);
 #ifdef CURLSSLOPT_NATIVE_CA
             curl_easy_setopt(curl_, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
 #endif
@@ -183,7 +188,13 @@ namespace satdump
                 return false;
             }
 
-            return true; // any other HTTP code behaves as before
+            if (http_code < 200 || http_code >= 300)
+            {
+                logger->warn("Failed to download from Space Track (HTTP %ld)!", http_code);
+                return false;
+            }
+
+            return true;
         }
 
         return false;

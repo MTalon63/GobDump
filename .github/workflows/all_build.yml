@@ -43,8 +43,6 @@ jobs:
                   # setup-msys2 caches the pacman packages itself.
                   cache: true
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             # cpu_features/airspy/airspyhf/bladeRF are built from source, which
             # dominates setup time. Everything else comes from pacman.
@@ -84,7 +82,6 @@ jobs:
               run: |
                   cmake --install build --prefix install
                   cp -r resources pipelines install/ 2>/dev/null || true
-                  cp build/rdas_aligner.exe install/ 2>/dev/null || true
 
             - name: Upload Portable
               uses: actions/upload-artifact@v4
@@ -102,15 +99,13 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Cache dependencies
               uses: actions/cache@v4
               id: win-deps-x64
               with:
                   path: windows/deps
-                  key: win-deps-x64-${{ hashFiles('windows/build_deps.ps1') }}
+                  key: win-deps-x64-${{ hashFiles('windows/build_deps.ps1', 'windows/patches/*.patch') }}
 
             - name: Set up Python 3.13
               if: steps.win-deps-x64.outputs.cache-hit != 'true'
@@ -165,7 +160,6 @@ jobs:
                   -DPLUGINS_ALL=ON
                   -DPLUGIN_AARONIA_SDR_SUPPORT=ON
                   -DBUILD_MSVC=ON
-                  -DBUILD_RDAS_ALIGNER=OFF
                   -DCMAKE_C_COMPILER_LAUNCHER=sccache
                   -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
@@ -203,15 +197,13 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Cache dependencies
               uses: actions/cache@v4
               id: win-deps-arm64
               with:
                   path: windows/deps
-                  key: win-deps-arm64-${{ hashFiles('windows/build_deps.ps1') }}
+                  key: win-deps-arm64-${{ hashFiles('windows/build_deps.ps1', 'windows/patches/*.patch') }}
 
             - name: Set up Python 3.13
               if: steps.win-deps-arm64.outputs.cache-hit != 'true'
@@ -269,7 +261,6 @@ jobs:
                   -DPLUGINS_ALL=ON
                   -DPLUGIN_LIMESDR_SDR_SUPPORT=OFF
                   -DBUILD_MSVC=ON
-                  -DBUILD_RDAS_ALIGNER=OFF
                   -DCMAKE_C_COMPILER_LAUNCHER=sccache
                   -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
@@ -385,14 +376,27 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Update repositories
               run: sudo apt update
 
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libopencv-dev libjsoncpp-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
+              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
+
+            - name: Build GLFW 3.4 with X11 + Wayland for AppImage
+              shell: bash
+              run: |
+                  sudo apt install -y libwayland-dev wayland-protocols libxkbcommon-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+                  git clone --depth 1 --branch 3.4 https://github.com/glfw/glfw.git /tmp/glfw34
+                  cmake -S /tmp/glfw34 -B /tmp/glfw34/build -G Ninja \
+                    -DBUILD_SHARED_LIBS=ON -DGLFW_INSTALL=OFF \
+                    -DGLFW_BUILD_WAYLAND=ON -DGLFW_BUILD_X11=ON \
+                    -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF \
+                    -DCMAKE_BUILD_TYPE=Release
+                  cmake --build /tmp/glfw34/build
+                  sudo mkdir -p /opt/glfw34/lib
+                  sudo cp -av /tmp/glfw34/build/src/libglfw.so.3* /opt/glfw34/lib/
+                  sudo chmod -R a+rX /opt/glfw34
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -407,7 +411,19 @@ jobs:
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX=/usr -G Ninja
+              run: |
+                  cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX=/usr -G Ninja \
+                    -DPLUGIN_CLUSTER=ON \
+                    -DPLUGIN_DMSP=ON \
+                    -DPLUGIN_DSCOVR=ON \
+                    -DPLUGIN_EARTHCARE=ON \
+                    -DPLUGIN_GCOM=ON \
+                    -DPLUGIN_GK2A=ON \
+                    -DPLUGIN_GEONETCAST=ON \
+                    -DPLUGIN_HIMAWARI=ON \
+                    -DPLUGIN_INSAT=ON \
+                    -DPLUGIN_METEOSAT=ON \
+                    -DPLUGIN_TUBSAT=ON
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -435,7 +451,56 @@ jobs:
             - name: Make AppImage
               working-directory: ${{runner.workspace}}/build
               shell: bash
-              run: cp *.deb gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && mkdir -p GobDump && mv gobdump.deb GobDump/ && ./pkg2appimage SatDump.yml
+              run: cp *.deb /tmp/gobdump.deb && cp $GITHUB_WORKSPACE/SatDump.yml . && ./pkg2appimage SatDump.yml
+
+            - name: Verify AppImage dependencies
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              run: |
+                  chmod +x out/*.AppImage
+                  rm -rf squashfs-root
+                  ./out/*.AppImage --appimage-extract > /dev/null
+                  LIBDIR="$PWD/squashfs-root/usr/lib:$PWD/squashfs-root/usr/lib/x86_64-linux-gnu"
+                  if ! test -e squashfs-root/usr/lib/x86_64-linux-gnu/libtiff.so.5 && ! test -e squashfs-root/usr/lib/libtiff.so.5; then
+                    echo "libtiff.so.5 was not bundled into the AppImage" >&2
+                    exit 1
+                  fi
+                  if ! test -e squashfs-root/usr/lib/x86_64-linux-gnu/libglfw.so.3; then
+                    echo "the dual-backend GLFW 3.4 was not bundled into the AppImage" >&2
+                    exit 1
+                  fi
+                  if ! strings squashfs-root/usr/lib/x86_64-linux-gnu/libglfw.so.3 | grep -q "Wayland"; then
+                    echo "the bundled GLFW does not contain Wayland support" >&2
+                    exit 1
+                  fi
+                  if LD_LIBRARY_PATH="$LIBDIR" ldd squashfs-root/usr/bin/gobdump-ui | grep -q "not found"; then
+                    echo "AppImage has unresolved shared libraries:" >&2
+                    LD_LIBRARY_PATH="$LIBDIR" ldd squashfs-root/usr/bin/gobdump-ui | grep "not found" >&2
+                    exit 1
+                  fi
+
+            - name: Verify AppImage output-directory fallback
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              run: |
+                  # pkg2appimage's AppRun always chdir()s into $APPDIR/usr, which
+                  # is inside the read-only squashfs mount. Default output
+                  # directories must fall back to $HOME instead of trying to
+                  # create ./live_output inside the mount.
+                  ROOT="$PWD/squashfs-root"
+                  LIBDIR="$ROOT/usr/lib:$ROOT/usr/lib/x86_64-linux-gnu"
+                  rm -rf /tmp/gobdump-home /tmp/gobdump-ro-cwd
+                  mkdir -p /tmp/gobdump-home /tmp/gobdump-ro-cwd
+                  chmod 555 /tmp/gobdump-ro-cwd
+                  ( cd /tmp/gobdump-ro-cwd && HOME=/tmp/gobdump-home \
+                      LD_LIBRARY_PATH="$LIBDIR" timeout 60 "$ROOT/usr/bin/gobdump" --help \
+                      > /tmp/gobdump-home/cli.log 2>&1 || true )
+                  if ! grep -q '/tmp/gobdump-home/live_output' /tmp/gobdump-home/.config/gobdump/settings.json; then
+                    echo "Output directories were not redirected away from the read-only working directory" >&2
+                    cat /tmp/gobdump-home/cli.log >&2 || true
+                    cat /tmp/gobdump-home/.config/gobdump/settings.json >&2 || true
+                    exit 1
+                  fi
 
             - name: Upload AppImage
               uses: actions/upload-artifact@v4
@@ -453,14 +518,12 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Update repositories
               run: sudo apt update
 
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libopencv-dev libjsoncpp-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
+              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev ninja-build
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -475,7 +538,19 @@ jobs:
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX=/usr -G Ninja
+              run: |
+                  cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_INSTALL_PREFIX=/usr -G Ninja \
+                    -DPLUGIN_CLUSTER=ON \
+                    -DPLUGIN_DMSP=ON \
+                    -DPLUGIN_DSCOVR=ON \
+                    -DPLUGIN_EARTHCARE=ON \
+                    -DPLUGIN_GCOM=ON \
+                    -DPLUGIN_GK2A=ON \
+                    -DPLUGIN_GEONETCAST=ON \
+                    -DPLUGIN_HIMAWARI=ON \
+                    -DPLUGIN_INSAT=ON \
+                    -DPLUGIN_METEOSAT=ON \
+                    -DPLUGIN_TUBSAT=ON
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -503,14 +578,12 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Update repositories
               run: sudo apt update
 
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libopencv-dev libjsoncpp-dev libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev ninja-build
+              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev ninja-build
 
             - name: Delete build dir
               run: rm -rf ${{runner.workspace}}/build
@@ -528,7 +601,19 @@ jobs:
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -G Ninja
+              run: |
+                  cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -G Ninja \
+                    -DPLUGIN_CLUSTER=ON \
+                    -DPLUGIN_DMSP=ON \
+                    -DPLUGIN_DSCOVR=ON \
+                    -DPLUGIN_EARTHCARE=ON \
+                    -DPLUGIN_GCOM=ON \
+                    -DPLUGIN_GK2A=ON \
+                    -DPLUGIN_GEONETCAST=ON \
+                    -DPLUGIN_HIMAWARI=ON \
+                    -DPLUGIN_INSAT=ON \
+                    -DPLUGIN_METEOSAT=ON \
+                    -DPLUGIN_TUBSAT=ON
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -556,8 +641,6 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Select Xcode version
               run: sudo xcode-select -s '/Applications/Xcode_16.2.app/Contents/Developer'
@@ -566,7 +649,7 @@ jobs:
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
               # sqlite3 libtool autoconf libjpeg-turbo libtiff libusb libpng zstd
-              run: brew install ccache ninja dylibbundler automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc opencv jsoncpp pkg-config
+              run: brew install ccache ninja dylibbundler automake meson orc libxml2 zlib portaudio boost volk libomp glfw fftw libxml2 portaudio jemalloc armadillo hdf5 protobuf grpc pkg-config cpptrace
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -586,6 +669,12 @@ jobs:
               shell: bash
               run: $GITHUB_WORKSPACE/macOS/build_deps.sh
 
+            - name: Build NNG 1.x
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              # Homebrew's nng is 2.x and no longer ships the 1.x protocol headers.
+              run: bash $GITHUB_WORKSPACE/macOS/build_nng.sh
+
             - name: Cache compiler objects
               uses: actions/cache@v4
               with:
@@ -598,7 +687,8 @@ jobs:
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -G Ninja
+              # NNG 2.x (Homebrew) dropped the 1.x protocol headers; link the deps/ 1.x build.
+              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DNNG_LIBRARY="$GITHUB_WORKSPACE/deps/lib/libnng.dylib" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -G Ninja
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -633,8 +723,6 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Checkout RDAS aligner
-              run: git submodule update --init external/rdas_layer_aligner
 
             - name: Select Xcode version
               run: sudo xcode-select -s '/Applications/Xcode_16.2.app/Contents/Developer'
@@ -642,7 +730,7 @@ jobs:
             - name: Install brew dependencies
               # These are preinstalled in the GitHub runners, cause needless warnings to appear
               # Add these back if these ever become missing for some reason
-              run: brew install ccache ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost nng volk libomp glfw3 fftw libxml2 portaudio jemalloc nng armadillo hdf5 protobuf grpc opencv jsoncpp pkg-config
+              run: brew install ccache ninja dylibbundler libtool autoconf automake meson orc libxml2 zlib portaudio boost volk libomp glfw fftw libxml2 portaudio jemalloc armadillo hdf5 protobuf grpc pkg-config cpptrace
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
@@ -662,6 +750,12 @@ jobs:
               shell: bash
               run: $GITHUB_WORKSPACE/macOS/build_deps.sh
 
+            - name: Build NNG 1.x
+              working-directory: ${{runner.workspace}}/build
+              shell: bash
+              # Homebrew's nng is 2.x and no longer ships the 1.x protocol headers.
+              run: bash $GITHUB_WORKSPACE/macOS/build_nng.sh
+
             - name: Cache compiler objects
               uses: actions/cache@v4
               with:
@@ -674,7 +768,8 @@ jobs:
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
-              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -G Ninja
+              # NNG 2.x (Homebrew) dropped the 1.x protocol headers; link the deps/ 1.x build.
+              run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUNDLING_MODE=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DNNG_LIBRARY="$GITHUB_WORKSPACE/deps/lib/libnng.dylib" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -G Ninja
 
             - name: Build
               working-directory: ${{runner.workspace}}/build
@@ -717,3 +812,44 @@ jobs:
 
             - name: Update Nightly
               run: gh release upload nightly gobdump_out/* -R ${{github.repository}} --clobber
+
+    # Publish the same artifacts to the GitHub Release whenever a tag is pushed.
+    # The release may already exist (created by hand); we only create it if missing.
+    publish_release:
+        needs: ["build_windows_msys2", "build_windows_x64", "build_windows_arm64", "build_ubuntu_2204", "build_ubuntu_2404", "build_macos_intel", "build_macos_silicon", "build_linux_arm64", "build_android"]
+        runs-on: ubuntu-latest
+        if: startsWith(github.ref, 'refs/tags/')
+
+        steps:
+            - name: Download Artifacts
+              uses: actions/download-artifact@v4
+
+            - name: Install zip
+              run: sudo apt install -y zip
+
+            - name: Prepare release assets
+              run: |
+                  set -euo pipefail
+                  mkdir -p gobdump_out
+                  cp GobDump-Ubuntu-22.04/gobdump*.deb gobdump_out/gobdump_ubuntu_22.04_amd64.deb
+                  cp GobDump-Ubuntu-24.04/gobdump*.deb gobdump_out/gobdump_ubuntu_24.04_amd64.deb
+                  cp GobDump-Pi64-Latest/gobdump*.deb gobdump_out/gobdump_rpi64_latest_arm64.deb
+                  cp GobDump-macOS-Intel/GobDump-macOS-Intel.dmg gobdump_out/
+                  cp GobDump-macOS-Silicon/GobDump-macOS-Silicon.dmg gobdump_out/
+                  cp GobDump-Windows_x64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_x64_Installer.exe
+                  cp GobDump-Windows_arm64_Installer/GobDump-*.exe gobdump_out/GobDump-Windows_arm64_Installer.exe
+                  cp GobDump-release.apk/app-release-signed.apk gobdump_out/GobDump-Android.apk
+                  cp GobDump-AppImage/*.AppImage gobdump_out/GobDump.AppImage
+                  # MSYS2 portable is intentionally not published to releases or nightly.
+                  (cd GobDump-Windows_x64_Portable && zip -qr ../gobdump_out/GobDump-Windows_x64_Portable.zip .)
+                  (cd GobDump-Windows_arm64_Portable && zip -qr ../gobdump_out/GobDump-Windows_arm64_Portable.zip .)
+
+            - name: Publish release assets
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  if gh release view "${{ github.ref_name }}" -R "${{ github.repository }}" >/dev/null 2>&1; then
+                      gh release upload "${{ github.ref_name }}" gobdump_out/* -R "${{ github.repository }}" --clobber
+                  else
+                      gh release create "${{ github.ref_name }}" -R "${{ github.repository }}" --generate-notes gobdump_out/*
+                  fi

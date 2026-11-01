@@ -28,6 +28,7 @@ namespace viterbi
             throw std::runtime_error("cc_encoder: frame_size must be > 0");
 
         partab_init();
+        build_out_table();
 
         d_max_frame_size = frame_size;
         set_frame_size(frame_size);
@@ -89,19 +90,25 @@ namespace viterbi
         }
     }
 
-    void CCEncoder::work(uint8_t *in, uint8_t *out)
+    void CCEncoder::build_out_table()
     {
-        unsigned int my_state = d_start_state;
+        // The table is only valid when every polynomial fits in K bits.
+        d_use_table = d_k <= 16;
+        for (int p : d_polys)
+            if ((unsigned int)std::abs(p) >= (1u << d_k))
+                d_use_table = false;
+        if (!d_use_table)
+            return;
 
-        for (unsigned int i = 0; i < d_frame_size; ++i)
-        {
-            my_state = (my_state << 1) | (in[i] & 1);
-            for (unsigned int j = 0; j < d_rate; ++j)
-                out[i * d_rate + j] = (d_polys[j] < 0) ^ parity(my_state & abs(d_polys[j])) ? 1 : 0;
-        }
-
-        d_start_state = my_state;
+        d_low_mask = (1 << d_k) - 1;
+        d_table_stride = (size_t)1 << d_k;
+        out_table.assign((size_t)d_rate * d_table_stride, 0);
+        for (unsigned int j = 0; j < d_rate; j++)
+            for (int v = 0; v <= d_low_mask; v++)
+                out_table[(size_t)j * d_table_stride + v] = (d_polys[j] < 0) ^ parity(v & std::abs(d_polys[j]));
     }
+
+    void CCEncoder::work(uint8_t *in, uint8_t *out) { work(in, out, d_frame_size); }
 
     void CCEncoder::work(uint8_t *in, uint8_t *out, int size)
     {
@@ -110,8 +117,17 @@ namespace viterbi
         for (int i = 0; i < size; ++i)
         {
             my_state = (my_state << 1) | (in[i] & 1);
-            for (unsigned int j = 0; j < d_rate; ++j)
-                out[i * d_rate + j] = (d_polys[j] < 0) ^ parity(my_state & abs(d_polys[j])) ? 1 : 0;
+            if (d_use_table)
+            {
+                const unsigned int low = my_state & d_low_mask;
+                for (unsigned int j = 0; j < d_rate; ++j)
+                    out[i * d_rate + j] = out_table[(size_t)j * d_table_stride + low];
+            }
+            else
+            {
+                for (unsigned int j = 0; j < d_rate; ++j)
+                    out[i * d_rate + j] = (d_polys[j] < 0) ^ parity(my_state & std::abs(d_polys[j])) ? 1 : 0;
+            }
         }
 
         d_start_state = my_state;

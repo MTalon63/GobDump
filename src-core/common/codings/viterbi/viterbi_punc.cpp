@@ -107,13 +107,6 @@ namespace viterbi
 
             int sz = depunc->depunc_cont(soft_buffer, depunc_buffer, size); // Depuncturing
 
-#if 0
-            cc_decoder.work(depunc_buffer, output, sz); // Decode entire buffer
-            out_n = sz / 2;
-
-            cc_encoder_ber.work(output, ber_encoded_buffer);                     // Re-encoded for a BER check
-            d_ber = get_ber(depunc_buffer, ber_encoded_buffer, test_bit_len, 5); // Compute BER
-#else
             vit_buffer.add(depunc_buffer, sz);
 
             out_n = 0;
@@ -127,7 +120,6 @@ namespace viterbi
                 out_n += vit_bufsize / 2;
                 vit_buffer.del(vit_bufsize);
             }
-#endif
 
             if (d_ber > d_ber_thresold) // Check current BER
             {

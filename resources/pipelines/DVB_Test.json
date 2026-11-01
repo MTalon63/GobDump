@@ -148,6 +148,60 @@
                 "name": "BBFrame Size",
                 "description": "BBFrame size for the TCP Sink"
             },*/
+            "ldpc_trials": {
+                "type": "int",
+                "value": 10,
+                "name": "LDPC Iterations",
+                "description": "Iterations used until the SNR estimate settles; the adaptive caps override it afterwards."
+            },
+            "ldpc_early_term": {
+                "type": "bool",
+                "value": false,
+                "name": "LDPC Early Termination",
+                "description": "Stop each SIMD lane once its parity checks pass instead of waiting for the slowest lane."
+            },
+            "ldpc_min_iterations": {
+                "type": "int",
+                "value": 1,
+                "name": "LDPC Min Iterations",
+                "description": "Minimum iterations before per-lane early termination may stop a lane."
+            },
+            "ldpc_adaptive": {
+                "type": "bool",
+                "value": true,
+                "name": "LDPC Adaptive Iterations",
+                "description": "Scale the iteration cap with measured SNR: fewer passes on a clean signal, the full cap in fade."
+            },
+            "ldpc_trials_good": {
+                "type": "int",
+                "value": 3,
+                "name": "LDPC Cap @ Good SNR",
+                "description": "Iteration cap used at or above LDPC SNR (good)."
+            },
+            "ldpc_trials_bad": {
+                "type": "int",
+                "value": 20,
+                "name": "LDPC Cap @ Bad SNR",
+                "description": "Iteration cap used at or below LDPC SNR (bad)."
+            },
+            "ldpc_snr_good": {
+                "type": "float",
+                "value": 12.0,
+                "name": "LDPC SNR (good)",
+                "description": "SNR in dB at which the reduced iteration cap applies."
+            },
+            "ldpc_snr_bad": {
+                "type": "float",
+                "value": 8.0,
+                "name": "LDPC SNR (bad)",
+                "description": "SNR in dB at which the full iteration cap applies."
+            },
+            "mt_bch": {
+                "type": "bool",
+                "value": false,
+                "name": "Multithreaded BCH",
+                "description": "Run BCH and descrambling on their own thread so they overlap LDPC decoding."
+            },
             "port": {
                 "type": "int",
                 "value": 6666,

@@ -1,10 +1,12 @@
 #include "module_svissr_decoder.h"
 #include "common/codings/differential/nrzm.h"
+#include "common/widgets/constellation.h"
 #include "imgui/imgui.h"
 #include "logger.h"
 #include "svissr_deframer.h"
 #include "svissr_derand.h"
 #include <cstdint>
+#include <algorithm>
 #include <cstdio>
 
 #define BUFFER_SIZE 8192
@@ -99,12 +101,7 @@ namespace fengyun_svissr
                 draw_list->AddRectFilled(rect_min, rect_max, style::theme.widget_bg);
                 draw_list->PushClipRect(rect_min, rect_max);
 
-                for (int i = 0; i < 2048; i++)
-                {
-                    draw_list->AddCircleFilled(ImVec2(ImGui::GetCursorScreenPos().x + (int)(100 * ui_scale + (buffer[i] / 127.0) * 130 * ui_scale) % int(200 * ui_scale),
-                                                      ImGui::GetCursorScreenPos().y + (int)(100 * ui_scale + rng.gasdev() * 14 * ui_scale) % int(200 * ui_scale)),
-                                               2 * ui_scale, style::theme.constellation);
-                }
+                satdump::widgets::drawSoftConstellation(draw_list, rect_min, rect_max, buffer, std::min(BUFFER_SIZE, 2048), 1, &rng, 0.8f, 2 * ui_scale);
 
                 draw_list->PopClipRect();
                 ImGui::Dummy(ImVec2(200 * ui_scale + 3, 200 * ui_scale + 3));

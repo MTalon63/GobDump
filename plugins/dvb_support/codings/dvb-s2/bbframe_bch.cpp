@@ -36,154 +36,88 @@
 
 namespace dvbs2
 {
-    BBFrameBCH::BBFrameBCH(dvbs2_framesize_t framesize, dvbs2_code_rate_t rate)
+    namespace
     {
-        if (framesize == FECFRAME_NORMAL)
+        struct BchFrameParamsEntry
         {
-            switch (rate)
+            dvbs2_framesize_t framesize;
+            dvbs2_code_rate_t rate;
+            unsigned int kbch;
+            unsigned int nbch;
+            unsigned int bch_code;
+        };
+
+        const BchFrameParamsEntry bch_frame_params[] = {
+            {FECFRAME_NORMAL, C1_4, 16008, 16200, BCH_CODE_N12},
+            {FECFRAME_NORMAL, C1_3, 21408, 21600, BCH_CODE_N12},
+            {FECFRAME_NORMAL, C2_5, 25728, 25920, BCH_CODE_N12},
+            {FECFRAME_NORMAL, C1_2, 32208, 32400, BCH_CODE_N12},
+            {FECFRAME_NORMAL, C3_5, 38688, 38880, BCH_CODE_N12},
+            {FECFRAME_NORMAL, C2_3, 43040, 43200, BCH_CODE_N10},
+            {FECFRAME_NORMAL, C3_4, 48408, 48600, BCH_CODE_N12},
+            {FECFRAME_NORMAL, C4_5, 51648, 51840, BCH_CODE_N12},
+            {FECFRAME_NORMAL, C5_6, 53840, 54000, BCH_CODE_N10},
+            {FECFRAME_NORMAL, C8_9, 57472, 57600, BCH_CODE_N8},
+            {FECFRAME_NORMAL, C9_10, 58192, 58320, BCH_CODE_N8},
+            {FECFRAME_SHORT, C1_4, 3072, 3240, BCH_CODE_S12},
+            {FECFRAME_SHORT, C1_3, 5232, 5400, BCH_CODE_S12},
+            {FECFRAME_SHORT, C2_5, 6312, 6480, BCH_CODE_S12},
+            {FECFRAME_SHORT, C1_2, 7032, 7200, BCH_CODE_S12},
+            {FECFRAME_SHORT, C3_5, 9552, 9720, BCH_CODE_S12},
+            {FECFRAME_SHORT, C2_3, 10632, 10800, BCH_CODE_S12},
+            {FECFRAME_SHORT, C3_4, 11712, 11880, BCH_CODE_S12},
+            {FECFRAME_SHORT, C4_5, 12432, 12600, BCH_CODE_S12},
+            {FECFRAME_SHORT, C5_6, 13152, 13320, BCH_CODE_S12},
+            {FECFRAME_SHORT, C8_9, 14232, 14400, BCH_CODE_S12},
+        };
+    } // namespace
+
+    BBFrameBCH::FrameParams BBFrameBCH::frameParams(dvbs2_framesize_t framesize, dvbs2_code_rate_t rate)
+    {
+        FrameParams params;
+
+        for (const BchFrameParamsEntry &entry : bch_frame_params)
+        {
+            if (entry.framesize != framesize || entry.rate != rate)
+                continue;
+
+            params.kbch = entry.kbch;
+            params.nbch = entry.nbch;
+            params.bch_code = entry.bch_code;
+
+            switch (params.bch_code)
             {
-            case C1_4:
-                kbch = 16008;
-                nbch = 16200;
-                bch_code = BCH_CODE_N12;
+            case BCH_CODE_N12:
+                params.num_parity_bits = 192;
                 break;
-            case C1_3:
-                kbch = 21408;
-                nbch = 21600;
-                bch_code = BCH_CODE_N12;
+            case BCH_CODE_N10:
+                params.num_parity_bits = 160;
                 break;
-            case C2_5:
-                kbch = 25728;
-                nbch = 25920;
-                bch_code = BCH_CODE_N12;
+            case BCH_CODE_N8:
+                params.num_parity_bits = 128;
                 break;
-            case C1_2:
-                kbch = 32208;
-                nbch = 32400;
-                bch_code = BCH_CODE_N12;
+            case BCH_CODE_M12:
+                params.num_parity_bits = 180;
                 break;
-            case C3_5:
-                kbch = 38688;
-                nbch = 38880;
-                bch_code = BCH_CODE_N12;
+            case BCH_CODE_S12:
+                params.num_parity_bits = 168;
                 break;
-            case C2_3:
-                kbch = 43040;
-                nbch = 43200;
-                bch_code = BCH_CODE_N10;
-                break;
-            case C3_4:
-                kbch = 48408;
-                nbch = 48600;
-                bch_code = BCH_CODE_N12;
-                break;
-            case C4_5:
-                kbch = 51648;
-                nbch = 51840;
-                bch_code = BCH_CODE_N12;
-                break;
-            case C5_6:
-                kbch = 53840;
-                nbch = 54000;
-                bch_code = BCH_CODE_N10;
-                break;
-            case C8_9:
-                kbch = 57472;
-                nbch = 57600;
-                bch_code = BCH_CODE_N8;
-                break;
-            case C9_10:
-                kbch = 58192;
-                nbch = 58320;
-                bch_code = BCH_CODE_N8;
-                break;
-            default:
-                kbch = 0;
-                nbch = 0;
-                bch_code = 0;
+            default: // Unsupported MODCOD: sizes stay zeroed.
                 break;
             }
-        }
-        else if (framesize == FECFRAME_SHORT)
-        {
-            switch (rate)
-            {
-            case C1_4:
-                kbch = 3072;
-                nbch = 3240;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C1_3:
-                kbch = 5232;
-                nbch = 5400;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C2_5:
-                kbch = 6312;
-                nbch = 6480;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C1_2:
-                kbch = 7032;
-                nbch = 7200;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C3_5:
-                kbch = 9552;
-                nbch = 9720;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C2_3:
-                kbch = 10632;
-                nbch = 10800;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C3_4:
-                kbch = 11712;
-                nbch = 11880;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C4_5:
-                kbch = 12432;
-                nbch = 12600;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C5_6:
-                kbch = 13152;
-                nbch = 13320;
-                bch_code = BCH_CODE_S12;
-                break;
-            case C8_9:
-                kbch = 14232;
-                nbch = 14400;
-                bch_code = BCH_CODE_S12;
-                break;
-            default:
-                kbch = 0;
-                nbch = 0;
-                bch_code = 0;
-                break;
-            }
+            break;
         }
 
-        switch (bch_code)
-        {
-        case BCH_CODE_N12:
-            num_parity_bits = 192;
-            break;
-        case BCH_CODE_N10:
-            num_parity_bits = 160;
-            break;
-        case BCH_CODE_N8:
-            num_parity_bits = 128;
-            break;
-        case BCH_CODE_M12:
-            num_parity_bits = 180;
-            break;
-        case BCH_CODE_S12:
-            num_parity_bits = 168;
-            break;
-        }
+        return params;
+    }
+
+    BBFrameBCH::BBFrameBCH(dvbs2_framesize_t framesize, dvbs2_code_rate_t rate)
+    {
+        FrameParams params = frameParams(framesize, rate);
+        kbch = params.kbch;
+        nbch = params.nbch;
+        bch_code = params.bch_code;
+        num_parity_bits = params.num_parity_bits;
 
         // Init decoder stufff
         frame = 0;
@@ -276,6 +210,9 @@ namespace dvbs2
 
     void BBFrameBCH::bch_poly_build_tables()
     {
+        if (kbch == 0 || nbch == 0 || num_parity_bits == 0) // Unsupported MODCOD
+            return;
+
         // Normal polynomials
         const int polyn01[] = {1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
         const int polyn02[] = {1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1};
@@ -415,8 +352,12 @@ namespace dvbs2
     {
         int corrections = 0;
 
-        code = &frame[0];
-        parity = &frame[kbch / 8];
+        if (kbch == 0 || nbch == 0)
+            return 0;
+
+        // Locals, so decode() stays re-entrant.
+        uint8_t *code = &frame[0];
+        uint8_t *parity = &frame[kbch / 8];
 
         switch (bch_code)
         {

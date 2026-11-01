@@ -94,7 +94,7 @@ namespace satdump
             image_filters = getImageFilters();
         }
 
-        ImageHandler::ImageHandler(image::Image img) : ImageHandler::ImageHandler() { setImage(img); }
+        ImageHandler::ImageHandler(image::Image img) : ImageHandler::ImageHandler() { setImage(std::move(img)); }
 
         ImageHandler::ImageHandler(image::Image img, std::string name) : ImageHandler::ImageHandler(img) { image_name = name; }
 
@@ -222,9 +222,10 @@ namespace satdump
                         ImGui::SameLine();
 
                         // Delete
+                        bool del_this_handle = false;
                         if (widgets::VerySmallButton(u8"\uF1F8") && i < active_filters.size())
                         {
-                            active_filters.erase(active_filters.begin() + i);
+                            del_this_handle = true;
                             quit = true;
                             asyncProcess();
                         }
@@ -271,6 +272,9 @@ namespace satdump
                         ImGui::EndGroup();
                         ImGui::PopID();
                         ImGui::Separator();
+
+                        if (del_this_handle)
+                            active_filters.erase(active_filters.begin() + i);
                     }
                     ImGui::EndListBox();
                 }
@@ -423,6 +427,10 @@ namespace satdump
 
                     image_view.mouseCallback = [this](float x, float y)
                     {
+                        // Skip while processing!
+                        if (is_processing)
+                            return;
+
                         auto img = getImage();
                         ImGui::BeginTooltip();
 
@@ -441,13 +449,16 @@ namespace satdump
                             fwd_lut_snap = correct_fwd_lut;
                         }
 
-                        for (int i = 0; i < img->channels(); i++)
-                            ImGui::Text(_("Raw %d : %d F %f"), i + 1, img->get(i, x, y), img->getf(i, x, y));
-
-                        if (calib_valid_snap && img->channels() == 1 && x >= 0 && y >= 0 && x < img->width() && y < img->height())
+                        if (x >= 0 && y >= 0 && x < img->width() && y < img->height())
                         {
-                            double val = calib_snap.getVal(img->getf(0, x, y));
-                            ImGui::Text(_("Unit : %f %s"), val, calib_snap.unit.c_str());
+                            for (int i = 0; i < img->channels(); i++)
+                                ImGui::Text(_("Raw %d : %d F %f"), i + 1, img->get(i, x, y), img->getf(i, x, y));
+
+                            if (calib_valid_snap && img->channels() == 1)
+                            {
+                                double val = calib_snap.getVal(img->getf(0, x, y));
+                                ImGui::Text(_("Unit : %f %s"), val, calib_snap.unit.c_str());
+                            }
                         }
 
                         // Handle rotations
@@ -565,6 +576,24 @@ namespace satdump
             {
                 std::lock_guard<std::mutex> l(state_mtx);
                 std::atomic_store(&image, std::make_shared<image::Image>(img));
+            }
+            process();
+        }
+
+        void ImageHandler::setImage(image::Image &&img)
+        {
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                std::atomic_store(&image, std::make_shared<image::Image>(std::move(img)));
+            }
+            process();
+        }
+
+        void ImageHandler::setImage(std::shared_ptr<image::Image> img)
+        {
+            {
+                std::lock_guard<std::mutex> l(state_mtx);
+                std::atomic_store(&image, std::move(img));
             }
             process();
         }

@@ -1,61 +1,66 @@
 #pragma once
 
-#include <vector>
-#include <deque>
 #include <cstdint>
+#include <vector>
 
 /*
-DVB-S Interleaver / Deinterleaver.
-Adapted from GNU Radio.
+DVB-S interleaver / deinterleaver. Adapted from GNU Radio.
+Each register is a fixed-depth delay line of length M*i. The register lengths and the
+deinterleave index order are load-bearing; do not reorder.
 */
 namespace dvbs
 {
     class DVBSInterleaving
     {
     private:
-        static const int d_SYNC = 0x47;
-        static const int d_NSYNC = 0xB8;
-        static const int d_MUX_PKT = 8;
-
-        const int d_blocks = 136;
+        const int d_MUX_PKT = 8;
         const int d_I = 12;
         const int d_M = 17;
 
-        std::vector<std::deque<unsigned char>> d_shift_interleave;
-        std::vector<std::deque<unsigned char>> d_shift_deinterleave;
+        // buf holds the last L inputs; w is the next slot to emit/store.
+        struct Delay
+        {
+            std::vector<uint8_t> buf;
+            int w = 0;
+
+            void init(int n) { buf.assign(n, 0); w = 0; }
+        };
+
+        std::vector<Delay> d_shift_interleave;
+        std::vector<Delay> d_shift_deinterleave;
 
     public:
         DVBSInterleaving()
         {
-            // Interleaving
-
-            // Positions are shift registers (FIFOs)
-            // of length i*M
-            d_shift_interleave.reserve(d_I);
+            // Interleaving: register i has length M*i.
+            d_shift_interleave.resize(d_I);
             for (int i = 0; i < d_I; i++)
-                d_shift_interleave.emplace_back(d_M * i, 0);
+                d_shift_interleave[i].init(d_M * i);
 
-            // Deinterleaving
-
-            // The positions are shift registers (FIFOs)
-            // of length i*M
-            d_shift_deinterleave.reserve(d_I);
+            // Deinterleaving: registers are emplaced in reverse, so index j has length M*(I-1-j).
+            d_shift_deinterleave.resize(d_I);
             for (int i = (d_I - 1); i >= 0; i--)
-                d_shift_deinterleave.emplace_back(d_M * i, 0);
+                d_shift_deinterleave[d_I - 1 - i].init(d_M * i);
+        }
+
+        // Emit the oldest value, then store v where it was.
+        static inline uint8_t delay_step(Delay &d, uint8_t v)
+        {
+            const int L = (int)d.buf.size();
+            if (L == 0)
+                return v; // empty register: v is immediately the oldest
+            const uint8_t out = d.buf[d.w];
+            d.buf[d.w] = v;
+            d.w++;
+            if (d.w == L)
+                d.w = 0;
+            return out;
         }
 
         void interleave(uint8_t *in, uint8_t *out)
         {
-            for (int i = 0; i < 1; i++)
-            {
-                // Process one block of I symbols
-                for (unsigned int j = 0; j < d_shift_interleave.size(); j++)
-                {
-                    d_shift_interleave[j].push_front(in[(d_I * i) + j]);
-                    out[(d_I * i) + j] = d_shift_interleave[j].back();
-                    d_shift_interleave[j].pop_back();
-                }
-            }
+            for (unsigned int j = 0; j < d_shift_interleave.size(); j++)
+                out[j] = delay_step(d_shift_interleave[j], in[j]);
         }
 
         void deinterleave(uint8_t *in, uint8_t *out)
@@ -66,9 +71,8 @@ namespace dvbs
                 // This is actually the deinterleaver
                 for (int k = 0; k < (d_M * d_I); k++)
                 {
-                    d_shift_deinterleave[k % d_I].push_back(in[count]);
-                    out[count++] = d_shift_deinterleave[k % d_I].front();
-                    d_shift_deinterleave[k % d_I].pop_front();
+                    out[count] = delay_step(d_shift_deinterleave[k % d_I], in[count]);
+                    count++;
                 }
             }
         }

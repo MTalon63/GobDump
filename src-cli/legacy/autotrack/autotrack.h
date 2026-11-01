@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 
 #include "common/dsp/fft/fft_pan.h"
@@ -81,6 +82,7 @@ private:
 
 private:
     bool is_recording = false;
+    std::atomic<bool> rdas_filler_detected{false};
 
     std::shared_ptr<dsp::FileSinkBlock> file_sink;
 

@@ -117,7 +117,7 @@ git clone https://github.com/sjinks/sqlite3-cmake --depth 1 -b master sqlite
 cd sqlite
 mkdir build
 cd build
-cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON  -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON
+cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON  -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -Dsqlite3_ENABLE_THREADSAFE=ON
 ninja install
 cd ../..
 
@@ -186,8 +186,10 @@ ninja install
 cd ../..
 
 # Libairspy
-git clone https://github.com/airspy/airspyone_host libairspy --depth 1 -b v1.0.10
+# Stay on v1.0.10: newer libairspy restricts use to the Airspy ecosystem (non-FOSS).
+git clone -c core.autocrlf=false https://github.com/airspy/airspyone_host libairspy --depth 1 -b v1.0.10
 cd libairspy
+Invoke-CheckedNative "git" @("apply", "-p1", "$($PSScriptRoot)/patches/libairspy-v1.0.10-teardown-order.patch")
 mkdir build
 cd build
 cmake $cmake_params ..  -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DLIBUSB_INCLUDE_DIR="$output_folder_fwd/include/libusb-1.0" -DTHREADS_PTHREADS_WIN32_LIBRARY="$output_folder_fwd/lib/pthreadVC3.lib"
@@ -359,6 +361,15 @@ if(!$is_arm) {
     ninja install
     cd ../..
 }
+
+# cpptrace
+git clone https://github.com/jeremy-rifkin/cpptrace --depth 1 -b v1.0.4
+cd cpptrace
+mkdir build
+cd build
+cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON
+ninja install
+cd ../..
 
 <#
 # libarmadillo

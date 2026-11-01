@@ -116,6 +116,72 @@ namespace satdump
         ImGui::SetItemTooltip("%s", "Displays times as local time throughout the scheduler UI only.\nAll other times are in UTC.");
         ImGui::SetNextItemWidth(elev_width);
         ImGui::InputFloat("Minimum Elevation", &autotrack_cfg.autotrack_min_elevation);
+        if (ImGui::Button("RDAS Slot Lengths..."))
+            ImGui::OpenPopup("RDAS Slot Lengths");
+        if (ImGui::BeginPopupModal("RDAS Slot Lengths", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextDisabled("Seconds between RDAS downlink slots, per satellite.");
+            ImGui::Spacing();
+            for (auto &p : autotrack_cfg.rdas_slot_seconds)
+            {
+                std::string name;
+                for (auto &t : tle_registry)
+                    if (t.norad == p.first)
+                    {
+                        name = t.name;
+                        break;
+                    }
+                if (name.empty())
+                {
+                    switch (p.first)
+                    {
+                    case 41105:
+                        name = "ELEKTRO-L 2";
+                        break;
+                    case 44903:
+                        name = "ELEKTRO-L 3";
+                        break;
+                    case 55506:
+                        name = "ELEKTRO-L 4";
+                        break;
+                    case 67756:
+                        name = "ELEKTRO-L 5";
+                        break;
+                    default:
+                        name = "NORAD " + std::to_string(p.first);
+                    }
+                }
+
+                ImGui::PushID(p.first);
+                ImGui::Text("%s", name.c_str());
+                ImGui::SameLine(220 * ui_scale);
+                ImGui::SetNextItemWidth(120 * ui_scale);
+                int seconds = p.second;
+                if (ImGui::InputInt("seconds##slot", &seconds))
+                    p.second = std::clamp(seconds, 60, 86400);
+                ImGui::PopID();
+            }
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Text("Filler timeout");
+            ImGui::SameLine(220 * ui_scale);
+            ImGui::SetNextItemWidth(120 * ui_scale);
+            int filler_timeout = autotrack_cfg.rdas_filler_timeout;
+            if (ImGui::InputInt("seconds##filler", &filler_timeout))
+                autotrack_cfg.rdas_filler_timeout = std::clamp(filler_timeout, -1, 600);
+            ImGui::TextDisabled("Stop the pass after this many seconds without valid frames. -1 disables it.");
+            ImGui::Text("Pass length");
+            ImGui::SameLine(220 * ui_scale);
+            ImGui::SetNextItemWidth(120 * ui_scale);
+            int pass_seconds = autotrack_cfg.rdas_pass_seconds;
+            if (ImGui::InputInt("seconds##pass", &pass_seconds))
+                autotrack_cfg.rdas_pass_seconds = std::clamp(pass_seconds, 60, 3600);
+            ImGui::TextDisabled("Duration of each generated RDAS pass slot.");
+            ImGui::Spacing();
+            if (ImGui::Button("Close"))
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
         ImGui::EndGroup();
         ImGui::SetCursorPosY(selection_box_bottom);
 
@@ -167,9 +233,18 @@ namespace satdump
                         double cpass_xe = ((cpass.los_time - curr_time) / (12.0 * 3600.0)) * d_pplot_size;
 
                         std::string name = "NORAD " + norad;
+#if 0
                         std::optional<TLE> this_tle = db_keplers->get_from_norad(norad);
                         if (this_tle.has_value())
                             name = this_tle->name;
+#else
+                        for (auto &n : tle_registry)
+                            if (n.norad == norad)
+                            {
+                                name = n.name;
+                                break;
+                            }
+#endif
 
                         if (cpass_xs < 0)
                             cpass_xs = 0;
@@ -240,7 +315,18 @@ namespace satdump
             for (auto &cpass : enabled_satellites)
             {
                 int dl_pos = 0;
-                std::optional<satdump::TLE> thisTLE = db_keplers->get_from_norad(cpass.norad);
+                std::optional<satdump::TLE> thisTLE;
+#if 0
+                thisTLE = db_keplers->get_from_norad(cpass.norad);
+#else
+                for (auto &n : tle_registry)
+                    if (n.norad == cpass.norad)
+                    {
+                        thisTLE = (std::optional<satdump::TLE>)n;
+                        break;
+                    }
+#endif
+
                 std::string object_name = (thisTLE.has_value() ? thisTLE->name : "NORAD #" + std::to_string(cpass.norad));
                 for (auto &downlink : cpass.downlinks)
                 {

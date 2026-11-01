@@ -1,4 +1,7 @@
 #pragma once
+
+#include <vector>
+#include <deque>
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
@@ -17,6 +20,7 @@ namespace dsp
 
     static constexpr int MIN_BUFFER_SIZE = 8192 * 2; // module_demod_base already assumes >= 8192+1
     static constexpr int MAX_BUFFER_SIZE = 1000000000 / (int)sizeof(complex_t);
+    static constexpr int STREAM_QUEUE_LEN = 4; // headroom so producers rarely block
 
     SATDUMP_DLL int setDefaultBufferSize(int size); // Validates; returns the value applied
     SATDUMP_DLL void lockDefaultBufferSize();       // Reject later changes, once init is done
@@ -48,135 +52,80 @@ namespace dsp
     public:
         stream(int stream_size = STREAM_BUFFER_SIZE) : buffer_size(stream_size)
         {
-            writeBuf = create_volk_buffer<T>(stream_size);
-            readBuf = create_volk_buffer<T>(stream_size);
-
-            for (int i = 0; i < stream_size; i++)
+            for (int i = 0; i < STREAM_QUEUE_LEN; i++)
             {
-                writeBuf[i] = 0;
-                readBuf[i] = 0;
+                T *b = create_volk_buffer<T>(stream_size);
+                bufs.push_back(b);
+                freeQ.push_back(b);
             }
+            writeBuf = freeQ.front();
+            freeQ.pop_front();
+            // Some callers touch readBuf outside a read()/flush() pair.
+            readBuf = bufs[0];
         }
-
-        ~stream()
-        {
-            volk_free(writeBuf);
-            volk_free(readBuf);
-        }
-
-        // writeBuf/readBuf are raw owning volk allocations freed above, so a shallow copy would alias
-        // them and both destructors would free the same blocks. Streams are shared by pointer anyway.
+        ~stream() { for (size_t i = 0; i < bufs.size(); i++) volk_free(bufs[i]); }
         stream(const stream &) = delete;
         stream &operator=(const stream &) = delete;
-
         bool swap(int size)
         {
-            {
-                // Wait to either swap or stop
-                std::unique_lock<std::mutex> lck(swapMtx);
-                swapCV.wait(lck, [this]
-                            { return (canSwap || writerStop); });
-
-                // If writer was stopped, abandon operation
-                if (writerStop)
-                {
-                    return false;
-                }
-
-                // Swap buffers
-                dataSize = size;
-                T *temp = writeBuf;
-                writeBuf = readBuf;
-                readBuf = temp;
-                canSwap = false;
-            }
-
-            // Notify reader that some data is ready
-            {
-                std::lock_guard<std::mutex> lck(rdyMtx);
-                dataReady = true;
-            }
-            rdyCV.notify_all();
-
+            std::unique_lock<std::mutex> lck(mtx);
+            if (writerStop) return false;
+            readyQ.push_back(std::make_pair(writeBuf, size));
+            dataSize = size;
+            lck.unlock(); cvReady.notify_all(); lck.lock();
+            cvSwap.wait(lck, [this] { return (!freeQ.empty() || writerStop); });
+            if (writerStop) return false;
+            writeBuf = freeQ.front(); freeQ.pop_front();
             return true;
         }
-
         int read()
         {
-            // Wait for data to be ready or to be stopped
-            std::unique_lock<std::mutex> lck(rdyMtx);
-            rdyCV.wait(lck, [this]
-                       { return (dataReady || readerStop); });
-
-            return (readerStop ? -1 : dataSize);
+            std::unique_lock<std::mutex> lck(mtx);
+            // writerStop must wake a parked reader, or shutdown hangs.
+            cvReady.wait(lck, [this] { return (!readyQ.empty() || readerStop || writerStop); });
+            // Drain queued chunks before reporting end-of-stream.
+            if (!readyQ.empty())
+            {
+                readBuf = readyQ.front().first;
+                dataSize = readyQ.front().second;
+                readyQ.pop_front();
+                held = true;
+                return dataSize;
+            }
+            return -1;
         }
-
         void flush()
         {
-            // Clear data ready
             {
-                std::lock_guard<std::mutex> lck(rdyMtx);
-                dataReady = false;
+                std::lock_guard<std::mutex> lck(mtx);
+                if (held)
+                {
+                    freeQ.push_back(readBuf);
+                    held = false;
+                }
             }
-
-            // Notify writer that buffers can be swapped
-            {
-                std::lock_guard<std::mutex> lck(swapMtx);
-                canSwap = true;
-            }
-
-            swapCV.notify_all();
+            cvSwap.notify_all();
         }
-
-        void stopWriter()
+        void stopWriter() { { std::lock_guard<std::mutex> lck(mtx); writerStop = true; } cvSwap.notify_all(); cvReady.notify_all(); }
+        void clearWriteStop() { std::lock_guard<std::mutex> lck(mtx); writerStop = false; }
+        void stopReader() { { std::lock_guard<std::mutex> lck(mtx); readerStop = true; } cvSwap.notify_all(); cvReady.notify_all(); }
+        void clearReadStop() { std::lock_guard<std::mutex> lck(mtx); readerStop = false; }
+        bool exhausted()
         {
-            {
-                std::lock_guard<std::mutex> lck(swapMtx);
-                writerStop = true;
-            }
-            swapCV.notify_all();
-        }
-
-        // Cleared under the lock, so a waiter can't observe a stale true for a restarted stream
-        void clearWriteStop()
-        {
-            std::lock_guard<std::mutex> lck(swapMtx);
-            writerStop = false;
-        }
-
-        void stopReader()
-        {
-            {
-                std::lock_guard<std::mutex> lck(rdyMtx);
-                readerStop = true;
-            }
-            rdyCV.notify_all();
-        }
-
-        void clearReadStop()
-        {
-            std::lock_guard<std::mutex> lck(rdyMtx);
-            readerStop = false;
+            std::lock_guard<std::mutex> lck(mtx);
+            return writerStop && readyQ.empty();
         }
         int getDataSize() { return dataSize; }
-        bool getReady() { return dataReady; }
         int getBufferSize() { return buffer_size; }
-
         T *writeBuf;
         T *readBuf;
-
     private:
-        std::mutex swapMtx;
-        std::condition_variable swapCV;
-        bool canSwap = true;
-
-        std::mutex rdyMtx;
-        std::condition_variable rdyCV;
-        bool dataReady = false;
-
-        bool readerStop = false;
-        bool writerStop = false;
-
+        std::mutex mtx;
+        std::condition_variable cvSwap, cvReady;
+        std::deque<std::pair<T *, int>> readyQ;
+        std::deque<T *> freeQ;
+        std::vector<T *> bufs;
+        bool readerStop = false, writerStop = false, held = false;
         const int buffer_size;
         int dataSize = 0;
     };
@@ -314,23 +263,27 @@ namespace dsp
 
         int waitUntilReadable()
         {
-            if (_stopReader)
-            {
-                return -1;
-            }
+            // Report queued data BEFORE honouring the stop flag. Returning -1 the moment
+            // _stopReader is set discards whatever is still buffered, which is the tail of the
+            // capture - the reader must be allowed to drain first.
             int _r = getReadable();
             if (_r != 0)
             {
                 return _r;
             }
-            std::unique_lock<std::mutex> lck(_readable_mtx);
-            canReadVar.wait(lck, [=]()
-                            { return ((this->getReadable(false) > 0) || this->getReadStop()); });
             if (_stopReader)
             {
                 return -1;
             }
-            return getReadable(false);
+            std::unique_lock<std::mutex> lck(_readable_mtx);
+            canReadVar.wait(lck, [=]()
+                            { return ((this->getReadable(false) > 0) || this->getReadStop()); });
+            _r = getReadable(false);
+            if (_r != 0)
+            {
+                return _r;
+            }
+            return _stopReader ? -1 : 0;
         }
 
         int getReadable(bool lock = true)
@@ -447,6 +400,16 @@ namespace dsp
         }
 
         bool getReadStop() { return _stopReader; }
+        // "No data now" vs "no data ever again, and none buffered". A consumer uses this to
+        // finish only once it has actually drained, instead of exiting on a stop flag and
+        // discarding what is still queued.
+        bool exhausted()
+        {
+            _readable_mtx.lock();
+            int r = readable;
+            _readable_mtx.unlock();
+            return _stopReader && r == 0;
+        }
         bool getWriteStop() { return _stopWriter; }
 
         // Cleared under the lock too, so a waiter can't see a stale true for a just-restarted buffer

@@ -38,6 +38,11 @@ namespace apid
         else
             fecf_strict = true;
 
+        if (parameters.count("fecf_warn_secs") > 0)
+            d_fecf_warn_secs = parameters["fecf_warn_secs"].get<int>();
+        else
+            d_fecf_warn_secs = 10;
+
         if (parameters.count("save_cadu") > 0)
             save_to_cadu = parameters["save_cadu"].get<bool>();
 
@@ -90,17 +95,50 @@ namespace apid
 
             ccsds::ccsds_aos::VCDU vcdu = ccsds::ccsds_aos::parseVCDU(cadu);
 
+            // Not CADU-framed: report framing instead of CRC noise.
+            const bool asm_ok = cadu[0] == 0x1A && cadu[1] == 0xCF && cadu[2] == 0xFC && cadu[3] == 0x1D;
+            if (!asm_ok)
+            {
+                framing_fail++;
+                auto now = std::chrono::steady_clock::now();
+                if (now - fecf_last_warn >= std::chrono::seconds((int)d_fecf_warn_secs))
+                {
+                    logger->warn("Framing: %llu of %llu reads are NOT ASM-aligned (first bytes %02X %02X %02X %02X, vcid %u). "
+                                 "The stream is not CADU-framed -- check cadu_size/the deframer, not the FECF.",
+                                 (unsigned long long)framing_fail, (unsigned long long)(fecf_total + framing_fail),
+                                 cadu[0], cadu[1], cadu[2], cadu[3], vcdu.vcid);
+                    fecf_last_warn = now;
+                }
+                continue;
+            }
+
             if (use_fecf)
             {
+                fecf_total++;
                 static codings::crc::GenericCRC fecf_crc(16, 0x1021, 0xFFFF, 0x0, false, false);
-                uint16_t computed_crc = fecf_crc.compute(cadu, (cadu_size / 8) - 2);
-                uint16_t expected_crc = (cadu[(cadu_size / 8) - 2] << 8) | cadu[(cadu_size / 8) - 1];
+                const int fecf_off = 4 + mpdu_data_size + 8;
+                uint16_t computed_crc = fecf_crc.compute(cadu, fecf_off);
+                uint16_t expected_crc = (cadu[fecf_off] << 8) | cadu[fecf_off + 1];
                 if (computed_crc != expected_crc)
                 {
-                    logger->warn("FECF check failed (vcdu_counter: %u).", vcdu.vcdu_counter + 1);
+                    // Rate-limit lossy-link rejection reports.
+                    fecf_fail++;
+                    auto now = std::chrono::steady_clock::now();
+                    if (now - fecf_last_warn >= std::chrono::seconds((int)d_fecf_warn_secs))
+                    {
+                        logger->warn("FECF: %llu of %llu frames rejected (%d since last report), last vcdu_counter %u",
+                                     (unsigned long long)fecf_fail, (unsigned long long)fecf_total,
+                                     fecf_suppressed, vcdu.vcdu_counter + 1);
+                        fecf_last_warn = now;
+                        fecf_suppressed = 0;
+                    }
+                    else
+                        fecf_suppressed++;
                     if (fecf_strict)
                         continue;
                 }
+                else
+                    fecf_ok++;
             }
 
             if (save_to_cadu)
@@ -121,7 +159,18 @@ namespace apid
 
                         // If packet_size is set, only send if payload matches
                         if (cfg.packet_size >= 0 && static_cast<int>(pkt.payload.size()) != cfg.packet_size)
+                        {
+                            cfg.size_rej++;
+                            cfg.size_last = (int)pkt.payload.size();
+                            auto now = std::chrono::steady_clock::now();
+                            if (now - cfg.size_warn_last >= std::chrono::seconds(10))
+                            {
+                                logger->warn("APID %d: %llu packets dropped, payload is %d B but packet_size is %d (use -1 to send anything)",
+                                             cfg.apid, (unsigned long long)cfg.size_rej, cfg.size_last, cfg.packet_size);
+                                cfg.size_warn_last = now;
+                            }
                             continue;
+                        }
 
                         int send_size = (cfg.packet_size >= 0) ? cfg.packet_size : static_cast<int>(pkt.payload.size());
 

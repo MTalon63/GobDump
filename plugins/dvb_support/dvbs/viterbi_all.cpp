@@ -7,6 +7,80 @@
 
 namespace viterbi
 {
+    // Fused rotate_soft + signed_soft_to_unsigned for the SYNCED path.
+    // -128 is clamped to -127 and 128 becomes 127 (the erasure marker).
+    static inline void rotate_convert_fused(int8_t *in, uint8_t *out, int size, phase_t phase)
+    {
+        switch (phase)
+        {
+        case PHASE_90:
+            for (int i = 0; i + 1 < size; i += 2)
+            {
+                float a = in[i], b = in[i + 1];
+                if (a == -128) a = -127;
+                if (b == -128) b = -127;
+                int8_t r = (int8_t)b, im = (int8_t)(-a);
+                in[i] = r;
+                in[i + 1] = im;
+                uint8_t o0 = (uint8_t)(r + 127);
+                uint8_t o1 = (uint8_t)(im + 127);
+                out[i] = (o0 == 128) ? 127 : o0;
+                out[i + 1] = (o1 == 128) ? 127 : o1;
+            }
+            if (size & 1)
+            {
+                int a = in[size - 1];
+                if (a == -128) a = -127;
+                uint8_t o = (uint8_t)(a + 127);
+                out[size - 1] = (o == 128) ? 127 : o;
+            }
+            break;
+        case PHASE_180:
+            for (int i = 0; i < size; i++)
+            {
+                int a = in[i];
+                if (a == -128) a = -127;
+                int8_t v = (int8_t)(-a);
+                in[i] = v;
+                uint8_t o = (uint8_t)(v + 127);
+                out[i] = (o == 128) ? 127 : o;
+            }
+            break;
+        case PHASE_270:
+            for (int i = 0; i + 1 < size; i += 2)
+            {
+                float a = in[i], b = in[i + 1];
+                if (a == -128) a = -127;
+                if (b == -128) b = -127;
+                int8_t r = (int8_t)(-b), im = (int8_t)a;
+                in[i] = r;
+                in[i + 1] = im;
+                uint8_t o0 = (uint8_t)(r + 127);
+                uint8_t o1 = (uint8_t)(im + 127);
+                out[i] = (o0 == 128) ? 127 : o0;
+                out[i + 1] = (o1 == 128) ? 127 : o1;
+            }
+            if (size & 1)
+            {
+                int a = in[size - 1];
+                if (a == -128) a = -127;
+                uint8_t o = (uint8_t)(a + 127);
+                out[size - 1] = (o == 128) ? 127 : o;
+            }
+            break;
+        default: // PHASE_0
+            for (int i = 0; i < size; i++)
+            {
+                int a = in[i];
+                if (a == -128) a = -127;
+                in[i] = (int8_t)a;
+                uint8_t o = (uint8_t)(a + 127);
+                out[i] = (o == 128) ? 127 : o;
+            }
+            break;
+        }
+    }
+
     Viterbi_DVBS::Viterbi_DVBS(float ber_threshold, int max_outsync, int buffer_size, std::vector<phase_t> phases)
         : d_ber_thresold(ber_threshold),
           d_max_outsync(max_outsync),
@@ -40,11 +114,10 @@ namespace viterbi
     {
         soft_buffer = new uint8_t[d_buffer_size * 4];
         depunc_buffer = new uint8_t[d_buffer_size * 4];
-        output_buffer = new uint8_t[d_buffer_size * 4];
 
         for (int i = 0; i < 12; i++)
         {
-            for (int y = 0; y < 2; y++)
+            for (int y = 0; y < 4; y++)
             {
                 d_bers_12[y][i] = 10;
                 d_bers_23[y][i] = 10;
@@ -59,7 +132,6 @@ namespace viterbi
     {
         delete[] soft_buffer;
         delete[] depunc_buffer;
-        delete[] output_buffer;
     }
 
     float Viterbi_DVBS::get_ber(uint8_t *raw, uint8_t *rencoded, int len, float ratio)
@@ -214,8 +286,7 @@ namespace viterbi
 
         if (d_state == ST_SYNCED) // Decode
         {
-            rotate_soft((int8_t *)input, size, d_phase, false);          // Phase shift
-            signed_soft_to_unsigned((int8_t *)input, soft_buffer, size); // Soft convertion
+            rotate_convert_fused((int8_t *)input, soft_buffer, size, d_phase);
 
             if (d_rate == RATE_1_2)
             {
@@ -228,13 +299,7 @@ namespace viterbi
             else if (d_rate == RATE_2_3)
             {
                 int sz = depunc_23.depunc_cont(soft_buffer, depunc_buffer, size); // Depuncturing
-#if 0
-                cc_decoder_23.work(depunc_buffer, output, sz); // Decode entire buffer
-                out_n = sz / 2;
 
-                cc_encoder_ber_23.work(output, ber_encoded_buffer);                               // Re-encoded for a BER check
-                d_ber = get_ber(depunc_buffer, ber_encoded_buffer, TEST_BITS_LENGTH * 1.25, 3.5); // Compute BER
-#else
                 vit_buffer_23.add(depunc_buffer, sz);
 
                 out_n = 0;
@@ -248,7 +313,6 @@ namespace viterbi
                     out_n += vit_bufsize_23 / 2;
                     vit_buffer_23.del(vit_bufsize_23);
                 }
-#endif
             }
             else if (d_rate == RATE_3_4)
             {
@@ -263,13 +327,7 @@ namespace viterbi
             else if (d_rate == RATE_5_6)
             {
                 int sz = depunc_56.depunc_cont(soft_buffer, depunc_buffer, size); // Depuncturing
-#if 0
-                cc_decoder_56.work(depunc_buffer, output, sz); // Decode entire buffer
-                out_n = sz / 2;
 
-                cc_encoder_ber_56.work(output, ber_encoded_buffer);                             // Re-encoded for a BER check
-                d_ber = get_ber(depunc_buffer, ber_encoded_buffer, TEST_BITS_LENGTH * 1.66, 8); // Compute BER
-#else
                 vit_buffer_56.add(depunc_buffer, sz);
 
                 out_n = 0;
@@ -283,7 +341,6 @@ namespace viterbi
                     out_n += vit_bufsize_56 / 2;
                     vit_buffer_56.del(vit_bufsize_56);
                 }
-#endif
             }
             else if (d_rate == RATE_7_8)
             {

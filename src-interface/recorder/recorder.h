@@ -86,6 +86,7 @@ namespace satdump
         bool show_waterfall = true;
         bool is_started = false, is_recording = false, is_processing = false;
         std::atomic<bool> is_stopping_processing{false};
+        std::atomic<bool> rdas_filler_detected{false};
         bool is_destroying = false; // Set in the destructor to prevent firing events back into the explorer during teardown
 
         double xconverter_frequency = 0;
@@ -195,7 +196,7 @@ namespace satdump
         void stop_recording();
         void load_rec_path_data();
 
-        void try_init_tracking_widget();
+        void try_init_tracking_widget(nlohmann::json cli_set = {});
 
         uint64_t get_samplerate()
         {
