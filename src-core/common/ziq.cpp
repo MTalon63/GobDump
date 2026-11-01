@@ -8,17 +8,40 @@
 
 namespace ziq
 {
+    static std::string annotate_quant(const std::string &in, int bits)
+    {
+        std::string kv = "\"quant_bits\":" + std::to_string(bits);
+        if (in.empty())
+            return "{" + kv + "}";
+        if (in.find("quant_bits") != std::string::npos)
+            return in;
+        size_t p = in.find('{');
+        if (p == std::string::npos)
+            return in;
+        std::string out = in;
+        size_t q = out.find_first_not_of(" \t\r\n", p + 1);
+        if (q != std::string::npos && out[q] == '}')
+            out.insert(q, kv);
+        else
+            out.insert(p + 1, kv + ",");
+        return out;
+    }
+
     // Writer
     ziq_writer::ziq_writer(ziq_cfg cfg, std::ofstream &stream) : cfg(cfg), stream(stream)
     {
+        std::string annotation = cfg.annotation;
+        if (cfg.quant_bits > 0 && cfg.quant_bits < cfg.bits_per_sample)
+            annotation = annotate_quant(annotation, cfg.quant_bits);
+
         // Write header
         stream.write((char *)ZIQ_SIGNATURE, 4);
         stream.write((char *)&cfg.is_compressed, 1);
         stream.write((char *)&cfg.bits_per_sample, 1);
         stream.write((char *)&cfg.samplerate, 8);
-        uint64_t string_size = cfg.annotation.size();
+        uint64_t string_size = annotation.size();
         stream.write((char *)&string_size, 8);
-        stream.write((char *)cfg.annotation.c_str(), string_size);
+        stream.write((char *)annotation.c_str(), string_size);
 
         max_buffer_size = dsp::STREAM_BUFFER_SIZE; // Abolute max size. Show never be reached
 
@@ -40,8 +63,32 @@ namespace ziq
             buffer_i16 = new int16_t[max_buffer_size * 2];
     }
 
+    void ziq_writer::finish()
+    {
+        if (!cfg.is_compressed || finished || zstd_ctx == nullptr)
+            return;
+        finished = true;
+
+        ZSTD_inBuffer in = {nullptr, 0, 0};
+        size_t ret = 1;
+        while (ret != 0)
+        {
+            ZSTD_outBuffer out = {output_compressed, max_buffer_size, 0};
+            ret = ZSTD_compressStream2(zstd_ctx, &out, &in, ZSTD_e_end);
+            if (ZSTD_isError(ret))
+            {
+                logger->error("ZIQ flush failed: %s", ZSTD_getErrorName(ret));
+                break;
+            }
+            if (out.pos)
+                stream.write((char *)output_compressed, out.pos);
+        }
+        stream.flush();
+    }
+
     ziq_writer::~ziq_writer()
     {
+        finish();
         ZSTD_freeCCtx(zstd_ctx);
 
         if (cfg.is_compressed)
@@ -71,6 +118,15 @@ namespace ziq
         if (cfg.bits_per_sample == 8)
         {
             volk_32f_s32f_convert_8i(buffer_i8, (float *)input, 127, size * 2);
+
+            if (cfg.quant_bits > 0 && cfg.quant_bits < 8)
+            {
+                const int drop = 8 - cfg.quant_bits;
+                const uint8_t half = (uint8_t)(1 << (drop - 1));
+                const uint8_t mask = (uint8_t)(0xFF & ~((1 << drop) - 1));
+                for (int i = 0; i < size * 2; i++)
+                    buffer_i8[i] = (int8_t)(uint8_t)(((uint8_t)buffer_i8[i] + half) & mask);
+            }
 
             if (cfg.is_compressed)
             {

@@ -38,6 +38,8 @@ namespace ziq
         char bits_per_sample;   // Bits per sample
         uint64_t samplerate;    // Samplerate of the contained IQ data
         std::string annotation; // Annotation field. This should be JSON and can used to store frequency and other informations
+
+        int quant_bits = 0; // Effective precision, 0 = full. Recorded in the annotation.
     };
 
     class ziq_writer
@@ -59,6 +61,7 @@ namespace ziq
         uint8_t *output_compressed;
 
     private:
+        bool finished = false;
         int compress_and_write(uint8_t *input, size_t size);
 
     public:
@@ -66,6 +69,8 @@ namespace ziq
         ~ziq_writer();
 
         int write(complex_t *input, int size);
+
+        void finish(); // must run before the stream is closed, or the tail is lost
     };
 
     class ziq_reader
