@@ -50,19 +50,46 @@ namespace remote_sdr
         return final_size;
     }
 
-    inline void decode_iq_pkt(uint8_t *input, complex_t *output, int *nsamples)
+    inline bool decode_iq_pkt(const uint8_t *input, size_t input_len, complex_t *output,
+                              size_t output_capacity, int *nsamples)
     {
+        constexpr size_t header_size = 9;
+        if (input == nullptr || output == nullptr || nsamples == nullptr || input_len < header_size)
+            return false;
+
         int bit_depth = input[0];
         float scale = 0.0f;
+        int decoded_samples = 0;
         memcpy(&scale, input + 1, sizeof(scale));
-        memcpy(nsamples, input + 5, sizeof(*nsamples));
+        memcpy(&decoded_samples, input + 5, sizeof(decoded_samples));
 
-        int final_size = 9;
+        if (decoded_samples <= 0 || static_cast<size_t>(decoded_samples) > output_capacity)
+            return false;
+
+        size_t bytes_per_sample = 0;
         if (bit_depth == 8)
-            volk_8i_s32f_convert_32f((float *)output, (int8_t *)&input[final_size], scale, *nsamples * 2);
+            bytes_per_sample = 2 * sizeof(int8_t);
         else if (bit_depth == 16)
-            volk_16i_s32f_convert_32f((float *)output, (int16_t *)&input[final_size], scale, *nsamples * 2);
+            bytes_per_sample = 2 * sizeof(int16_t);
         else if (bit_depth == 32)
-            memcpy(output, &input[final_size], *nsamples * sizeof(complex_t));
+            bytes_per_sample = sizeof(complex_t);
+        else
+            return false;
+
+        const size_t sample_count = static_cast<size_t>(decoded_samples);
+        if (sample_count > (SIZE_MAX - header_size) / bytes_per_sample)
+            return false;
+        if (header_size + sample_count * bytes_per_sample > input_len)
+            return false;
+
+        if (bit_depth == 8)
+            volk_8i_s32f_convert_32f((float *)output, (const int8_t *)&input[header_size], scale, decoded_samples * 2);
+        else if (bit_depth == 16)
+            volk_16i_s32f_convert_32f((float *)output, (const int16_t *)&input[header_size], scale, decoded_samples * 2);
+        else
+            memcpy(output, &input[header_size], sample_count * sizeof(complex_t));
+
+        *nsamples = decoded_samples;
+        return true;
     }
 };
