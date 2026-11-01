@@ -53,6 +53,7 @@ namespace dsp
         { ZIQ, 32 },
         { ZIQ, 16 },
         { ZIQ, 8 },
+        { ZIQ, 6 },
 #endif
 #ifdef BUILD_ZIQ2
         { ZIQ2, 16 },
@@ -116,7 +117,15 @@ namespace dsp
             type = WAV_16;
 #ifdef BUILD_ZIQ
         else if (s == "ziq")
+        {
             type = ZIQ;
+            ziq_depth = 8;
+        }
+        else if (s == "ziq6" || s == "ziq_cs6")
+        {
+            type = ZIQ;
+            ziq_depth = 6;
+        }
 #endif
 #ifdef BUILD_ZIQ2
         else if (s == "ziq2")
@@ -163,6 +172,7 @@ namespace dsp
             "ziq cf32\0"
             "ziq cs16\0"
             "ziq cs8\0"
+            "ziq cs6\0"
 #endif
 #ifdef BUILD_ZIQ2
             "ziq2 cs16 (WIP)\0"

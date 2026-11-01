@@ -65,6 +65,10 @@ namespace dsp
 
             rec_mutex.lock();
             should_work = false;
+#ifdef BUILD_ZIQ
+            if (d_sample_format == ZIQ && ziqWriter)
+                ziqWriter->finish();
+#endif
             current_size_out = 0;
             current_size_out_raw = 0;
             output_file.close();
