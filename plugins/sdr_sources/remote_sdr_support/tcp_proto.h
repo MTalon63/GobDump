@@ -170,37 +170,30 @@ public:
                     continue;
                 }
 
-                int lpkt_size = sread(buffer, 4);
-                if (lpkt_size <= 0)
+                if (!read_exact(buffer, 4))
                 {
                     closeconn();
                     continue;
                 }
-                if (lpkt_size < 4)
+
+                uint32_t payload_size = (uint32_t(buffer[0]) << 24) |
+                                        (uint32_t(buffer[1]) << 16) |
+                                        (uint32_t(buffer[2]) << 8) |
+                                        uint32_t(buffer[3]);
+                if (payload_size == 0 || payload_size > 3000000 - 4)
                 {
-                    logger->error("Client sent a packet that was too small. Closing connection!");
+                    logger->error("Reported packet size too large or empty. Closing connection!");
                     closeconn();
                     continue;
                 }
 
-                int current_pkt_size = lpkt_size;
-                int expected_pkt_size = uint32_t(buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]) + 4;
-                if (expected_pkt_size > 3000000)
+                if (!read_exact(buffer + 4, payload_size))
                 {
-                    logger->error("Reported packet size too large. Closing connection!");
                     closeconn();
                     continue;
                 }
 
-                while (current_pkt_size < expected_pkt_size)
-                {
-                    int ret = sread(buffer + current_pkt_size, expected_pkt_size - current_pkt_size);
-                    if (ret <= 0)
-                        break;
-                    current_pkt_size += ret;
-                }
-
-                callback_func(buffer + 4, expected_pkt_size - 4);
+                callback_func(buffer + 4, static_cast<int>(payload_size));
             }
             else
             {
@@ -211,9 +204,21 @@ public:
     }
 
 private:
+    bool read_exact(uint8_t *buff, size_t len)
+    {
+        size_t received = 0;
+        while (received < len)
+        {
+            int ret = sread(buff + received, static_cast<int>(len - received));
+            if (ret <= 0)
+                return false;
+            received += static_cast<size_t>(ret);
+        }
+        return true;
+    }
+
     int sread(uint8_t *buff, int len)
     {
-        // int ret = read(clientsockfd, buff, len);
         return recv(clientsockfd, (char *)buff, len, 0);
     }
 
@@ -336,31 +341,27 @@ public:
     void rx_thread_func()
     {
         uint8_t *buffer = new uint8_t[3000000];
-        int current_pkt_size_exp = -1;
         while (thread_should_run)
         {
             if (clientsockfd != -1)
             {
-                int lpkt_size = sread(buffer, 4);
-                if (lpkt_size <= 0)
-                    continue;
+                if (!read_exact(buffer, 4))
+                    break;
 
-                if (current_pkt_size_exp == -1)
+                uint32_t payload_size = (uint32_t(buffer[0]) << 24) |
+                                        (uint32_t(buffer[1]) << 16) |
+                                        (uint32_t(buffer[2]) << 8) |
+                                        uint32_t(buffer[3]);
+                if (payload_size == 0 || payload_size > 3000000 - 4)
                 {
-                    current_pkt_size_exp = uint32_t(buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]) + 4;
+                    logger->error("Reported packet size too large or empty. Closing connection!");
+                    break;
                 }
 
-                int current_pkt_size = lpkt_size;
-                int expected_pkt_size = uint32_t(buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]) + 4;
-                while (current_pkt_size < expected_pkt_size)
-                {
-                    int ret = sread(buffer + current_pkt_size, expected_pkt_size - current_pkt_size);
-                    if (ret <= 0)
-                        break;
-                    current_pkt_size += ret;
-                }
+                if (!read_exact(buffer + 4, payload_size))
+                    break;
 
-                callback_func(buffer + 4, expected_pkt_size - 4);
+                callback_func(buffer + 4, static_cast<int>(payload_size));
 
                 if (readOne)
                     break;
@@ -374,9 +375,21 @@ public:
     }
 
 private:
+    bool read_exact(uint8_t *buff, size_t len)
+    {
+        size_t received = 0;
+        while (received < len)
+        {
+            int ret = sread(buff + received, static_cast<int>(len - received));
+            if (ret <= 0)
+                return false;
+            received += static_cast<size_t>(ret);
+        }
+        return true;
+    }
+
     int sread(uint8_t *buff, int len)
     {
-        // return read(clientsockfd, buff, len);
         return recv(clientsockfd, (char *)buff, len, 0);
     }
 
