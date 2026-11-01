@@ -6,6 +6,7 @@
 #include "pipeline/modules/instrument_utils.h"
 
 #include <atomic>
+#include <ctime>
 #include <memory>
 
 namespace elektro_arktika
@@ -33,6 +34,10 @@ namespace elektro_arktika
             bool decode_ir = false;
             bool project_vis2 = false;
             bool fill_missing = false;
+            bool flip_180 = false;
+            int filler_timeout = -1;
+            std::atomic<time_t> last_valid_frame_time{0};
+            std::atomic<bool> filler_reported{false};
             size_t max_fill_lines = 50;
             std::atomic<bool> recalibrate_aligner{false};
 

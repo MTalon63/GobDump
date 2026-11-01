@@ -86,6 +86,7 @@ namespace satdump
         bool show_waterfall = true;
         bool is_started = false, is_recording = false, is_processing = false;
         std::atomic<bool> is_stopping_processing{false};
+        std::atomic<bool> rdas_filler_detected{false};
         bool is_destroying = false; // Set in the destructor to prevent firing events back into the explorer during teardown
 
         double xconverter_frequency = 0;

@@ -5,7 +5,10 @@
 #include "image/image.h"
 #include "nlohmann/json_utils.h"
 #include "passes.h"
+#include <algorithm>
 #include <functional>
+#include <map>
+#include <string>
 
 namespace satdump
 {
@@ -15,6 +18,12 @@ namespace satdump
         bool stop_sdr_when_idle = false;
         bool multi_mode = false;
         bool use_localtime = false;
+        // Seconds between RDAS downlink slots, per NORAD. 900 = 15 minutes.
+        std::map<int, int> rdas_slot_seconds = {
+            {41105, 900}, {44903, 900}, {55506, 900}, {67756, 900}};
+        // Stop an RDAS pass after this many seconds without valid frames. -1 disables it.
+        int rdas_filler_timeout = 10;
+        int rdas_pass_seconds = 600;
     };
 
     inline void to_json(nlohmann::ordered_json &j, const AutoTrackCfg &v)
@@ -23,6 +32,11 @@ namespace satdump
         j["stop_sdr_when_idle"] = v.stop_sdr_when_idle;
         j["multi_mode"] = v.multi_mode;
         j["use_localtime"] = v.use_localtime;
+        j["rdas_slot_seconds"] = nlohmann::ordered_json::object();
+        for (auto &p : v.rdas_slot_seconds)
+            j["rdas_slot_seconds"][std::to_string(p.first)] = p.second;
+        j["rdas_filler_timeout"] = v.rdas_filler_timeout;
+        j["rdas_pass_seconds"] = v.rdas_pass_seconds;
     }
 
     inline void from_json(const nlohmann::ordered_json &j, AutoTrackCfg &v)
@@ -35,6 +49,19 @@ namespace satdump
             v.multi_mode = j["multi_mode"];
         if (j.contains("use_localtime"))
             v.use_localtime = j["use_localtime"];
+        if (j.contains("rdas_slot_seconds") && j["rdas_slot_seconds"].is_object())
+            for (auto &p : j["rdas_slot_seconds"].items())
+                try
+                {
+                    v.rdas_slot_seconds[std::stoi(p.key())] = std::clamp(p.value().get<int>(), 60, 86400);
+                }
+                catch (...)
+                {
+                }
+        if (j.contains("rdas_filler_timeout"))
+            v.rdas_filler_timeout = std::clamp(j["rdas_filler_timeout"].get<int>(), -1, 600);
+        if (j.contains("rdas_pass_seconds"))
+            v.rdas_pass_seconds = std::clamp(j["rdas_pass_seconds"].get<int>(), 60, 3600);
     }
 
     struct TrackedObject

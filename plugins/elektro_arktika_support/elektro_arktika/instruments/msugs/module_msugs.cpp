@@ -7,6 +7,7 @@
 #include "products/image/channel_transform.h"
 #include "utils/binary.h"
 #include "utils/stats.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -16,7 +17,9 @@
 #include "products/dataset.h"
 #include "products/image_product.h"
 
+#include "common/tracking/scheduler/rdas_filler.h"
 #include "common/tracking/tle.h"
+#include "core/plugin.h"
 #include "core/resources.h"
 #include "init.h"
 #include "nlohmann/json_utils.h"
@@ -52,6 +55,8 @@ namespace elektro_arktika
                 return 44903; // Elektro-L 3
             case 4:
                 return 55506; // Elektro-L 4
+            case 5:
+                return 67756; // Elektro-L 5
             default:
                 return -1;
             }
@@ -74,6 +79,9 @@ namespace elektro_arktika
             decode_ir = parameters.contains("decode_ir") ? parameters["decode_ir"].get<bool>() : false;
             project_vis2 = parameters.contains("project_vis2") ? parameters["project_vis2"].get<bool>() : false;
             fill_missing = parameters.contains("fill_missing") ? parameters["fill_missing"].get<bool>() : false;
+            flip_180 = parameters.contains("flip_180") ? parameters["flip_180"].get<bool>() : false;
+            filler_timeout = parameters.contains("filler_timeout") ? parameters["filler_timeout"].get<int>() : -1;
+            filler_timeout = std::clamp(filler_timeout, -1, 600);
             max_fill_lines = parameters.contains("max_fill_lines") ? parameters["max_fill_lines"].get<size_t>() : 50;
             if (decode_ir)
                 infr_reader = std::make_unique<MSUIRReader>();
@@ -95,6 +103,7 @@ namespace elektro_arktika
 
             logger->info("Demultiplexing and deframing...");
 
+            uint64_t last_frame_count = 0;
             while (should_run())
             {
                 // Read buffer
@@ -158,6 +167,24 @@ namespace elektro_arktika
                             data_unknown.write((char *)frame.data(), frame.size());
                     }
                 }*/
+
+                if (filler_timeout > 0)
+                {
+                    uint64_t frame_count = vis1_reader.frames + vis2_reader.frames + vis3_reader.frames + (infr_reader ? infr_reader->frames : 0);
+                    time_t now = time(nullptr);
+                    if (frame_count != last_frame_count)
+                    {
+                        last_frame_count = frame_count;
+                        last_valid_frame_time.store(now);
+                        if (filler_reported.exchange(false))
+                            satdump::eventBus->fire_event<satdump::events::RDASFillerEvent>({false});
+                    }
+                    else if (last_valid_frame_time.load() > 0 && now - last_valid_frame_time.load() > filler_timeout && !filler_reported.exchange(true))
+                    {
+                        logger->warn("RDAS: no valid frames for %d seconds, filler detected", filler_timeout);
+                        satdump::eventBus->fire_event<satdump::events::RDASFillerEvent>({true});
+                    }
+                }
             }
 
             // data_unknown.close();
@@ -448,6 +475,7 @@ namespace elektro_arktika
                 RDASProcessOptions rdas_options;
                 rdas_options.satellite = std::string(is_arktika ? "M" : "L") + std::to_string(sat_num);
                 rdas_options.recalibrate = recalibrate_aligner.load();
+                rdas_options.flip_180 = flip_180;
                 rdas_options.output_directory = dataset_dir;
                 rdas_options.product_source = sat_name;
                 rdas_options.vis1_timestamp = meanValidTimestamp(vis1_reader.timestamps);
@@ -515,6 +543,13 @@ namespace elektro_arktika
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Redo the MSU-GS layer calibration at the end of this decode.\n"
                                   "Otherwise the saved calibration is reused.");
+
+            bool flip = flip_180;
+            if (ImGui::Checkbox("Upside down (rotate 180°)##rdas_flip", &flip))
+                flip_180 = flip;
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Rotate the aligned MSU-GS products 180 degrees.\n"
+                                  "Applied after layer alignment, so the saved calibration is unaffected.");
 
             ImGui::End();
         }

@@ -6,6 +6,7 @@
 #include "init.h"
 #include "logger.h"
 #include "products/dataset.h"
+#include "image/processing.h"
 #include "products/image_product.h"
 #include "satdump_vars.h"
 #include "utils/stats.h"
@@ -726,6 +727,13 @@ namespace elektro_arktika
             std::vector<image::Image> vis1_aligned, vis2_aligned;
             bool vis1_ok = false, vis2_ok = false;
 
+            auto apply_flip = [&](std::vector<image::Image> &imgs)
+            {
+                if (options.flip_180)
+                    for (auto &img : imgs)
+                        image::rotate(img, 180);
+            };
+
             if (calibration.vis1.has_affines() && images.vis1_ch1 && images.vis1_ch2 && images.vis1_ch3 &&
                 imageHasContent(*images.vis1_ch1))
             {
@@ -760,6 +768,7 @@ namespace elektro_arktika
                     vis2_aligned[c].clear();
                 }
 
+                apply_flip(merged);
                 const double ts = options.vis1_timestamp > 0 ? options.vis1_timestamp : options.vis2_timestamp;
                 result.products.push_back(saveAlignedProduct(options.output_directory, "MSUGS_VIS_Aligned",
                                                              options.product_source, ts, merged, options.dataset));
@@ -770,6 +779,7 @@ namespace elektro_arktika
             {
                 if (vis1_ok)
                 {
+                    apply_flip(vis1_aligned);
                     result.products.push_back(saveAlignedProduct(options.output_directory, "MSUGS_VIS-1_Aligned",
                                                                  options.product_source, options.vis1_timestamp,
                                                                  vis1_aligned, options.dataset));
@@ -777,6 +787,7 @@ namespace elektro_arktika
 
                 if (vis2_ok)
                 {
+                    apply_flip(vis2_aligned);
                     result.products.push_back(saveAlignedProduct(options.output_directory, "MSUGS_VIS-2_Aligned",
                                                                  options.product_source, options.vis2_timestamp,
                                                                  vis2_aligned, options.dataset));

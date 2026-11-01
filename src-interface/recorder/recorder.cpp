@@ -1,4 +1,5 @@
 #include "recorder.h"
+#include "common/tracking/scheduler/rdas_filler.h"
 #include "common/utils.h"
 #include "common/widgets/frequency_input.h"
 #include "common/widgets/stepped_slider.h"
@@ -193,6 +194,8 @@ namespace satdump
                 start_processing();
             }));
         event_handler_ids.push_back(eventBus->register_handler<RecorderStopProcessingEvent>([this](const RecorderStopProcessingEvent &) { stop_processing(); }));
+        event_handler_ids.push_back(eventBus->register_handler<events::RDASFillerEvent>(
+            [this](const events::RDASFillerEvent &evt) { rdas_filler_detected.store(evt.filler); }));
 
         event_handler_ids.push_back(eventBus->register_handler<RecorderSetFFTSettingsEvent>(
             [this](const RecorderSetFFTSettingsEvent &evt)
@@ -707,6 +710,13 @@ namespace satdump
 
     void RecorderApplication::drawContents(ImVec2 win_size)
     {
+        if (rdas_filler_detected.exchange(false))
+        {
+            logger->warn("RDAS filler detected; stopping pass early");
+            stop_processing();
+            stop_recording();
+        }
+
         float right_width = win_size.x;
         float wf_size = win_size.y;
         float left_width = ImGui::GetCursorPosX();

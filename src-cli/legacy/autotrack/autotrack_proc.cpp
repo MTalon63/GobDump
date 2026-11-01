@@ -15,6 +15,7 @@ void AutoTrackApp::start_processing()
     pipeline_params["baseband_format"] = "cf32";
     pipeline_params["buffer_size"] = dsp::STREAM_BUFFER_SIZE; // This is required, as we WILL go over the (usually) default 8192 size
     pipeline_params["start_timestamp"] = (double)time(0);     // Some pipelines need this
+    pipeline_params["filler_timeout"] = auto_scheduler.getAutoTrackCfg().rdas_filler_timeout;
 
     try
     {
@@ -50,6 +51,7 @@ void AutoTrackApp::stop_processing()
             satdump::pipeline::Pipeline selected_pipeline_ = selected_pipeline;
             std::string pipeline_output_dir_ = pipeline_output_dir;
             nlohmann::json pipeline_params_ = pipeline_params;
+            pipeline_params_.erase("filler_timeout"); // Tracker-only; do not run it during offline post-processing.
             auto fun = [selected_pipeline_, pipeline_output_dir_, input_file, pipeline_params_](int)
             {
                 satdump::setLowestThreadPriority(); // TODOREWORK namespace remove

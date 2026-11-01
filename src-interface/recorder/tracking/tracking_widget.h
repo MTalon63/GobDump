@@ -82,5 +82,7 @@ namespace satdump
         void render();
         void renderConfig();
         void renderSatfinder();
+
+        AutoTrackCfg getAutoTrackCfg() { return auto_scheduler.getAutoTrackCfg(); }
     };
 } // namespace satdump
