@@ -376,6 +376,12 @@ if(PLUGIN_LITEXM2SDR_SDR_SUPPORT)
   add_subdirectory(sdr_sources/litexm2sdr_sdr_support)
 endif()
 
+option(PLUGIN_REMOTE_SDR_SUPPORT "Enable Remote SDR Support plugin (WIP!)" ON)
+
+if(PLUGIN_REMOTE_SDR_SUPPORT)
+  add_subdirectory(sdr_sources/remote_sdr_support)
+endif()
+
 # Off by default on MinGW: MSYS2's libuhd segfaults during device discovery,
 # reproducible with its own uhd_find_devices.exe. Re-enable with
 # -DPLUGIN_USRP_SDR_SUPPORT=ON once that package is fixed.
@@ -453,12 +459,6 @@ option(PLUGIN_NET_SOURCE_SDR_SUPPORT "Enable Network Source Support plugin" ON)
 
 if(PLUGIN_NET_SOURCE_SDR_SUPPORT)
   add_subdirectory(sdr_sources/net_source_support)
-endif()
-
-option(PLUGIN_REMOTE_SDR_SUPPORT "Enable Remote SDR Support plugin (WIP!)" ON)
-
-if(PLUGIN_REMOTE_SDR_SUPPORT)
-  add_subdirectory(sdr_sources/remote_sdr_support)
 endif()
 
 # Disable by default, sort of experimental

@@ -53,12 +53,16 @@ nlohmann::json RemoteSource::get_settings()
 
 void RemoteSource::open()
 {
+    if (tcp_client->readOne)
+        throw satdump_exception("Lost connection to SDR server!");
     sendPacketWithVector(tcp_client, dsp::remote::PKT_TYPE_SOURCEOPEN, nlohmann::json::to_cbor(nlohmann::json(remote_source_desc)));
     is_open = true;
 }
 
 void RemoteSource::start()
 {
+    if (tcp_client->readOne)
+        throw satdump_exception("Lost connection to SDR server!");
     DSPSampleSource::start();
     sendPacketWithVector(tcp_client, dsp::remote::PKT_TYPE_SOURCESTART);
     is_started = true;

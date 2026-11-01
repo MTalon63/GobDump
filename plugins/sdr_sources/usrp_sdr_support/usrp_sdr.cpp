@@ -1,4 +1,7 @@
 #include "usrp_sdr.h"
+#include "usrp_local_server.h"
+
+#include <cstdlib>
 
 void USRPSource::set_gains()
 {
@@ -23,7 +26,20 @@ void USRPSource::open_sdr()
 {
     uhd::device_addrs_t devlist = uhd::device::find(uhd::device_addr_t());
 
-    uhd::device_addr_t addr = devlist[std::stoi(d_sdr_id)];
+    int device_id = 0;
+    try
+    {
+        device_id = std::stoi(d_sdr_id);
+    }
+    catch (const std::exception &)
+    {
+        throw satdump_exception("Invalid USRP device index!");
+    }
+
+    if (device_id < 0 || device_id >= (int)devlist.size())
+        throw satdump_exception("USRP device not found!");
+
+    uhd::device_addr_t addr = devlist[device_id];
 
     // USB transport parameters, optimal values from testing
     addr["recv_frame_size"] = "8000"; // RX frame size
@@ -160,6 +176,9 @@ nlohmann::json USRPSource::get_settings()
 
 void USRPSource::open()
 {
+    if (getenv("GOBDUMP_USRP_LOCAL") == nullptr)
+        throw satdump_exception("USRP must be opened through the local SDR server.");
+
     open_sdr();
     is_open = true;
     device_lost = false;
@@ -169,6 +188,9 @@ void USRPSource::open()
 
 void USRPSource::start()
 {
+    if (getenv("GOBDUMP_USRP_LOCAL") == nullptr)
+        throw satdump_exception("USRP must be started through the local SDR server.");
+
     DSPSampleSource::start();
     thread_should_run = false;
     device_lost = false;
@@ -223,6 +245,10 @@ void USRPSource::stop()
         work_thread.join();
     logger->info("Thread stopped");
 
+    bool helper = getenv("GOBDUMP_USRP_SERVER") != nullptr;
+    if (helper && device_lost)
+        std::_Exit(0);
+
     if (!device_lost && usrp_streamer)
     {
         try
@@ -236,6 +262,9 @@ void USRPSource::stop()
         }
     }
 
+    if (helper && device_lost)
+        std::_Exit(0);
+
     if (usrp_device)
     {
         try
@@ -245,8 +274,12 @@ void USRPSource::stop()
         catch (const std::exception &e)
         {
             logger->debug("USRP teardown control error: %s", e.what());
+            device_lost = true;
         }
     }
+
+    if (helper && device_lost)
+        std::_Exit(0);
 
     usrp_streamer.reset();
     usrp_device.reset();
@@ -328,6 +361,9 @@ uint64_t USRPSource::get_samplerate() { return samplerate_widget.get_value(); }
 std::vector<dsp::SourceDescriptor> USRPSource::getAvailableSources()
 {
     std::vector<dsp::SourceDescriptor> results;
+
+    if (getenv("GOBDUMP_USRP_LOCAL") == nullptr)
+        return usrp_local_server::getSources();
 
     uhd::device_addrs_t devlist = uhd::device::find(uhd::device_addr_t());
 
