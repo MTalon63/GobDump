@@ -8,6 +8,7 @@
 #include "init.h"
 
 #include "core/config.h"
+#include "core/crashdump.h"
 #include "core/plugin.h"
 #include "core/resources.h"
 #include "db/kepler/kepler_handler.h"
@@ -106,6 +107,8 @@ namespace satdump
 
     void initSatDump(bool is_gui)
     {
+        initCrashDump();
+
 #if ENABLE_I18N
         initLanguage();
 #endif
