@@ -1,0 +1,17 @@
+diff --git a/libairspy/src/airspy.c b/libairspy/src/airspy.c
+index 5f4adcc..427ffe2 100644
+--- a/libairspy/src/airspy.c
++++ b/libairspy/src/airspy.c
+@@ -997,10 +997,10 @@ int ADDCALL airspy_close(airspy_device_t* device)
+ 			iqconverter_float_free(device->cnv_f);
+ 			iqconverter_int16_free(device->cnv_i);
+ 
+ 			pthread_cond_destroy(&device->consumer_cv);
+ 			pthread_mutex_destroy(&device->consumer_mp);
+ 
+-			airspy_open_exit(device);
+ 			free_transfers(device);
++			airspy_open_exit(device);
+ 			free(device->supported_samplerates);
+ 			free(device);
+ 		}
