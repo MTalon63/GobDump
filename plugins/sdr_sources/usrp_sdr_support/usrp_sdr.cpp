@@ -1,15 +1,4 @@
 #include "usrp_sdr.h"
-#include <utility>
-
-namespace
-{
-    template <typename T>
-    void abandon_handle(T &handle)
-    {
-        if (handle)
-            (void)new T(std::move(handle));
-    }
-} // namespace
 
 void USRPSource::set_gains()
 {
@@ -234,8 +223,7 @@ void USRPSource::stop()
         work_thread.join();
     logger->info("Thread stopped");
 
-    bool uhd_ok = !device_lost;
-    if (usrp_streamer && uhd_ok)
+    if (!device_lost && usrp_streamer)
     {
         try
         {
@@ -244,21 +232,24 @@ void USRPSource::stop()
         catch (const std::exception &e)
         {
             logger->error("Could not stop USRP stream: %s", e.what());
-            uhd_ok = false;
+            device_lost = true;
         }
     }
 
-    if (uhd_ok)
+    if (usrp_device)
     {
-        usrp_streamer.reset();
-        usrp_device.reset();
+        try
+        {
+            usrp_device->set_rx_freq(d_frequency + 1, channel);
+        }
+        catch (const std::exception &e)
+        {
+            logger->debug("USRP teardown control error: %s", e.what());
+        }
     }
-    else
-    {
-        logger->warn("USRP device lost, skipping USB teardown");
-        abandon_handle(usrp_streamer);
-        abandon_handle(usrp_device);
-    }
+
+    usrp_streamer.reset();
+    usrp_device.reset();
 
     is_started = false;
     device_lost = false;
