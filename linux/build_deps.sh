@@ -34,10 +34,10 @@ if [ ! -d uhd/.git ]; then
     git clone https://github.com/EttusResearch/uhd --depth 1 -b "$UHD_TAG" uhd
 fi
 
-if git -C uhd apply --check -p1 "$PATCH_FILE" 2> /dev/null; then
+if git -C uhd apply --check --ignore-whitespace -p1 "$PATCH_FILE" 2> /dev/null; then
     echo "Applying GobDump UHD hotplug patch..."
-    git -C uhd apply -p1 "$PATCH_FILE"
-elif ! git -C uhd apply --reverse --check -p1 "$PATCH_FILE" 2> /dev/null; then
+    git -C uhd apply --ignore-whitespace -p1 "$PATCH_FILE"
+elif ! git -C uhd apply --reverse --check --ignore-whitespace -p1 "$PATCH_FILE" 2> /dev/null; then
     echo "error: cannot apply $PATCH_FILE" >&2
     exit 1
 fi

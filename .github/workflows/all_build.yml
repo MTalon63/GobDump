@@ -393,7 +393,7 @@ jobs:
                 key: linux-uhd-410-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
 
             - name: Build patched UHD
-              run: ./linux/build_deps.sh
+              run: bash ./linux/build_deps.sh
 
 
             - name: Build GLFW 3.4 with X11 + Wayland for AppImage
@@ -548,7 +548,7 @@ jobs:
                 key: linux-uhd-410-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
 
             - name: Build patched UHD
-              run: ./linux/build_deps.sh
+              run: bash ./linux/build_deps.sh
 
 
             - name: Create Build Environment
@@ -621,7 +621,7 @@ jobs:
                 key: linux-uhd-410-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
 
             - name: Build patched UHD
-              run: ./linux/build_deps.sh
+              run: bash ./linux/build_deps.sh
 
 
             - name: Delete build dir
