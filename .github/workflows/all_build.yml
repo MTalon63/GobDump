@@ -305,18 +305,18 @@ jobs:
             - name: Set up Android SDK
               uses: android-actions/setup-android@v3
               with:
-                  packages: platforms;android-34 build-tools;30.0.3 ndk;25.2.9519653 cmake;3.22.1
+                  packages: platforms;android-34 build-tools;30.0.3 ndk;25.2.9519653 cmake;3.31.6
 
             - name: Install NDK, platform, and CMake
               shell: bash
               run: |
-                  sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.22.1"
+                  sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.31.6"
 
             - name: Select Android CMake
               shell: bash
               run: |
-                  export PATH="$ANDROID_HOME/cmake/3.22.1/bin:$PATH"
-                  echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+                  export PATH="$ANDROID_HOME/cmake/3.31.6/bin:$PATH"
+                  echo "$ANDROID_HOME/cmake/3.31.6/bin" >> "$GITHUB_PATH"
                   command -v cmake
                   cmake --version
 
