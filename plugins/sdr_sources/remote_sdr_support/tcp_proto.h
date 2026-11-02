@@ -75,8 +75,11 @@ public:
         if (setsockopt(serversockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof enable) < 0)
             logger->trace("Problem setting SO_REUSEADDR on TCP socket; ignoring");
 
-        if (setsockopt(serversockfd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof enable) < 0)
-            logger->trace("Problem setting SO_REUSEPORT on TCP socket; ignoring");
+        if (getenv("GOBDUMP_USRP_SERVER") == nullptr)
+        {
+            if (setsockopt(serversockfd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof enable) < 0)
+                logger->trace("Problem setting SO_REUSEPORT on TCP socket; ignoring");
+        }
 #endif
 
         struct sockaddr_in servaddr;
@@ -170,30 +173,37 @@ public:
                     continue;
                 }
 
-                if (!read_exact(buffer, 4))
+                int lpkt_size = sread(buffer, 4);
+                if (lpkt_size <= 0)
                 {
                     closeconn();
                     continue;
                 }
-
-                uint32_t payload_size = (uint32_t(buffer[0]) << 24) |
-                                        (uint32_t(buffer[1]) << 16) |
-                                        (uint32_t(buffer[2]) << 8) |
-                                        uint32_t(buffer[3]);
-                if (payload_size == 0 || payload_size > 3000000 - 4)
+                if (lpkt_size < 4)
                 {
-                    logger->error("Reported packet size too large or empty. Closing connection!");
+                    logger->error("Client sent a packet that was too small. Closing connection!");
                     closeconn();
                     continue;
                 }
 
-                if (!read_exact(buffer + 4, payload_size))
+                int current_pkt_size = lpkt_size;
+                int expected_pkt_size = uint32_t(buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]) + 4;
+                if (expected_pkt_size > 3000000)
                 {
+                    logger->error("Reported packet size too large. Closing connection!");
                     closeconn();
                     continue;
                 }
 
-                callback_func(buffer + 4, static_cast<int>(payload_size));
+                while (current_pkt_size < expected_pkt_size)
+                {
+                    int ret = sread(buffer + current_pkt_size, expected_pkt_size - current_pkt_size);
+                    if (ret <= 0)
+                        break;
+                    current_pkt_size += ret;
+                }
+
+                callback_func(buffer + 4, expected_pkt_size - 4);
             }
             else
             {
@@ -204,21 +214,9 @@ public:
     }
 
 private:
-    bool read_exact(uint8_t *buff, size_t len)
-    {
-        size_t received = 0;
-        while (received < len)
-        {
-            int ret = sread(buff + received, static_cast<int>(len - received));
-            if (ret <= 0)
-                return false;
-            received += static_cast<size_t>(ret);
-        }
-        return true;
-    }
-
     int sread(uint8_t *buff, int len)
     {
+        // int ret = read(clientsockfd, buff, len);
         return recv(clientsockfd, (char *)buff, len, 0);
     }
 
@@ -277,7 +275,7 @@ public:
     bool readOne = false;
 
 public:
-    TCPClient(char *address, int port) : d_port(port)
+    TCPClient(char *address, int port, int timeout_sec = 10) : d_port(port)
     {
 #if defined(_WIN32)
         if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
@@ -289,11 +287,11 @@ public:
             throw std::runtime_error("Socket creation failed");
 
 #ifdef _WIN32
-        int timeout = 10000;
+        int timeout = timeout_sec * 1000;
         const char *timeout_ptr = (const char *)&timeout;
 #else
         struct timeval timeout;
-        timeout.tv_sec = 10;
+        timeout.tv_sec = timeout_sec;
         timeout.tv_usec = 0;
         struct timeval *timeout_ptr = &timeout;
 #endif
@@ -341,27 +339,36 @@ public:
     void rx_thread_func()
     {
         uint8_t *buffer = new uint8_t[3000000];
+        int current_pkt_size_exp = -1;
         while (thread_should_run)
         {
             if (clientsockfd != -1)
             {
-                if (!read_exact(buffer, 4))
-                    break;
-
-                uint32_t payload_size = (uint32_t(buffer[0]) << 24) |
-                                        (uint32_t(buffer[1]) << 16) |
-                                        (uint32_t(buffer[2]) << 8) |
-                                        uint32_t(buffer[3]);
-                if (payload_size == 0 || payload_size > 3000000 - 4)
+                int lpkt_size = sread(buffer, 4);
+                if (lpkt_size == 0)
                 {
-                    logger->error("Reported packet size too large or empty. Closing connection!");
+                    readOne = true;
                     break;
                 }
+                if (lpkt_size < 0)
+                    continue;
 
-                if (!read_exact(buffer + 4, payload_size))
-                    break;
+                if (current_pkt_size_exp == -1)
+                {
+                    current_pkt_size_exp = uint32_t(buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]) + 4;
+                }
 
-                callback_func(buffer + 4, static_cast<int>(payload_size));
+                int current_pkt_size = lpkt_size;
+                int expected_pkt_size = uint32_t(buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]) + 4;
+                while (current_pkt_size < expected_pkt_size)
+                {
+                    int ret = sread(buffer + current_pkt_size, expected_pkt_size - current_pkt_size);
+                    if (ret <= 0)
+                        break;
+                    current_pkt_size += ret;
+                }
+
+                callback_func(buffer + 4, expected_pkt_size - 4);
 
                 if (readOne)
                     break;
@@ -375,21 +382,9 @@ public:
     }
 
 private:
-    bool read_exact(uint8_t *buff, size_t len)
-    {
-        size_t received = 0;
-        while (received < len)
-        {
-            int ret = sread(buff + received, static_cast<int>(len - received));
-            if (ret <= 0)
-                return false;
-            received += static_cast<size_t>(ret);
-        }
-        return true;
-    }
-
     int sread(uint8_t *buff, int len)
     {
+        // return read(clientsockfd, buff, len);
         return recv(clientsockfd, (char *)buff, len, 0);
     }
 

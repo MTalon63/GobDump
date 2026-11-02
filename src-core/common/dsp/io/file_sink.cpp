@@ -87,7 +87,8 @@ namespace dsp
         if (d_sample_format == ZIQ)
         {
             ziqcfg.is_compressed = true;
-            ziqcfg.bits_per_sample = d_sample_format.ziq_depth;
+            ziqcfg.bits_per_sample = d_sample_format.ziq_depth >= 8 ? d_sample_format.ziq_depth : 8;
+            ziqcfg.quant_bits = d_sample_format.ziq_depth < 8 ? d_sample_format.ziq_depth : 0;
             ziqcfg.samplerate = samplerate;
             ziqcfg.annotation = "";
 
