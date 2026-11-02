@@ -65,6 +65,10 @@ if(UNIX)
     endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/deps")
+endif()
+
 # $ORIGIN RUNPATH so installed binaries/plugins find the core lib under any prefix.
 if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(CMAKE_INSTALL_RPATH
@@ -443,7 +447,7 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
     set(CPACK_PACKAGE_CONTACT "MTalon63")
 
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libfftw3-bin, libvolk-bin | libvolk2-bin, libpng16-16, libnng1, librtlsdr0 | librtlsdr2, libhackrf0, libairspy0, libairspyhf1, libglfw3 | libglfw3-wayland, libzstd1, libjemalloc2 | libjemalloc1, libportaudiocpp0, libhdf5-hl-100t64 | libhdf5-hl-100 | libhdf5-103 | libhdf5-100 | libhdf5-310, libdbus-1-dev, libsqlite3-0, libxrandr2, libuhd4.1.0 | libuhd4.6.0 | libuhd4.8.0 | libuhd4.9.0")
-    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libomp5, ocl-icd-libopencl1, intel-opencl-icd, mesa-opencl-icd")
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libomp5, ocl-icd-libopencl1, intel-opencl-icd, mesa-opencl-icd, uhd-host")
 
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
     set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")

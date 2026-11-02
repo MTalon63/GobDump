@@ -353,8 +353,9 @@ if(!$is_arm) {
     cd ../..
 
     # LIBUHD
-    git clone https://github.com/ettusresearch/uhd --depth 1 -b v4.10.0.0
+    git clone -c core.autocrlf=false https://github.com/ettusresearch/uhd --depth 1 -b v4.10.0.0
     cd uhd
+    Invoke-CheckedNative "git" @("apply", "-p1", "$($PSScriptRoot)/../patches/uhd-4.10-b200-hotplug.patch")
     mkdir build
     cd build
     cmake $cmake_params ../host -DCMAKE_CXX_FLAGS="/EHsc /FIwinsock2.h" -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DBUILD_SHARED_LIBS=ON -DENABLE_MAN_PAGES=OFF -DENABLE_MANUAL=OFF -DENABLE_PYTHON_API=OFF -DENABLE_EXAMPLES=OFF -DENABLE_UTILS=OFF -DENABLE_TESTS=OFF 

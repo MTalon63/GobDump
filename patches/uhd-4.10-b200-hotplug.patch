@@ -1,0 +1,253 @@
+diff --git a/host/lib/transport/libusb1_base.cpp b/host/lib/transport/libusb1_base.cpp
+index e264426..070c6e0 100644
+--- a/host/lib/transport/libusb1_base.cpp
++++ b/host/lib/transport/libusb1_base.cpp
+@@ -21,6 +21,20 @@
+ using namespace uhd;
+ using namespace uhd::transport;
+ 
++namespace {
++std::mutex& handle_cache_mutex()
++{
++    static std::mutex mutex;
++    return mutex;
++}
++
++uhd::dict<libusb_device*, std::weak_ptr<libusb::device_handle>>& handle_cache()
++{
++    static uhd::dict<libusb_device*, std::weak_ptr<libusb::device_handle>> handles;
++    return handles;
++}
++} // namespace
++
+ /***********************************************************************
+  * libusb session
+  **********************************************************************/
+@@ -75,7 +89,10 @@ private:
+             case LIBUSB_ERROR_TIMEOUT:
+                 break;
+             case LIBUSB_ERROR_NO_DEVICE:
+-                throw uhd::io_error(libusb_strerror(LIBUSB_ERROR_NO_DEVICE));
++                // Do not throw: the process-wide event thread would exit.
++                UHD_LOGGER_ERROR("USB")
++                    << "libusb event handler: " << libusb_strerror(LIBUSB_ERROR_NO_DEVICE);
++                break;
+             default:
+                 UHD_LOGGER_ERROR("USB")
+                     << UHD_FUNCTION << ": " << libusb_strerror((libusb_error)ret);
+@@ -309,6 +326,17 @@ public:
+         return _handle;
+     }
+ 
++    void invalidate(void) override
++    {
++        std::lock_guard<std::mutex> lock(handle_cache_mutex());
++        auto& handles = handle_cache();
++        if (handles.has_key(_dev->get())) {
++            libusb::device_handle::sptr cached = handles[_dev->get()].lock();
++            if (cached.get() == static_cast<libusb::device_handle*>(this))
++                handles.pop(_dev->get());
++        }
++    }
++
+     void claim_interface(int interface) override
+     {
+         UHD_ASSERT_THROW(libusb_claim_interface(this->get(), interface) == 0);
+@@ -342,6 +370,8 @@ private:
+ 
+ libusb_device_handle_impl::~libusb_device_handle_impl(void)
+ {
++    this->invalidate();
++
+     // release all claimed interfaces
+     for (size_t i = 0; i < _claimed.size(); i++) {
+         libusb_release_interface(this->get(), _claimed[i]);
+@@ -351,11 +381,10 @@ libusb_device_handle_impl::~libusb_device_handle_impl(void)
+ 
+ libusb::device_handle::sptr libusb::device_handle::get_cached_handle(device::sptr dev)
+ {
+-    static uhd::dict<libusb_device*, std::weak_ptr<device_handle>> handles;
++    uhd::dict<libusb_device*, std::weak_ptr<device_handle>>& handles = handle_cache();
+ 
+     // lock for atomic access to static table above
+-    static std::mutex mutex;
+-    std::lock_guard<std::mutex> lock(mutex);
++    std::lock_guard<std::mutex> lock(handle_cache_mutex());
+ 
+     // not expired -> get existing handle
+     if (handles.has_key(dev->get())) {
+@@ -380,6 +409,14 @@ libusb::device_handle::sptr libusb::device_handle::get_cached_handle(device::spt
+     }
+ }
+ 
++void libusb::device_handle::clear_cached_handle(device::sptr dev)
++{
++    std::lock_guard<std::mutex> lock(handle_cache_mutex());
++    auto& handles = handle_cache();
++    if (handles.has_key(dev->get()))
++        handles.pop(dev->get());
++}
++
+ /***********************************************************************
+  * libusb special handle
+  **********************************************************************/
+diff --git a/host/lib/transport/libusb1_base.hpp b/host/lib/transport/libusb1_base.hpp
+index 8e48832..5f6d9dc 100644
+--- a/host/lib/transport/libusb1_base.hpp
++++ b/host/lib/transport/libusb1_base.hpp
+@@ -140,6 +140,10 @@ public:
+     //! get a cached handle or make a new one given the device
+     static sptr get_cached_handle(device::sptr);
+ 
++    static void clear_cached_handle(device::sptr dev);
++
++    virtual void invalidate(void) = 0;
++
+     //! get the underlying device handle
+     virtual libusb_device_handle* get(void) const = 0;
+ 
+diff --git a/host/lib/transport/libusb1_control.cpp b/host/lib/transport/libusb1_control.cpp
+index 1ef8870..969cc1d 100644
+--- a/host/lib/transport/libusb1_control.cpp
++++ b/host/lib/transport/libusb1_control.cpp
+@@ -39,7 +39,7 @@ public:
+         uint32_t libusb_timeout = 0) override
+     {
+         std::lock_guard<std::mutex> lock(_mutex);
+-        return libusb_control_transfer(_handle->get(),
++        const int ret = libusb_control_transfer(_handle->get(),
+             request_type,
+             request,
+             value,
+@@ -47,6 +47,9 @@ public:
+             buff,
+             length,
+             libusb_timeout);
++        if (ret == LIBUSB_ERROR_NO_DEVICE)
++            _handle->invalidate();
++        return ret;
+     }
+ 
+ private:
+diff --git a/host/lib/transport/libusb1_zero_copy.cpp b/host/lib/transport/libusb1_zero_copy.cpp
+index 6ab8dbf..b488bbf 100644
+--- a/host/lib/transport/libusb1_zero_copy.cpp
++++ b/host/lib/transport/libusb1_zero_copy.cpp
+@@ -12,6 +12,7 @@
+ #include <uhd/transport/buffer_pool.hpp>
+ #include <uhd/transport/usb_zero_copy.hpp>
+ #include <uhd/utils/log.hpp>
++#include <algorithm>
+ #include <condition_variable>
+ #include <boost/circular_buffer.hpp>
+ #include <boost/format.hpp>
+@@ -135,7 +136,12 @@ public:
+ 
+     void release(void) override
+     {
+-        _release_cb(this);
++        // Reached from ~intrusive_ptr() (noexcept): never throw.
++        try {
++            _release_cb(this);
++        } catch (const std::exception& e) {
++            UHD_LOGGER_ERROR("USB") << "usb " << _name << " release failed: " << e.what();
++        }
+     }
+ 
+     UHD_INLINE void submit(void)
+@@ -151,6 +157,7 @@ public:
+             throw uhd::usb_error(ret,
+                 str(boost::format("usb %s submit failed: %s") % _name
+                     % libusb_error_name(ret)));
++        submitted = true;
+     }
+ 
+     template <typename buffer_type>
+@@ -172,6 +179,8 @@ public:
+     // This is public because it is accessed from the libusb_zero_copy_single constructor
+     lut_result_t result;
+ 
++    bool submitted = false;
++
+     /*!
+      * Wait for a managed buffer to become complete.
+      *
+@@ -292,14 +301,22 @@ public:
+             libusb_cancel_transfer(lut);
+         }
+ 
+-        // process all transfers until timeout occurs
+-        for (libusb_zero_copy_mb* mb : _enqueued) {
+-            mb->wait_for_completion(0.01);
++        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
++        for (size_t i = 0; i < _mb_pool.size(); i++) {
++            if (not _mb_pool[i]->submitted)
++                continue;
++            const auto left = std::chrono::duration<double>(
++                deadline - std::chrono::steady_clock::now()).count();
++            if (left <= 0.0 or not _mb_pool[i]->wait_for_completion(left)) {
++                UHD_LOGGER_ERROR("USB")
++                    << "usb transfer still pending at teardown; leaking it";
++                _leaked.push_back(_all_luts[i]);
++            }
+         }
+ 
+-        // free all transfers
+         for (libusb_transfer* lut : _all_luts) {
+-            libusb_free_transfer(lut);
++            if (std::find(_leaked.begin(), _leaked.end(), lut) == _leaked.end())
++                libusb_free_transfer(lut);
+         }
+     }
+ 
+@@ -330,6 +347,8 @@ public:
+         if (buff)
+             _enqueued.pop_front();
+         this->submit_what_we_can();
++        if (_status == STATUS_ERROR)
++            return typename buffer_type::sptr();
+         return buff;
+     }
+ 
+@@ -376,15 +395,22 @@ private:
+                 _released.front()->submit();
+                 _enqueued.push_back(_released.front());
+                 _released.pop_front();
+-            } catch (uhd::usb_error& e) {
++            } catch (const uhd::usb_error& e) {
++                // Called from release() (noexcept): latch, do not rethrow.
+                 _status = STATUS_ERROR;
+-                throw e;
++                _released.pop_front();
++                if (int(e.code()) == LIBUSB_ERROR_NO_DEVICE)
++                    _handle->invalidate();
++                UHD_LOGGER_ERROR("USB") << e.what();
++                return;
+             }
+         }
+     }
+ 
+     //! a list of all transfer structs we allocated
+     std::list<libusb_transfer*> _all_luts;
++
++    std::vector<libusb_transfer*> _leaked;
+ };
+ 
+ /***********************************************************************
+diff --git a/host/lib/usrp/b200/b200_impl.cpp b/host/lib/usrp/b200/b200_impl.cpp
+index 45b5935..0c9e336 100644
+--- a/host/lib/usrp/b200/b200_impl.cpp
++++ b/host/lib/usrp/b200/b200_impl.cpp
+@@ -287,6 +287,12 @@ static device::sptr b200_make(const device_addr_t& device_addr)
+         dev_handle->clear_endpoints(
+             B200_USB_DATA_RECV_ENDPOINT, B200_USB_DATA_SEND_ENDPOINT);
+         dev_handle->reset_device();
++    } catch (const uhd::io_error&) {
++        if (handle) {
++            libusb::device_handle::clear_cached_handle(
++                std::static_pointer_cast<libusb::special_handle>(handle)->get_device());
++            handle.reset();
++        }
+     }
+ 
+     return device::sptr(new b200_impl(device_addr, handle));
