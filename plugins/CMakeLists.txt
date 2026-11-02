@@ -385,6 +385,23 @@ else()
   option(PLUGIN_USRP_SDR_SUPPORT "Enable USRP SDR Support plugin" ON)
 endif()
 
+option(GOBDUMP_AUTO_BUILD_DEPS "Build bundled dependencies (patched UHD) automatically" ON)
+if(PLUGIN_USRP_SDR_SUPPORT AND UNIX AND NOT APPLE AND NOT ANDROID AND GOBDUMP_AUTO_BUILD_DEPS)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/deps/.uhd-built")
+    message(STATUS "Building bundled UHD (patched). First build only, this takes a few minutes...")
+    execute_process(
+      COMMAND bash "${CMAKE_SOURCE_DIR}/linux/build_deps.sh"
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      RESULT_VARIABLE _gobdump_uhd_result)
+    if(NOT _gobdump_uhd_result EQUAL 0)
+      message(WARNING "Bundled UHD build failed, USRP support will be skipped. "
+                      "Run linux/build_deps.sh manually for details.")
+    endif()
+  endif()
+elseif(PLUGIN_USRP_SDR_SUPPORT AND APPLE AND NOT EXISTS "${CMAKE_SOURCE_DIR}/deps")
+  message(STATUS "USRP support needs the bundled UHD: run macOS/build_deps.sh once before building.")
+endif()
+
 if(PLUGIN_USRP_SDR_SUPPORT)
   add_subdirectory(sdr_sources/usrp_sdr_support)
 endif()
