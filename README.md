@@ -165,6 +165,7 @@ wants the plugins.
 | `BUILD_TOOLS` | `OFF` | Extra tools programs |
 | `BUILD_DOCS` | `OFF` | Doxygen docs |
 | `ENABLE_I18N` | `ON` | Translations |
+| `GOBDUMP_AUTO_BUILD_DEPS` | `ON` | Linux: build the bundled patched UHD on first configure |
 
 #### Profiling the DSP kernels
 
@@ -274,6 +275,7 @@ sudo apt install libomp-dev                                       # Shouldn't be
 sudo apt install intel-opencl-icd                                 # Enables OpenCL for Intel Integrated Graphics
 sudo apt install mesa-opencl-icd                                  # For AMD Radeon cards *BEFORE series 5000*; newer cards need the official AMD drivers
 sudo apt install libarmadillo-dev
+sudo apt install libboost-all-dev libusb-1.0-0-dev python3-mako   # Only for USRP hardware (used by linux/build_deps.sh)
 
 # One-liner to install all dependencies:
 sudo apt install git build-essential cmake ninja-build pkgconf libfftw3-dev libpng-dev \
@@ -418,6 +420,33 @@ make run     # CLI;  make ui  for the GUI
 
 Add `-DBUILD_GUI=OFF` if you do not want the GUI. MSU-GS layer alignment is
 built into GobDump - no external binary or OpenCV dependency.
+
+#### USRP / Ettus hardware (all platforms)
+
+GobDump ships a patched UHD (4.10) for USRP support. The stock library aborts the
+whole process when a B2xx is unplugged, and cannot reliably reopen the device
+afterwards (upstream issue [#803](https://github.com/EttusResearch/uhd/issues/803)).
+The patch lives in [patches/uhd-4.10-b200-hotplug.patch](patches/uhd-4.10-b200-hotplug.patch).
+
+The dependency scripts apply it automatically, so there is nothing extra to do:
+
+| Platform | How UHD gets built |
+|---|---|
+| Windows | `windows/build_deps.ps1` clones, patches and builds UHD |
+| macOS | `macOS/build_deps.sh` clones, patches and builds UHD |
+| Linux | built automatically by the first CMake configure (`linux/build_deps.sh` is run for you); disable with `-DGOBDUMP_AUTO_BUILD_DEPS=OFF` |
+
+On Linux the patched UHD is built into `deps/` on the first configure (needs
+`libboost-all-dev libusb-1.0-0-dev python3-mako`; run `linux/build_deps.sh`
+manually to see its output). It is also installed into the package
+(`lib/gobdump`), so packaged builds always run the patched driver. Delete `deps/`
+to force a rebuild; pass `-DGOBDUMP_AUTO_BUILD_DEPS=OFF` to build against the
+system `libuhd` instead (hot-unplug safety is then not guaranteed).
+
+Firmware/FPGA images are not part of libuhd on any platform. Install the
+`uhd-host` package (Linux) or run `uhd_images_downloader` once, and UHD finds
+them in `/usr/share/uhd/images`; alternatively point the "UHD Images Path"
+setting in the SDR configuration at the directory that contains them.
 
 ### Raspberry Pi
 

@@ -21,6 +21,7 @@ msys2-deps/
 compile_commands.json
 as.predefined
 deps/
+deps-temp/
 !android/deps/
 !android/deps/**/
 build_p2/

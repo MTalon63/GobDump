@@ -376,12 +376,6 @@ if(PLUGIN_LITEXM2SDR_SDR_SUPPORT)
   add_subdirectory(sdr_sources/litexm2sdr_sdr_support)
 endif()
 
-option(PLUGIN_REMOTE_SDR_SUPPORT "Enable Remote SDR Support plugin (WIP!)" ON)
-
-if(PLUGIN_REMOTE_SDR_SUPPORT)
-  add_subdirectory(sdr_sources/remote_sdr_support)
-endif()
-
 # Off by default on MinGW: MSYS2's libuhd segfaults during device discovery,
 # reproducible with its own uhd_find_devices.exe. Re-enable with
 # -DPLUGIN_USRP_SDR_SUPPORT=ON once that package is fixed.
@@ -389,6 +383,23 @@ if(MINGW)
   option(PLUGIN_USRP_SDR_SUPPORT "Enable USRP SDR Support plugin" OFF)
 else()
   option(PLUGIN_USRP_SDR_SUPPORT "Enable USRP SDR Support plugin" ON)
+endif()
+
+option(GOBDUMP_AUTO_BUILD_DEPS "Build bundled dependencies (patched UHD) automatically" ON)
+if(PLUGIN_USRP_SDR_SUPPORT AND UNIX AND NOT APPLE AND NOT ANDROID AND GOBDUMP_AUTO_BUILD_DEPS)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/deps/.uhd-built")
+    message(STATUS "Building bundled UHD (patched). First build only, this takes a few minutes...")
+    execute_process(
+      COMMAND bash "${CMAKE_SOURCE_DIR}/linux/build_deps.sh"
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      RESULT_VARIABLE _gobdump_uhd_result)
+    if(NOT _gobdump_uhd_result EQUAL 0)
+      message(WARNING "Bundled UHD build failed, USRP support will be skipped. "
+                      "Run linux/build_deps.sh manually for details.")
+    endif()
+  endif()
+elseif(PLUGIN_USRP_SDR_SUPPORT AND APPLE AND NOT EXISTS "${CMAKE_SOURCE_DIR}/deps")
+  message(STATUS "USRP support needs the bundled UHD: run macOS/build_deps.sh once before building.")
 endif()
 
 if(PLUGIN_USRP_SDR_SUPPORT)
@@ -459,6 +470,12 @@ option(PLUGIN_NET_SOURCE_SDR_SUPPORT "Enable Network Source Support plugin" ON)
 
 if(PLUGIN_NET_SOURCE_SDR_SUPPORT)
   add_subdirectory(sdr_sources/net_source_support)
+endif()
+
+option(PLUGIN_REMOTE_SDR_SUPPORT "Enable Remote SDR Support plugin (WIP!)" ON)
+
+if(PLUGIN_REMOTE_SDR_SUPPORT)
+  add_subdirectory(sdr_sources/remote_sdr_support)
 endif()
 
 # Disable by default, sort of experimental
