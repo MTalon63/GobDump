@@ -120,6 +120,9 @@ namespace codings
                 for (int i = 0; i < d_simd; i++)
                 {
                     memcpy(&frame[i * d_frame_size], &depunc_buffer_ou[i * d_codeword_size + 18], 8158);
+                    // two zero pad bits after the 8158 coded bits
+                    frame[i * d_frame_size + 8158] = 0;
+                    frame[i * d_frame_size + 8159] = 0;
                 }
             }
             else

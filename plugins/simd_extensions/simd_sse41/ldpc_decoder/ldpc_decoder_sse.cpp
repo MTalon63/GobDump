@@ -179,8 +179,8 @@ namespace codings
             }
 
             parity = _mm_set1_epi16(0);
-            min1 = _mm_set1_epi16(UINT8_MAX);
-            min2 = _mm_set1_epi16(UINT8_MAX);
+            min1 = _mm_set1_epi16(INT16_MAX);
+            min2 = _mm_set1_epi16(INT16_MAX);
 
             if (cn_deg & 0x1)
                 parity = _mm_xor_si128(_mm_set1_epi16(0xFFFF), parity);
@@ -231,10 +231,14 @@ namespace codings
                 equ_min1 = _mm_add_epi16(_mm_xor_si128(_mm_set1_epi16(0xFFFF), equ_wip), _mm_set1_epi16(1));
                 min = _mm_or_si128(_mm_and_si128(min1, _mm_xor_si128(_mm_set1_epi16(0xFFFF), equ_min1)), _mm_and_si128(min2, equ_min1));
 
-                /* Normalized Min-Sum: scale magnitude by alpha (Q8). Magnitudes are
-                 * bounded well under 2^15 so the low half of the product suffices. */
+                /* NMS alpha (Q8), full 32-bit product. */
                 if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
-                    min = _mm_srli_epi16(_mm_mullo_epi16(min, _mm_set1_epi16(d_nms_alpha_q8)), 8);
+                {
+                    const __m128i alpha = _mm_set1_epi16(d_nms_alpha_q8);
+                    const __m128i lo = _mm_mullo_epi16(min, alpha);
+                    const __m128i hi = _mm_mulhi_epi16(min, alpha);
+                    min = _mm_or_si128(_mm_srli_epi16(lo, 8), _mm_slli_epi16(hi, 8));
+                }
 
                 sign = _mm_xor_si128(parity, cn_in[vn_idx]);
 
