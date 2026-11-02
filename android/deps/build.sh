@@ -62,7 +62,9 @@ build_fftw3() {
     cd fftw3
     mkdir build
     cd build
-    cmake $(get_cmake_command $1) -DCMAKE_INSTALL_PREFIX=$OUTPUT_DIR/$1 -DBUILD_SHARED_LIBS=OFF -DENABLE_FLOAT=ON ..
+    # FFTW's CMakeLists.txt predates CMake 3.5. CMake 4 rejects that
+    # declaration unless the old policy compatibility floor is explicitly set.
+    cmake $(get_cmake_command $1) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX=$OUTPUT_DIR/$1 -DBUILD_SHARED_LIBS=OFF -DENABLE_FLOAT=ON ..
     make -j$(nproc) install
     cd ..
     rm -rf build
