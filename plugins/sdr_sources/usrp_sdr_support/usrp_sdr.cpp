@@ -1,7 +1,4 @@
 #include "usrp_sdr.h"
-#include "usrp_local_server.h"
-
-#include <cstdlib>
 
 void USRPSource::set_gains()
 {
@@ -24,7 +21,15 @@ void USRPSource::set_gains()
 
 void USRPSource::open_sdr()
 {
-    uhd::device_addrs_t devlist = uhd::device::find(uhd::device_addr_t());
+    uhd::device_addrs_t devlist;
+    try
+    {
+        devlist = uhd::device::find(uhd::device_addr_t());
+    }
+    catch (const std::exception &e)
+    {
+        throw satdump_exception("Could not enumerate USRP devices: " + std::string(e.what()));
+    }
 
     int device_id = 0;
     try
@@ -176,9 +181,6 @@ nlohmann::json USRPSource::get_settings()
 
 void USRPSource::open()
 {
-    if (getenv("GOBDUMP_USRP_LOCAL") == nullptr)
-        throw satdump_exception("USRP must be opened through the local SDR server.");
-
     open_sdr();
     is_open = true;
     device_lost = false;
@@ -188,12 +190,13 @@ void USRPSource::open()
 
 void USRPSource::start()
 {
-    if (getenv("GOBDUMP_USRP_LOCAL") == nullptr)
-        throw satdump_exception("USRP must be started through the local SDR server.");
-
     DSPSampleSource::start();
     thread_should_run = false;
     device_lost = false;
+
+    usrp_streamer.reset();
+    usrp_device.reset();
+
     open_sdr();
     open_channel();
 
@@ -245,10 +248,6 @@ void USRPSource::stop()
         work_thread.join();
     logger->info("Thread stopped");
 
-    bool helper = getenv("GOBDUMP_USRP_SERVER") != nullptr;
-    if (helper && device_lost)
-        std::_Exit(0);
-
     if (!device_lost && usrp_streamer)
     {
         try
@@ -262,30 +261,13 @@ void USRPSource::stop()
         }
     }
 
-    if (helper && device_lost)
-        std::_Exit(0);
-
-    if (usrp_device)
-    {
-        try
-        {
-            usrp_device->set_rx_freq(d_frequency + 1, channel);
-        }
-        catch (const std::exception &e)
-        {
-            logger->debug("USRP teardown control error: %s", e.what());
-            device_lost = true;
-        }
-    }
-
-    if (helper && device_lost)
-        std::_Exit(0);
-
     usrp_streamer.reset();
     usrp_device.reset();
 
+    if (device_lost)
+        logger->error("USRP device disconnected. Reconnect it and press Start again.");
+
     is_started = false;
-    device_lost = false;
 }
 
 void USRPSource::close() { is_open = false; }
@@ -317,8 +299,15 @@ void USRPSource::drawControlUI()
 
     if (RImGui::Combo("Channel", &channel, channel_option_str.c_str()) && is_open)
     {
-        open_sdr();
-        open_channel();
+        try
+        {
+            open_sdr();
+            open_channel();
+        }
+        catch (const std::exception &e)
+        {
+            logger->error("Could not switch USRP channel: %s", e.what());
+        }
         usrp_streamer.reset();
         usrp_device.reset();
     }
@@ -362,16 +351,23 @@ std::vector<dsp::SourceDescriptor> USRPSource::getAvailableSources()
 {
     std::vector<dsp::SourceDescriptor> results;
 
-    if (getenv("GOBDUMP_USRP_LOCAL") == nullptr)
-        return usrp_local_server::getSources();
-
-    uhd::device_addrs_t devlist = uhd::device::find(uhd::device_addr_t());
+    uhd::device_addrs_t devlist;
+    try
+    {
+        devlist = uhd::device::find(uhd::device_addr_t());
+    }
+    catch (const std::exception &e)
+    {
+        logger->error("Could not enumerate USRP devices: %s", e.what());
+        return results;
+    }
 
     uint64_t i = 0;
     for (const uhd::device_addr_t &dev : devlist)
     {
         std::string type = dev.has_key("product") ? dev["product"] : dev["type"];
-        results.push_back({"usrp", "USRP " + type + " " + dev["serial"], std::to_string(i)});
+        std::string serial = dev.has_key("serial") ? dev["serial"] : "unknown";
+        results.push_back({"usrp", "USRP " + type + " " + serial, std::to_string(i)});
         i++;
     }
 

@@ -170,7 +170,9 @@ cd ../../..
 rm -rf bladeRF
 
 echo "Building UHD..."
-git clone https://github.com/EttusResearch/uhd --depth 1 -b v4.9.0.0
+git clone https://github.com/EttusResearch/uhd --depth 1 -b v4.10.0.0
+PATCH_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/../patches" &> /dev/null && pwd )"
+git -C uhd apply --ignore-whitespace -p1 "$PATCH_DIR/uhd-4.10-b200-hotplug.patch"
 cd uhd/host
 sed -i '' 's/ appropriately or"/");/g' lib/utils/paths.cpp                          #Disable non-applicable help
 sed -i '' '/follow the below instructions to download/{N;d;}' lib/utils/paths.cpp

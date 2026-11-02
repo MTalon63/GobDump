@@ -199,8 +199,8 @@ namespace codings
             }
 
             parity = vdupq_n_s16(0);
-            min1 = vdupq_n_s16(UINT8_MAX);
-            min2 = vdupq_n_s16(UINT8_MAX);
+            min1 = vdupq_n_s16(INT16_MAX);
+            min2 = vdupq_n_s16(INT16_MAX);
 
             if (cn_deg & 0x1)
                 parity = veorq_s16(vdupq_n_s16(0xFFFF), parity);
@@ -252,11 +252,14 @@ namespace codings
                 equ_min1 = vaddq_s16(veorq_s16(vdupq_n_s16(0xFFFF), equ_wip), vdupq_n_s16(1));
                 min = vorrq_s16(vandq_s16(min1, veorq_s16(vdupq_n_s16(0xFFFF), equ_min1)), vandq_s16(min2, equ_min1));
 
-                /* Normalized Min-Sum: scale magnitude by alpha (Q8). Magnitudes are
-                 * bounded well under 2^15 so the low half of the product suffices. */
+                /* NMS alpha (Q8), full 32-bit product. */
                 if (d_algorithm == LDPC_NORMALIZED_MIN_SUM)
-                    min = vreinterpretq_s16_u16(vshrq_n_u16(
-                        vreinterpretq_u16_s16(vmulq_s16(min, vdupq_n_s16(d_nms_alpha_q8))), 8));
+                {
+                    const int16x8_t alpha = vdupq_n_s16(d_nms_alpha_q8);
+                    const int32x4_t lo32 = vmull_s16(vget_low_s16(min), vget_low_s16(alpha));
+                    const int32x4_t hi32 = vmull_s16(vget_high_s16(min), vget_high_s16(alpha));
+                    min = vcombine_s16(vshrn_n_s32(lo32, 8), vshrn_n_s32(hi32, 8));
+                }
 
                 sign = veorq_s16(parity, cn_in[vn_idx]);
 
