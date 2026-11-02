@@ -11,6 +11,9 @@ mkdir portable
 # Core
 cp gobdump.exe portable
 cp gobdump-ui.exe portable
+if (Test-Path satdump_sdr_server.exe) {
+    cp satdump_sdr_server.exe portable
+}
 cp *.dll portable
 
 # Plugins

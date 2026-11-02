@@ -101,7 +101,9 @@ namespace reedsolomon
             }
         }
 
-        std::memcpy(data, odata, fill_bytes == -1 ? d_coded_bits : (d_coded_bits - fill_bytes));
+        // odata holds the corrected message only, the parity beyond d_coded_bits is not filled in.
+        // Copying less than d_coded_bits left the tail of the codeword uncorrected.
+        std::memcpy(data, odata, d_coded_bits);
 
         if (ccsds)
         {
