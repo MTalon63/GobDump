@@ -356,17 +356,32 @@ jobs:
             - name: Sign APK
               if: ${{ github.event_name != 'pull_request' }}
               shell: bash
+              env:
+                  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+                  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+                  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+                  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
               run: |
-                  APK=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-unsigned.apk
-                  SIGNED=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-signed.apk
-                  echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.keystore
-                  $ANDROID_HOME/build-tools/30.0.3/apksigner sign \
+                  set -euo pipefail
+                  APK="$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+                  SIGNED="$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-signed.apk"
+
+                  # Keep secret values out of the shell command line. In particular, an
+                  # unquoted/empty alias shifts the following apksigner arguments and
+                  # results in: "Unexpected parameter(s) after input APK (--key-pass)".
+                  : "${ANDROID_KEYSTORE_BASE64:?ANDROID_KEYSTORE_BASE64 is not set}"
+                  : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS is not set}"
+                  : "${ANDROID_KEYSTORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD is not set}"
+                  : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD is not set}"
+                  printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release.keystore
+
+                  "$ANDROID_HOME/build-tools/30.0.3/apksigner" sign \
                       --ks /tmp/release.keystore \
-                      --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
-                      --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-                      --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
-                      --out $SIGNED \
-                      $APK
+                      --ks-key-alias "$ANDROID_KEY_ALIAS" \
+                      --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+                      --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+                      --out "$SIGNED" \
+                      "$APK"
 
             - name: Upload APK
               uses: actions/upload-artifact@v4
