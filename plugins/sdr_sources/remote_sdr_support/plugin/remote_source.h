@@ -61,6 +61,9 @@ public:
 
     void handler(uint8_t *buffer, int len)
     {
+        if (buffer == nullptr || len <= 0)
+            return;
+
         int pkt_type = buffer[0];
 
         if (pkt_type == dsp::remote::PKT_TYPE_PING)
@@ -86,16 +89,22 @@ public:
 
         if (pkt_type == dsp::remote::PKT_TYPE_SAMPLERATEFBK)
         {
-            samplerate_current = *((uint64_t *)&buffer[1]);
+            if (len < 1 + static_cast<int>(sizeof(uint64_t)))
+                return;
+            memcpy(&samplerate_current, &buffer[1], sizeof(samplerate_current));
             logger->debug("Samplerate sent %llu", samplerate_current);
         }
 
         if (pkt_type == dsp::remote::PKT_TYPE_IQ)
         {
             int nsamples = 0;
-            remote_sdr::decode_iq_pkt(&buffer[1], output_stream->writeBuf, &nsamples);
-            // memcpy(output_stream->writeBuf, &buffer[3], nsamples * sizeof(complex_t));
-            // logger->trace("SAMPLES %d %d", nsamples, len);
+            if (!output_stream || !remote_sdr::decode_iq_pkt(
+                    &buffer[1], static_cast<size_t>(len - 1), output_stream->writeBuf,
+                    static_cast<size_t>(output_stream->getBufferSize()), &nsamples))
+            {
+                logger->error("Invalid remote IQ packet (%d bytes)", len);
+                return;
+            }
             output_stream->swap(nsamples);
             bytes_received += len;
             samples_received += nsamples;
@@ -104,6 +113,8 @@ public:
         if (pkt_type == dsp::remote::PKT_TYPE_GETSETTINGS)
         {
             logger->debug("Got source settings");
+            if (len <= 1)
+                return;
             d_settings = nlohmann::json::from_cbor(std::vector<uint8_t>(&buffer[1], &buffer[len]));
             waiting_for_settings = false;
         }
