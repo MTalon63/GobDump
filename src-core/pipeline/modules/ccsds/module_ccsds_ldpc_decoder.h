@@ -68,6 +68,30 @@ namespace satdump
                 uint8_t *ldpc_output_buffer;
                 uint8_t *deframer_buffer;
 
+                // 8PSK front-end.
+                bool d_is_higher_order = false;
+                int d_bits_per_sym = 1;
+                int d_num_phases = 1;
+                int d_current_phase = 0;
+                bool hd_tracking = false;
+                bool hd_syncing = false;
+                int hd_sync_fail_count = 0;
+                static constexpr int HD_CHUNK_SYMS = 4096;
+                int8_t *hd_sym_buffer = nullptr;
+                int8_t *hd_llr_buffer = nullptr;
+                int8_t *hd_llr_fifo = nullptr;
+                int hd_fifo_len = 0;
+                int hd_fifo_cap = 0;
+                float hd_phase_cos[16] = {0};
+                float hd_phase_sin[16] = {0};
+                float d_correlator_threshold = 0.5f;
+                std::vector<uint8_t> hd_asm_bits;
+                float hd_asm_ref[3][64] = {}; // one matched filter per bit phase
+                float hd_asm_ref_sq[3] = {0};
+                int hd_fifo_bit_phase = 0; // bit phase (mod 3) of hd_llr_fifo[0]
+                bool d_conjugate = false;
+                std::unique_ptr<dsp::constellation_t> hd_constellation;
+
                 std::unique_ptr<CorrelatorGeneric> correlator;
                 std::unique_ptr<codings::ldpc::CCSDSLDPC> ldpc_dec;
                 std::unique_ptr<labrador::code_params_t> ldpc2_params;
@@ -80,7 +104,7 @@ namespace satdump
                 // UI Stuff
                 float cor_history[200];
 
-                float correlator_cor;
+                float correlator_cor = 0.0f;
                 float correlator_corr_norm = 0.0f;
                 bool correlator_locked = false;
 
@@ -96,7 +120,7 @@ namespace satdump
                 int correlator_search_window = 0;
 
                 float ldpc_history[200];
-                int ldpc_corr;
+                int ldpc_corr = 0;
 
                 // LDPC iterations actually used (with early termination) and its history.
                 int ldpc_iterations_used = 0;
@@ -125,6 +149,15 @@ namespace satdump
 
                 bool is_started = false;
 
+                // 8PSK helpers.
+                void feed_frame(int8_t *frame);
+                void decode_batch();
+                void process_higher_order();
+                void demap_higher_order(const int8_t *sym, int nsyms, int phase, bool conjugate, int8_t *out);
+                float correlate_asm(const int8_t *bits, int pos, int nbits, const float *ref, float ref_sq, float &raw_out);
+                bool find_asm_window(const int8_t *bits, int center, int half, int nbits, int bit_phase, int &pos, float &corr, float &raw);
+                void hd_append_llrs(const int8_t *llr, int count);
+
             public:
                 CCSDSLDPCDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
                 ~CCSDSLDPCDecoderModule();
@@ -136,7 +169,29 @@ namespace satdump
             public:
                 static std::string getID();
                 virtual std::string getIDM() { return getID(); };
-                static nlohmann::json getParams() { return {}; } // TODOREWORK
+                static nlohmann::json getParams()
+                {
+                    nlohmann::json v;
+                    v["constellation"] = "bpsk";
+                    v["ldpc_rate"] = "7/8";
+                    v["ldpc_block_size"] = 0;
+                    v["ldpc_iterations"] = 10;
+                    v["ldpc_algorithm"] = "min_sum";
+                    v["ldpc_nms_alpha"] = 0.8;
+                    v["ldpc_offset_beta"] = 0.0;
+                    v["ldpc_max_iterations"] = 50;
+                    v["ldpc_min_iterations"] = 1;
+                    v["ldpc_early_termination"] = true;
+                    v["ldpc_llr_clamp"] = 127;
+                    v["derandomize"] = true;
+                    v["long_poly"] = false;
+                    v["ccsds"] = true;
+                    v["ldpc2"] = false;
+                    v["internal_stream"] = false;
+                    v["llr_scaling"] = "calibrated";
+                    v["correlator_threshold"] = 0.5;
+                    return v;
+                }
                 static std::shared_ptr<ProcessingModule> getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
             };
         } // namespace ccsds

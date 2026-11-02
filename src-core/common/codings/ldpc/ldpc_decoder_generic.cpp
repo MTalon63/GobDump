@@ -292,8 +292,8 @@ namespace codings
             }
 
             parity = 0;
-            min1 = UINT8_MAX;
-            min2 = UINT8_MAX;
+            min1 = INT16_MAX;
+            min2 = INT16_MAX;
 
             if (cn_deg & 0x1)
                 parity = ~parity;
@@ -380,8 +380,8 @@ namespace codings
                 d_vns_to_cn_msgs[vn_idx] = *d_vn_addr[cn_row_base + vn_idx] - d_cn_to_vn_msgs[cn_offset + vn_idx];
 
             parity = 0;
-            min1 = UINT8_MAX;
-            min2 = UINT8_MAX;
+            min1 = INT16_MAX;
+            min2 = INT16_MAX;
 
             if (cn_deg & 0x1)
                 parity = ~parity;

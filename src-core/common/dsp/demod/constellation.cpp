@@ -228,7 +228,8 @@ namespace dsp
     void constellation_t::demod_soft_calc(complex_t sample, int8_t *bits, float *phase_error, float npwr)
     {
         int v;
-        std::vector<float> tmp(2 * const_bits, 0);
+        // fixed scratch: at most 5 bits
+        float tmp[2 * 8] = {0};
 
         if (const_amp != 1)
             sample = sample * const_amp;
