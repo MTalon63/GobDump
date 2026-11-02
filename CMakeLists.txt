@@ -140,7 +140,7 @@ if(UNIX OR MINGW)
         message("ZIQ Was enabled but libzstd was not found!")
         set(BUILD_ZIQ OFF)
     endif()
-else()
+elseif(NOT MSVC AND NOT BUILD_MSVC)
     # set(CMAKE_CXX_FLAGS "-Wall")
     # set(CMAKE_CXX_FLAGS_DEBUG "-g")
     set(CMAKE_CXX_FLAGS_RELEASE "-O2")
@@ -168,10 +168,12 @@ if(MSVC OR BUILD_MSVC)
     endif()
 
     # This should be the default, but sometimes it isn't apparently
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MD")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD /Z7")
+    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MD /Z7")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MDd")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF /INCREMENTAL:NO")
+    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF /INCREMENTAL:NO")
 
     # C4244/C4267 NOT suppressed: the only automatic detector for 64->32-bit bugs that hit Win64 but not Linux
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3 /MP8 /EHsc /wd4305 /wd4273 /wd4661")
