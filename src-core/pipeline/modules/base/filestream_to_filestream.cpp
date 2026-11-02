@@ -44,12 +44,15 @@ namespace satdump
                 return v;
             }
 
-            void FileStreamToFileStreamModule::read_data(uint8_t *buffer, size_t size)
+            size_t FileStreamToFileStreamModule::read_data(uint8_t *buffer, size_t size)
             {
+                size_t got = size;
+
                 // Read buffer
                 if (input_data_type == DATA_FILE)
                 {
                     data_in.read((char *)buffer, size);
+                    got = (size_t)data_in.gcount();
                     progress = data_in.tellg();
                 }
                 else
@@ -64,6 +67,8 @@ namespace satdump
                         logger->trace(stats.dump(4));
                     time_ = time(0);
                 }
+
+                return got;
             }
 
             void FileStreamToFileStreamModule::write_data(uint8_t *buffer, size_t size)

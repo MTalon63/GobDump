@@ -53,7 +53,8 @@ namespace satdump
                 nlohmann::json getModuleStats();
 
             protected:
-                void read_data(uint8_t *buffer, size_t size);
+                // Bytes actually read; a file returns short at EOF.
+                size_t read_data(uint8_t *buffer, size_t size);
 
                 void write_data(uint8_t *buffer, size_t size);
 
