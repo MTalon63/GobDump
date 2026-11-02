@@ -3,13 +3,20 @@
 
 namespace dsp
 {
+    void CostasLoopBlock::set_loop_bw(float bw)
+    {
+        // Same arithmetic as the constructor so coefficients stay bit-identical.
+        loop_bw = bw;
+        float damping = sqrtf(2.0f) / 2.0f;
+        float denom = (1.0 + 2.0 * damping * bw + bw * bw);
+        alpha = (4 * damping * bw) / denom;
+        beta = (4 * bw * bw) / denom;
+    }
+
     CostasLoopBlock::CostasLoopBlock(std::shared_ptr<dsp::stream<complex_t>> input, float loop_bw, unsigned int order, float freq_limit)
         : Block(input), order(order), loop_bw(loop_bw), freq_limit_min(-freq_limit), freq_limit_max(freq_limit)
     {
-        float damping = sqrtf(2.0f) / 2.0f;
-        float denom = (1.0 + 2.0 * damping * loop_bw + loop_bw * loop_bw);
-        alpha = (4 * damping * loop_bw) / denom;
-        beta = (4 * loop_bw * loop_bw) / denom;
+        set_loop_bw(loop_bw);
 
         freq_limit_min_re = cosf(freq_limit_min);
         freq_limit_min_im = -sinf(freq_limit_min);
@@ -45,12 +52,30 @@ namespace dsp
                 error = (tmp_re > 0.0f ? 1.0f : -1.0f) * tmp_im - (tmp_im > 0.0f ? 1.0f : -1.0f) * tmp_re;
                 break;
             case 8: // Order 8, 8-PSK
+            {
                 const float K = (sqrtf(2.0) - 1);
                 if (fabsf(tmp_re) >= fabsf(tmp_im))
                     error = ((tmp_re > 0.0f ? 1.0f : -1.0f) * tmp_im - (tmp_im > 0.0f ? 1.0f : -1.0f) * tmp_re * K);
                 else
                     error = ((tmp_re > 0.0f ? 1.0f : -1.0f) * tmp_im * K - (tmp_im > 0.0f ? 1.0f : -1.0f) * tmp_re);
                 break;
+            }
+            case 16: // Order 16, decision-directed (16APSK and other APSK)
+            {
+                if (dd_const != nullptr)
+                {
+                    float pwr = tmp_re * tmp_re + tmp_im * tmp_im;
+                    if (std::isfinite(pwr))
+                        dd_pwr += DD_PWR_ALPHA * (pwr - dd_pwr);
+
+                    // Nearest point at the tracked amplitude; the angle to it is the error.
+                    float amp = sqrtf(dd_pwr > 1e-12f ? dd_pwr : 1e-12f);
+                    complex_t dec = dd_const->nearest_scaled(complex_t(tmp_re, tmp_im), amp);
+                    complex_t err = complex_t(tmp_re, tmp_im) * dec.conj();
+                    error = err.arg();
+                }
+                break;
+            }
             }
 
             // Clip error

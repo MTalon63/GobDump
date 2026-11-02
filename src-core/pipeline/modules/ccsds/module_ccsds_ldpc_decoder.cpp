@@ -58,8 +58,17 @@ namespace satdump
                     d_bits_per_sym = 3;
                     d_num_phases = 16; // Costas can lock on a 22.5 deg half-step
                 }
+                else if (d_constellation_str == "16apsk")
+                {
+                    // 8192 bits = 2048 symbols, symbol aligned (8192 % 4 == 0); 4
+                    // phases for slips/resync (4-fold rotational symmetry).
+                    d_constellation = dsp::APSK16_CCSDS;
+                    d_is_higher_order = true;
+                    d_bits_per_sym = 4;
+                    d_num_phases = 4;
+                }
                 else
-                    throw satdump_exception("CCSDS LDPC Decoder : invalid constellation type!");
+                    throw satdump_exception("CCSDS LDPC Decoder : invalid constellation type! (bpsk, qpsk, oqpsk, 8psk, 16apsk)");
 
                 // Parse LDPC settings
                 d_ldpc_rate = codings::ldpc::ldpc_rate_from_string(d_ldpc_rate_str);
@@ -126,6 +135,14 @@ namespace satdump
 
                 d_correlator_threshold = parameters.count("correlator_threshold") > 0 ? parameters["correlator_threshold"].get<float>() : 0.5f;
 
+                // Calibration off for 8PSK (keeps npwr 1 / const_sca 50).
+                if (d_constellation == dsp::APSK16_CCSDS)
+                {
+                    d_gamma = parameters.count("gamma") > 0 ? parameters["gamma"].get<float>() : 2.60f;
+                    d_llr_noise_cal = parameters.count("llr_noise_calibration") > 0 ? parameters["llr_noise_calibration"].get<bool>() : true;
+                    d_llr_target = parameters.count("llr_target_mean") > 0 ? parameters["llr_target_mean"].get<float>() : 28.0f;
+                }
+
                 if (d_is_higher_order)
                 {
                     hd_asm_bits = d_ldpc_rate == codings::ldpc::RATE_7_8
@@ -133,36 +150,31 @@ namespace satdump
                                       : satdump::unsigned_to_bitvec<uint64_t>(0x034776c7272895b0);
 
                     // Exact demap; the LUT clips 8PSK points.
-                    hd_constellation = std::make_unique<dsp::constellation_t>(d_constellation);
+                    hd_constellation = std::make_unique<dsp::constellation_t>(d_constellation, d_gamma);
 
-                    // Noiseless ASM matched filters, one per bit phase.
+                    // ASM matched filters, one per bit phase, at the demapper's npwr.
+                    d_llr_gain = hd_constellation->get_scale();
+
+                    if (d_constellation == dsp::APSK16_CCSDS)
                     {
-                        const int nbits = (int)hd_asm_bits.size();
-                        int8_t asm_llr[3 * 24] = {0};
-                        for (int off = 0; off < 3; off++)
+                        // Nearest-point EVM; M2M4 and the PSK grid are invalid here.
+                        mer_estimator.set_apsk_points(hd_constellation->get_points(), hd_constellation->get_states());
+
+                        // Start near the 8PSK values; both converge within a few chunks.
+                        if (d_llr_noise_cal)
                         {
-                            const int seq_len = nbits + off;
-                            const int nsym = (seq_len + d_bits_per_sym - 1) / d_bits_per_sym;
-                            for (int s = 0; s < nsym; s++)
-                            {
-                                int sym = 0;
-                                for (int b = 0; b < d_bits_per_sym; b++)
-                                {
-                                    int idx = s * d_bits_per_sym + b;
-                                    int bit = 0;
-                                    if (idx >= off && idx - off < nbits)
-                                        bit = hd_asm_bits[idx - off];
-                                    sym = (sym << 1) | bit;
-                                }
-                                hd_constellation->demod_soft_calc(hd_constellation->mod((uint8_t)sym), &asm_llr[s * d_bits_per_sym]);
-                            }
-                            for (int k = 0; k < nbits; k++)
-                            {
-                                hd_asm_ref[off][k] = (float)asm_llr[off + k];
-                                hd_asm_ref_sq[off] += hd_asm_ref[off][k] * hd_asm_ref[off][k];
-                            }
+                            d_demap_npwr = 0.05f; // 10 dB Es/N0; npwr is the per-axis variance
+                            d_llr_gain = 5.0f;
+                            hd_constellation->set_scale(d_llr_gain);
                         }
+
+                        const complex_t p1 = hd_constellation->get_points()[3]; // inner 45 deg
+                        const float r1 = sqrtf(p1.real * p1.real + p1.imag * p1.imag);
+                        logger->info("16APSK: gamma %.3f (R1 %.4f R2 %.4f), %d phases, noise-calibrated LLRs: %s",
+                                     d_gamma, r1, d_gamma * r1, d_num_phases, d_llr_noise_cal ? "yes" : "no");
                     }
+
+                    hd_build_asm_ref(d_demap_npwr);
 
                     hd_sym_buffer = new int8_t[2 * HD_CHUNK_SYMS]();
                     hd_llr_buffer = new int8_t[d_bits_per_sym * HD_CHUNK_SYMS]();
@@ -398,8 +410,11 @@ namespace satdump
                 }
             }
 
-            void CCSDSLDPCDecoderModule::decode_batch()
+            void CCSDSLDPCDecoderModule::decode_batch(int lanes)
             {
+                if (lanes < 0 || lanes > d_ldpc_simd)
+                    lanes = d_ldpc_simd;
+
                 // Adaptive LLR scaling for BPSK/QPSK.
                 if (!d_is_higher_order)
                 {
@@ -511,7 +526,7 @@ namespace satdump
 
                     if (d_internal_stream)
                     {
-                        for (int i = 0; i < d_ldpc_simd; i++)
+                        for (int i = 0; i < lanes; i++)
                         {
                             int frames = deframer->work(&ldpc_output_buffer[i * d_ldpc_codeword_size], d_ldpc_data_size, deframer_buffer);
                             for (int i = 0; i < frames; i++)
@@ -520,10 +535,10 @@ namespace satdump
                     }
                     else
                     {
-                        for (int i = 0; i < d_ldpc_simd * d_ldpc_codeword_size; i++)
+                        for (int i = 0; i < lanes * d_ldpc_codeword_size; i++)
                             deframer_buffer[i / 8] = deframer_buffer[i / 8] << 1 | ldpc_output_buffer[i];
 
-                        for (int i = 0; i < d_ldpc_simd; i++)
+                        for (int i = 0; i < lanes; i++)
                         {
                             if (d_ldpc_asm_size == 32)
                             {
@@ -550,6 +565,92 @@ namespace satdump
                 }
             }
 
+            void CCSDSLDPCDecoderModule::hd_build_asm_ref(float npwr)
+            {
+                const int nbits = (int)hd_asm_bits.size();
+                const int bps = d_bits_per_sym;
+
+                // Must use the runtime npwr and const_sca: a wrong npwr flattens the
+                // profile, and int8 truncates a scale difference instead of cancelling it.
+                for (int off = 0; off < bps; off++)
+                {
+                    const int seq_len = nbits + off;
+                    const int nsym = (seq_len + bps - 1) / bps;
+
+                    for (int k = 0; k < nbits; k++)
+                        hd_asm_ref[off][k] = 0.0f;
+
+                    for (int s = 0; s < nsym; s++)
+                    {
+                        // Bits of this symbol that carry real ASM bits; the rest are pad.
+                        bool known[8] = {false};
+                        int n_unknown = 0;
+                        for (int b = 0; b < bps; b++)
+                        {
+                            int idx = s * bps + b;
+                            known[b] = (idx >= off && idx - off < nbits);
+                            if (!known[b])
+                                n_unknown++;
+                        }
+
+                        // 8PSK: zero is a neutral guess. APSK: '00' is a real point, so
+                        // marginalise the pad bits over all combinations.
+                        const int npat = (d_constellation == dsp::APSK16_CCSDS) ? (1 << n_unknown) : 1;
+
+                        float acc[8] = {0};
+                        for (int pat = 0; pat < npat; pat++)
+                        {
+                            int sym = 0, up = 0;
+                            for (int b = 0; b < bps; b++)
+                            {
+                                int bit;
+                                if (known[b])
+                                    bit = hd_asm_bits[s * bps + b - off];
+                                else
+                                    bit = (pat >> up++) & 1;
+                                sym = (sym << 1) | bit;
+                            }
+
+                            int8_t llr[8] = {0};
+                            hd_constellation->demod_soft_calc(hd_constellation->mod((uint8_t)sym), llr, nullptr, npwr);
+                            for (int b = 0; b < bps; b++)
+                                if (known[b])
+                                    acc[b] += (float)llr[b];
+                        }
+
+                        for (int b = 0; b < bps; b++)
+                            if (known[b])
+                                hd_asm_ref[off][s * bps + b - off] = acc[b] / (float)npat;
+                    }
+
+                    float sq = 0.0f;
+                    for (int k = 0; k < nbits; k++)
+                        sq += hd_asm_ref[off][k] * hd_asm_ref[off][k];
+                    hd_asm_ref_sq[off] = sq;
+
+                    if (!(sq > 0.0f))
+                        logger->warn("LDPC %s: empty ASM reference for bit phase %d", d_constellation_str.c_str(), off);
+                }
+            }
+
+            void CCSDSLDPCDecoderModule::hd_update_llr_gain(const int8_t *llr, int count)
+            {
+                // Mean-|LLR| controller, slew limited to 2x per chunk.
+                long sum = 0;
+                for (int i = 0; i < count; i++)
+                {
+                    int v = llr[i];
+                    sum += v < 0 ? -v : v;
+                }
+                float mean = count > 0 ? (float)sum / (float)count : 0.0f;
+                if (!(mean > 1e-2f))
+                    return;
+
+                float ratio = std::clamp(d_llr_target / mean, 0.5f, 2.0f);
+                d_llr_gain = std::clamp(d_llr_gain * powf(ratio, 0.25f), 0.05f, 64.0f);
+                hd_constellation->set_scale(d_llr_gain);
+            }
+
             void CCSDSLDPCDecoderModule::demap_higher_order(const int8_t *sym, int nsyms, int phase, bool conjugate, int8_t *out)
             {
                 const float c = hd_phase_cos[phase];
@@ -560,7 +661,7 @@ namespace satdump
                     // int8 ~100 RMS -> unit RMS.
                     float r = (float)sym[2 * i + 0] * 0.01f;
                     float q = (float)sym[2 * i + 1] * (conjugate ? -0.01f : 0.01f);
-                    hd_constellation->demod_soft_calc(complex_t(r * c - q * s, q * c + r * s), &out[i * d_bits_per_sym]);
+                    hd_constellation->demod_soft_calc(complex_t(r * c - q * s, q * c + r * s), &out[i * d_bits_per_sym], nullptr, d_demap_npwr);
                 }
             }
 
@@ -593,7 +694,7 @@ namespace satdump
                 if (hd_fifo_len + count > hd_fifo_cap)
                 {
                     // Size is guaranteed; drop and re-acquire rather than misalign.
-                    logger->warn("LDPC 8PSK FIFO overflow (%d + %d > %d), re-acquiring", hd_fifo_len, count, hd_fifo_cap);
+                    logger->warn("LDPC %s FIFO overflow (%d + %d > %d), re-acquiring", d_constellation_str.c_str(), hd_fifo_len, count, hd_fifo_cap);
                     hd_fifo_len = 0;
                     hd_tracking = false;
                     hd_syncing = false;
@@ -616,7 +717,7 @@ namespace satdump
                 int hi = std::min(nbits - n, center + half);
                 for (int p = lo; p <= hi; p++)
                 {
-                    const int off = (bit_phase + p) % 3;
+                    const int off = (bit_phase + p) % d_bits_per_sym;
                     float r;
                     float c = correlate_asm(bits, p, nbits, hd_asm_ref[off], hd_asm_ref_sq[off], r);
                     if (c > corr)
@@ -641,10 +742,34 @@ namespace satdump
                 {
                     if (!hd_tracking && !hd_syncing)
                     {
-                        read_data((uint8_t *)hd_sym_buffer, HD_CHUNK_SYMS * 2);
+                        const size_t got = read_data((uint8_t *)hd_sym_buffer, HD_CHUNK_SYMS * 2);
+                        if (got < 2)
+                            break; // end of file: go drain what is already in the FIFO
+
+                        // Take npwr here, where the FIFO resets: ref and LLRs share a shape.
+                        if (d_llr_noise_cal && d_mer_valid)
+                        {
+                            float npwr = std::clamp(d_npwr_smooth, 1e-6f, 1.0f);
+                            if (npwr > d_demap_npwr * 1.25f || npwr < d_demap_npwr * 0.8f)
+                            {
+                                d_demap_npwr = npwr;
+                                hd_build_asm_ref(d_demap_npwr);
+                                logger->debug("16APSK demapper npwr -> %.3g (MER %.1f dB)", d_demap_npwr, mer_db);
+                            }
+                        }
 
                         float best_corr = 0.0f, best_raw = 0.0f;
                         int best_phase = -1, best_pos = 0, best_conj = 0;
+
+                        // Best correlation per (phase, conj), for the two-ASM re-score.
+                        float cand_corr[16][2];
+                        int cand_pos[16][2];
+                        for (int p = 0; p < 16; p++)
+                            for (int c = 0; c < 2; c++)
+                            {
+                                cand_corr[p][c] = 0.0f;
+                                cand_pos[p][c] = -1;
+                            }
 
                         for (int p = 0; p < d_num_phases; p++)
                         {
@@ -654,8 +779,13 @@ namespace satdump
                                 for (int pos = 0; pos + asm_bits <= chunk_bits; pos++)
                                 {
                                     float raw;
-                                    const int off = pos % 3; // chunk starts on a symbol boundary
+                                    const int off = pos % d_bits_per_sym; // chunk starts on a symbol boundary
                                     float corr = correlate_asm(hd_llr_buffer, pos, chunk_bits, hd_asm_ref[off], hd_asm_ref_sq[off], raw);
+                                    if (corr > cand_corr[p][conj])
+                                    {
+                                        cand_corr[p][conj] = corr;
+                                        cand_pos[p][conj] = pos;
+                                    }
                                     if (corr > best_corr)
                                     {
                                         best_corr = corr;
@@ -668,6 +798,48 @@ namespace satdump
                             }
                         }
 
+                        // Re-score the plausible phases on two ASMs: one 32-bit ASM cannot
+                        // separate the true rotation from a half-step one at low SNR (8PSK
+                        // at 4 dB picked the half-step and lost every frame).
+                        if (best_phase >= 0 && best_corr >= acq_threshold &&
+                            best_pos + (int)d_ldpc_frame_size + asm_bits <= chunk_bits)
+                        {
+                            float best_score = -1e9f;
+                            int bp = best_phase, bc = best_conj, bpos = best_pos;
+                            for (int p = 0; p < (int)d_num_phases; p++)
+                            {
+                                for (int c = 0; c < 2; c++)
+                                {
+                                    if (cand_pos[p][c] < 0 || cand_corr[p][c] < best_corr - 0.25f)
+                                        continue;
+                                    const int pos2 = cand_pos[p][c] + (int)d_ldpc_frame_size;
+                                    if (pos2 + asm_bits > chunk_bits)
+                                        continue;
+                                    demap_higher_order(hd_sym_buffer, HD_CHUNK_SYMS, p, c == 1, hd_llr_buffer);
+                                    float raw2;
+                                    const int off2 = pos2 % d_bits_per_sym;
+                                    const float score = cand_corr[p][c] +
+                                                        correlate_asm(hd_llr_buffer, pos2, chunk_bits, hd_asm_ref[off2], hd_asm_ref_sq[off2], raw2);
+                                    if (score > best_score)
+                                    {
+                                        best_score = score;
+                                        bp = p;
+                                        bc = c;
+                                        bpos = cand_pos[p][c];
+                                    }
+                                }
+                            }
+                            if (best_score > -1e8f && (bp != best_phase || bc != best_conj || bpos != best_pos))
+                            {
+                                logger->debug("phase re-score chose %d/%d at %d (two-frame score %.3f vs %.3f)",
+                                              bp, bc, bpos, best_score, best_corr);
+                                best_phase = bp;
+                                best_conj = bc;
+                                best_pos = bpos;
+                                best_corr = best_score * 0.5f;
+                            }
+                        }
+
                         correlator_cor = best_raw;
                         correlator_corr_norm = best_corr;
 
@@ -675,12 +847,15 @@ namespace satdump
                         {
                             demap_higher_order(hd_sym_buffer, HD_CHUNK_SYMS, best_phase, best_conj == 1, hd_llr_buffer);
                             hd_fifo_len = 0;
-                            hd_fifo_bit_phase = best_pos % 3;
+                            hd_fifo_bit_phase = best_pos % d_bits_per_sym;
                             hd_append_llrs(&hd_llr_buffer[best_pos], chunk_bits - best_pos);
 
+                            // Do not drop queued frames on a re-lock: each is a complete
+                            // codeword and the LDPC lanes are independent, so a batch may
+                            // mix phases (resetting cost up to 15 good frames per slip).
                             d_current_phase = best_phase;
                             d_conjugate = (best_conj == 1);
-                            frames_in_ldpc_buffer = 0; // don't mix alignments in a batch
+                            hd_grid_ok = false; // new alignment: the grid must be re-earned
                             hd_syncing = true;
                             hd_sync_fail_count = 0;
                             correlator_locked = false;
@@ -694,9 +869,13 @@ namespace satdump
                     const int need = d_ldpc_frame_size + asm_bits + half;
                     if (hd_fifo_len < need)
                     {
-                        read_data((uint8_t *)hd_sym_buffer, HD_CHUNK_SYMS * 2);
-                        demap_higher_order(hd_sym_buffer, HD_CHUNK_SYMS, d_current_phase, d_conjugate, hd_llr_buffer);
-                        hd_append_llrs(hd_llr_buffer, chunk_bits);
+                        // Demap only what was read: at EOF the rest of hd_sym_buffer is stale.
+                        const size_t got = read_data((uint8_t *)hd_sym_buffer, HD_CHUNK_SYMS * 2);
+                        if (got < 2)
+                            break;
+                        const int nsyms = (int)(got / 2);
+                        demap_higher_order(hd_sym_buffer, nsyms, d_current_phase, d_conjugate, hd_llr_buffer);
+                        hd_append_llrs(hd_llr_buffer, nsyms * d_bits_per_sym);
 
                         static thread_local std::vector<complex_t> mer_buf;
                         if ((int)mer_buf.size() < HD_CHUNK_SYMS)
@@ -709,6 +888,44 @@ namespace satdump
                         if (mer_db > peak_mer)
                             peak_mer = mer_db;
                         avg_mer = avg_mer * 0.99f + mer_db * 0.01f;
+
+                        if (d_llr_noise_cal)
+                        {
+                            // npwr = PER-AXIS variance in demap units (int8/100): scale by
+                            // (127/100)^2 from the EVM units and halve for per-axis.
+                            float pn = powf(10.0f, mer_estimator.noise() / 10.0f);
+                            d_npwr_implied = std::clamp(0.5f * pn * (127.0f * 127.0f) / (100.0f * 100.0f), 1e-6f, 1.0f);
+
+                            // The estimator starts from zero power, so its first chunks read
+                            // several dB low; average before trusting it.
+                            // Skip the biased first chunks after a reset.
+                            if (d_mer_settle > 0)
+                                d_mer_settle--;
+                            else if (++d_mer_updates == 1)
+                                d_npwr_smooth = d_npwr_implied;
+                            else
+                                d_npwr_smooth += 0.1f * (d_npwr_implied - d_npwr_smooth);
+
+                            // Also wait out the amplitude drift at the head of a recording.
+                            d_mer_valid = (d_mer_updates >= 6);
+
+                            hd_update_llr_gain(hd_llr_buffer, chunk_bits);
+                            llr_scale = d_llr_gain;
+
+                            // Apply npwr at (re)acquisition only: a mid-lock change would
+                            // score buffered frames against a different filter shape, so a
+                            // big SNR move re-acquires instead.
+                            if (d_mer_valid && (d_npwr_smooth > d_demap_npwr * 2.0f || d_npwr_smooth < d_demap_npwr * 0.5f))
+                            {
+                                logger->debug("16APSK MER %.1f dB implies npwr %.3g vs %.3g in use, re-acquiring", mer_db, d_npwr_smooth, d_demap_npwr);
+                                hd_tracking = false;
+                                hd_syncing = false;
+                                hd_fifo_len = 0;
+                                correlator_bad_count = 0;
+                                correlator_good_count = 0;
+                                continue;
+                            }
+                        }
                         continue;
                     }
 
@@ -724,6 +941,7 @@ namespace satdump
                         {
                             hd_syncing = false;
                             hd_tracking = true;
+                            hd_grid_ok = true; // the ASM exactly one frame later verified
                             hd_sync_fail_count = 0;
                             correlator_good_count = 1;
                             correlator_locked = (correlator_good_count >= correlator_lock_after);
@@ -732,7 +950,7 @@ namespace satdump
                         {
                             memmove(hd_llr_fifo, &hd_llr_fifo[npos], hd_fifo_len - npos);
                             hd_fifo_len -= npos;
-                            hd_fifo_bit_phase = (hd_fifo_bit_phase + npos) % 3;
+                            hd_fifo_bit_phase = (hd_fifo_bit_phase + npos) % d_bits_per_sym;
                         }
                         else
                         {
@@ -756,7 +974,7 @@ namespace satdump
                         {
                             memmove(hd_llr_fifo, &hd_llr_fifo[best_pos], hd_fifo_len - best_pos);
                             hd_fifo_len -= best_pos;
-                            hd_fifo_bit_phase = (hd_fifo_bit_phase + best_pos) % 3;
+                            hd_fifo_bit_phase = (hd_fifo_bit_phase + best_pos) % d_bits_per_sym;
                             // refill before next-ASM search
                             if (hd_fifo_len < need)
                                 continue;
@@ -766,32 +984,62 @@ namespace satdump
                         float ncorr, nraw;
                         find_asm_window(hd_llr_fifo, d_ldpc_frame_size, half, hd_fifo_len, hd_fifo_bit_phase, npos, ncorr, nraw);
 
-                        if (npos == d_ldpc_frame_size && ncorr >= track_threshold)
+                        // A weak next-ASM says nothing about the position (the peak wanders
+                        // 0..1 bits), and the ASM is not part of the codeword: with a trusted
+                        // grid the boundary is exactly one frame ahead, so feed the frame.
+                        const bool asm_strong = (ncorr >= track_threshold);
+                        const bool at_expected = asm_strong ? (npos == d_ldpc_frame_size) : hd_grid_ok;
+
+                        if (at_expected)
                         {
-                            correlator_good_count++;
-                            correlator_bad_count = 0;
+                            if (asm_strong)
+                            {
+                                correlator_good_count++;
+                                correlator_bad_count = 0;
+                            }
+                            else
+                            {
+                                logger->trace("LDPC %s weak next ASM (npos %d corr %.2f), trusting the grid and feeding",
+                                              d_constellation_str.c_str(), npos, ncorr);
+                                correlator_bad_count++;
+                            }
+
                             if (!correlator_locked && correlator_good_count >= correlator_lock_after)
                             {
                                 correlator_locked = true;
-                                logger->info("LDPC 8PSK locked (phase %d/%d, %s)", d_current_phase, d_num_phases,
+                                logger->info("LDPC %s locked (phase %d/%d, %s)", d_constellation_str.c_str(), d_current_phase, d_num_phases,
                                              d_conjugate ? "conjugated" : "normal");
                             }
 
                             feed_frame(hd_llr_fifo);
+                            hd_frames_fed++;
+                            if (!asm_strong)
+                                hd_frames_weak_fed++;
+                            hd_grid_ok = true;
                             memmove(hd_llr_fifo, &hd_llr_fifo[d_ldpc_frame_size], hd_fifo_len - d_ldpc_frame_size);
                             hd_fifo_len -= d_ldpc_frame_size;
-                            hd_fifo_bit_phase = (hd_fifo_bit_phase + d_ldpc_frame_size) % 3;
+                            hd_fifo_bit_phase = (hd_fifo_bit_phase + d_ldpc_frame_size) % d_bits_per_sym;
                             continue;
                         }
 
-                        if (npos >= 0 && ncorr >= track_threshold)
+                        if (asm_strong && npos >= 0)
                         {
-                            logger->trace("LDPC 8PSK frame slip (%d bits), dropping frame", npos - d_ldpc_frame_size);
+                            logger->trace("LDPC %s frame slip (%d bits), dropping frame", d_constellation_str.c_str(), npos - d_ldpc_frame_size);
+                            hd_frames_dropped++;
                             correlator_bad_count = 0;
+                            hd_grid_ok = true;
                             memmove(hd_llr_fifo, &hd_llr_fifo[npos], hd_fifo_len - npos);
                             hd_fifo_len -= npos;
-                            hd_fifo_bit_phase = (hd_fifo_bit_phase + npos) % 3;
+                            hd_fifo_bit_phase = (hd_fifo_bit_phase + npos) % d_bits_per_sym;
                             continue;
+                        }
+
+                        // Current ASM good, next one damaged: step exactly one frame.
+                        // Sliding a bit would move the good ASM out of its window.
+                        if (!asm_strong)
+                        {
+                            logger->trace("LDPC %s weak next ASM (npos %d, corr %.2f), no trusted grid: dropping frame", d_constellation_str.c_str(), npos, ncorr);
+                            hd_frames_dropped++;
                         }
                     }
 
@@ -800,22 +1048,90 @@ namespace satdump
 
                     if (correlator_bad_count >= correlator_drop_after)
                     {
-                        logger->warn("LDPC 8PSK lost lock (corr %.2f), re-acquiring", best_corr);
+                        logger->warn("LDPC %s lost lock (corr %.2f, pos %d), re-acquiring", d_constellation_str.c_str(), best_corr, best_pos);
                         correlator_locked = false;
                         hd_tracking = false;
+                        hd_grid_ok = false;
                         correlator_bad_count = 0;
                         hd_fifo_len = 0;
                         // keep partial batch; only a phase change resets it
                         mer_db = 0;
                         avg_mer = 0;
                         mer_estimator.reset();
+                        d_mer_settle = 2;
                         continue;
                     }
 
-                    memmove(hd_llr_fifo, &hd_llr_fifo[1], hd_fifo_len - 1);
-                    hd_fifo_len--;
-                    hd_fifo_bit_phase = (hd_fifo_bit_phase + 1) % 3;
+                    // Grid known if a frame was fed or the current ASM correlated.
+                    if (hd_grid_ok || (best_pos >= 0 && best_corr >= track_threshold))
+                    {
+                        if (hd_fifo_len < d_ldpc_frame_size + asm_bits)
+                        {
+                            // Cannot happen (the refill guarantees need bits).
+                            hd_tracking = false;
+                            hd_syncing = false;
+                            hd_grid_ok = false;
+                            hd_fifo_len = 0;
+                            correlator_bad_count = 0;
+                            continue;
+                        }
+                        // Trusted grid: skip exactly one frame and keep the alignment.
+                        memmove(hd_llr_fifo, &hd_llr_fifo[d_ldpc_frame_size], hd_fifo_len - d_ldpc_frame_size);
+                        hd_fifo_len -= d_ldpc_frame_size;
+                        hd_fifo_bit_phase = (hd_fifo_bit_phase + d_ldpc_frame_size) % d_bits_per_sym;
+                    }
+                    else
+                    {
+                        // No trusted grid yet: slide one bit and keep looking.
+                        memmove(hd_llr_fifo, &hd_llr_fifo[1], hd_fifo_len - 1);
+                        hd_fifo_len--;
+                        hd_fifo_bit_phase = (hd_fifo_bit_phase + 1) % d_bits_per_sym;
+                    }
                 }
+
+                // Drain the FIFO at EOF: up to ~15 demapped frames were left unemitted.
+                // Require the ASM at position 0 with a good correlation.
+                if (!d_is_streaming_input)
+                {
+                    int drained = 0;
+                    // Stricter than tracking: no next-ASM bracket to confirm it.
+                    const float drain_threshold = std::max(d_correlator_threshold, 0.90f);
+                    while (hd_fifo_len >= d_ldpc_frame_size + asm_bits)
+                    {
+                        int pos;
+                        float corr, raw;
+                        find_asm_window(hd_llr_fifo, 0, 256, hd_fifo_len, hd_fifo_bit_phase, pos, corr, raw);
+                        if (pos != 0 || corr < drain_threshold)
+                            break;
+
+                        feed_frame(hd_llr_fifo);
+                        hd_frames_fed++;
+                        drained++;
+                        memmove(hd_llr_fifo, &hd_llr_fifo[d_ldpc_frame_size], hd_fifo_len - d_ldpc_frame_size);
+                        hd_fifo_len -= d_ldpc_frame_size;
+                        hd_fifo_bit_phase = (hd_fifo_bit_phase + d_ldpc_frame_size) % d_bits_per_sym;
+
+                        if (frames_in_ldpc_buffer == d_ldpc_simd)
+                        {
+                            decode_batch();
+                            frames_in_ldpc_buffer = 0;
+                        }
+                    }
+                    if (drained > 0)
+                        logger->info("%s: drained %d frames left in the FIFO at EOF", d_constellation_str.c_str(), drained);
+                }
+
+                // Flush the last partial batch (up to 15 frames) at EOF.
+                if (frames_in_ldpc_buffer > 0 && !d_is_streaming_input)
+                {
+                    logger->info("%s: flushing the final batch (%d frames)", d_constellation_str.c_str(), frames_in_ldpc_buffer);
+                    decode_batch(frames_in_ldpc_buffer);
+                    frames_in_ldpc_buffer = 0;
+                }
+
+                logger->info("%s front-end: %llu frames fed (%llu with a weak ASM), %llu dropped",
+                             d_constellation_str.c_str(), (unsigned long long)hd_frames_fed, (unsigned long long)hd_frames_weak_fed,
+                             (unsigned long long)hd_frames_dropped);
             }
 
             nlohmann::json CCSDSLDPCDecoderModule::getModuleStats()
@@ -837,6 +1153,18 @@ namespace satdump
                 v["ldpc_converged"] = ldpc_last_converged;
                 v["llr_snr"] = llr_snr;
                 v["llr_scale"] = llr_scale;
+                if (d_llr_noise_cal)
+                {
+                    v["apsk_gamma"] = d_gamma;
+                    v["demap_npwr"] = d_demap_npwr;
+                    v["llr_gain"] = d_llr_gain;
+                }
+                if (d_is_higher_order)
+                {
+                    v["frames_fed"] = (uint64_t)hd_frames_fed;
+                    v["frames_dropped"] = (uint64_t)hd_frames_dropped;
+                    v["frames_weak_fed"] = (uint64_t)hd_frames_weak_fed;
+                }
                 v["llr_sigma2"] = llr_sigma2;
                 v["llr_scaling"] = d_llr_calibrated ? "calibrated" : "heuristic";
                 if (correlator_locked)
