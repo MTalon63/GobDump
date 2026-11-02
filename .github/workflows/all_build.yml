@@ -312,6 +312,14 @@ jobs:
               run: |
                   sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.22.1"
 
+            - name: Select Android CMake
+              shell: bash
+              run: |
+                  export PATH="$ANDROID_HOME/cmake/3.22.1/bin:$PATH"
+                  echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+                  command -v cmake
+                  cmake --version
+
             - name: Cache dependencies
               uses: actions/cache@v4
               id: android-deps

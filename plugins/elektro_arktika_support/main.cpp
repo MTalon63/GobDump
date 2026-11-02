@@ -11,7 +11,7 @@
 #include "elektro_arktika/instruments/ggak/module_ggak.h"
 #include "elektro_arktika/instruments/msugs/module_msugs.h"
 #include "elektro_arktika/instruments/msugs/msugs_proj.h"
-#include "elektro_arktika/lrit/module_elektro_lrit_data_decoder.h"
+#include "elektro_arktika/xrit/module_elektro_xrit_data_decoder.h"
 #include "projection/raytrace/satellite_raytracer.h"
 
 class ElektroArktikaSupport : public satdump::Plugin
@@ -61,7 +61,7 @@ public:
     static void registerPluginsHandler(const satdump::pipeline::RegisterModulesEvent &evt)
     {
         REGISTER_MODULE_EXTERNAL(evt.modules_registry, elektro_arktika::msugs::MSUGSDecoderModule);
-        REGISTER_MODULE_EXTERNAL(evt.modules_registry, elektro::lrit::ELEKTROLRITDataDecoderModule);
+        REGISTER_MODULE_EXTERNAL(evt.modules_registry, elektro::xrit::ELEKTROXRITDataDecoderModule);
         REGISTER_MODULE_EXTERNAL(evt.modules_registry, elektro_arktika::ggak::GGAKToMQTTModule);
         REGISTER_MODULE_EXTERNAL(evt.modules_registry, elektro_arktika::ggak::GGAKDecoderModule);
     }
