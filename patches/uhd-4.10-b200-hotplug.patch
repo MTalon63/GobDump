@@ -1,5 +1,5 @@
 diff --git a/host/lib/transport/libusb1_base.cpp b/host/lib/transport/libusb1_base.cpp
-index e264426..070c6e0 100644
+index e264426..30be4bf 100644
 --- a/host/lib/transport/libusb1_base.cpp
 +++ b/host/lib/transport/libusb1_base.cpp
 @@ -21,6 +21,20 @@
@@ -46,7 +46,7 @@ index e264426..070c6e0 100644
 +        if (handles.has_key(_dev->get())) {
 +            libusb::device_handle::sptr cached = handles[_dev->get()].lock();
 +            if (cached.get() == static_cast<libusb::device_handle*>(this))
-+                handles.pop(_dev->get());
++                handles[_dev->get()].reset();
 +        }
 +    }
 +
@@ -76,16 +76,14 @@ index e264426..070c6e0 100644
  
      // not expired -> get existing handle
      if (handles.has_key(dev->get())) {
-@@ -380,6 +409,14 @@ libusb::device_handle::sptr libusb::device_handle::get_cached_handle(device::spt
+@@ -380,6 +409,12 @@ libusb::device_handle::sptr libusb::device_handle::get_cached_handle(device::spt
      }
  }
  
 +void libusb::device_handle::clear_cached_handle(device::sptr dev)
 +{
 +    std::lock_guard<std::mutex> lock(handle_cache_mutex());
-+    auto& handles = handle_cache();
-+    if (handles.has_key(dev->get()))
-+        handles.pop(dev->get());
++    handle_cache()[dev->get()].reset();
 +}
 +
  /***********************************************************************
@@ -130,7 +128,7 @@ index 1ef8870..969cc1d 100644
  
  private:
 diff --git a/host/lib/transport/libusb1_zero_copy.cpp b/host/lib/transport/libusb1_zero_copy.cpp
-index 6ab8dbf..b488bbf 100644
+index 6ab8dbf..fc071f9 100644
 --- a/host/lib/transport/libusb1_zero_copy.cpp
 +++ b/host/lib/transport/libusb1_zero_copy.cpp
 @@ -12,6 +12,7 @@
@@ -172,7 +170,7 @@ index 6ab8dbf..b488bbf 100644
      /*!
       * Wait for a managed buffer to become complete.
       *
-@@ -292,14 +301,22 @@ public:
+@@ -292,14 +301,24 @@ public:
              libusb_cancel_transfer(lut);
          }
  
@@ -180,16 +178,18 @@ index 6ab8dbf..b488bbf 100644
 -        for (libusb_zero_copy_mb* mb : _enqueued) {
 -            mb->wait_for_completion(0.01);
 +        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-+        for (size_t i = 0; i < _mb_pool.size(); i++) {
-+            if (not _mb_pool[i]->submitted)
-+                continue;
-+            const auto left = std::chrono::duration<double>(
-+                deadline - std::chrono::steady_clock::now()).count();
-+            if (left <= 0.0 or not _mb_pool[i]->wait_for_completion(left)) {
-+                UHD_LOGGER_ERROR("USB")
-+                    << "usb transfer still pending at teardown; leaking it";
-+                _leaked.push_back(_all_luts[i]);
++        auto lut_it = _all_luts.begin();
++        for (auto& mb : _mb_pool) {
++            if (mb->submitted) {
++                const auto left = std::chrono::duration<double>(
++                    deadline - std::chrono::steady_clock::now()).count();
++                if (left <= 0.0 or not mb->wait_for_completion(left)) {
++                    UHD_LOGGER_ERROR("USB")
++                        << "usb transfer still pending at teardown; leaking it";
++                    _leaked.push_back(*lut_it);
++                }
 +            }
++            ++lut_it;
          }
  
 -        // free all transfers
@@ -200,7 +200,7 @@ index 6ab8dbf..b488bbf 100644
          }
      }
  
-@@ -330,6 +347,8 @@ public:
+@@ -330,6 +349,8 @@ public:
          if (buff)
              _enqueued.pop_front();
          this->submit_what_we_can();
@@ -209,7 +209,7 @@ index 6ab8dbf..b488bbf 100644
          return buff;
      }
  
-@@ -376,15 +395,22 @@ private:
+@@ -376,15 +397,22 @@ private:
                  _released.front()->submit();
                  _enqueued.push_back(_released.front());
                  _released.pop_front();
