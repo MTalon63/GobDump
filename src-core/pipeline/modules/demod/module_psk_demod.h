@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/dsp/clock_recovery/clock_recovery_mm.h"
+#include "common/dsp/demod/constellation.h"
 #include "common/dsp/demod/delay_one_imag.h"
 #include "common/dsp/filter/fir.h"
 #include "common/dsp/pll/costas_loop.h"
@@ -20,12 +21,22 @@ namespace satdump
                 std::shared_ptr<dsp::PLLCarrierTrackingBlock> carrier_pll;
                 std::shared_ptr<dsp::CorrectIQBlock<complex_t>> carrier_dc;
                 std::shared_ptr<dsp::CostasLoopBlock> pll;
+                // Optional DD phase loop after timing recovery (ISI-free symbols, SNR
+                // adaptive bandwidth). 0 = disabled.
+                std::shared_ptr<dsp::CostasLoopBlock> sym_pll;
+                std::shared_ptr<dsp::stream<complex_t>> sym_stream; // rec or sym_pll output
+                float d_sym_pll_bw = 0.05f; // symbol-rate loop nominal bw (16APSK only), 0 = off
                 std::shared_ptr<dsp::CorrectIQBlock<complex_t>> post_pll_dc;
                 std::shared_ptr<dsp::DelayOneImagBlock> delay;
                 std::shared_ptr<dsp::MMClockRecoveryBlock<complex_t>> rec;
 
                 std::string constellation_type;
                 bool is_bpsk, is_oqpsk;
+                bool is_apsk16 = false; // 16APSK: decision-directed carrier loop + APSK TED
+                float d_gamma = 2.60f;  // 16APSK ring ratio
+                bool d_apsk_ted = true; // nearest-point M&M slicer (A/B testable)
+                std::unique_ptr<dsp::constellation_t> apsk16_const;
+                std::unique_ptr<dsp::constellation_t> psk8_sym_const; // table for the symbol-rate loop on 8PSK
 
                 float d_rrc_alpha;
                 int d_rrc_taps = 31;
@@ -58,6 +69,9 @@ namespace satdump
                 {
                     nlohmann::json v = BaseDemodModule::getParams();
                     v["constellation"] = "bpsk";
+                    v["gamma"] = 2.60;
+                    v["apsk_ted"] = true;
+                    v["sym_pll_bw"] = 0.05;
                     v["rrc_alpha"] = 0.35;
                     v["rrc_taps"] = 31;
                     v["pll_bw"] = 0.005;

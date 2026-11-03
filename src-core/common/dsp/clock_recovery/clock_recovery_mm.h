@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/dsp/block.h"
+#include "common/dsp/demod/constellation.h"
 #include "common/dsp/resamp/polyphase_bank.h"
 
 /*
@@ -58,6 +59,11 @@ namespace dsp
         // complex ones, and keeps the complex slicer's imag sign (pure noise here) out of the error.
         // A field, not a ctor arg, so the mangled name cannot change. Off unless a demod enables it.
         bool bpsk_real_ted = false;
+
+        // ASPK: nearest point of this table instead of the QPSK sign slice (the sign
+        // slice biases the TED between rings). Null = previous behaviour. Must outlive.
+        const dsp::constellation_t *dd_const = nullptr;
+        float dd_pwr = 1.0f;
 
         MMClockRecoveryBlock(std::shared_ptr<dsp::stream<T>> input, float omega, float omegaGain, float mu, float muGain, float omegaLimit, int nfilt = 128, int ntaps = 8);
         ~MMClockRecoveryBlock();

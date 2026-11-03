@@ -247,6 +247,16 @@ namespace dsp
                     c_0T = complex_t(p_0T.real > 0.0f ? 1.0f : -1.0f, 0.0f);
                     phase_error = c_1T.real * p_0T.real - c_0T.real * p_1T.real;
                 }
+                else if (dd_const != nullptr)
+                {
+                    // APSK: nearest point at the tracked amplitude.
+                    float pwr = p_0T.real * p_0T.real + p_0T.imag * p_0T.imag;
+                    if (std::isfinite(pwr))
+                        dd_pwr += 0.001f * (pwr - dd_pwr);
+                    float amp = sqrtf(dd_pwr > 1e-12f ? dd_pwr : 1e-12f);
+                    c_0T = dd_const->nearest_scaled(p_0T, amp);
+                    phase_error = (((p_0T - p_2T) * c_1T.conj()) - ((c_0T - c_2T) * p_1T.conj())).real;
+                }
                 else
                 {
                     c_0T = complex_t(p_0T.real > 0.0f ? 1.0f : 0.0f, p_0T.imag > 0.0f ? 1.0f : 0.0f);

@@ -25,9 +25,10 @@ namespace satdump
 
                 // Reject unknown constellations before init() derefs pll.
                 if (constellation_type != "bpsk" && constellation_type != "qpsk" &&
-                    constellation_type != "oqpsk" && constellation_type != "8psk")
+                    constellation_type != "oqpsk" && constellation_type != "8psk" &&
+                    constellation_type != "16apsk")
                     throw satdump_exception("PSKDemod : unknown constellation \"" + constellation_type +
-                                            "\" (use bpsk, qpsk, oqpsk or 8psk)");
+                                            "\" (use bpsk, qpsk, oqpsk, 8psk or 16apsk)");
 
                 if (parameters.count("rrc_alpha") > 0)
                     d_rrc_alpha = parameters["rrc_alpha"].get<float>();
@@ -69,6 +70,17 @@ namespace satdump
                 if (parameters.count("clock_omega_relative_limit") > 0)
                     d_clock_omega_relative_limit = parameters["clock_omega_relative_limit"].get<float>();
 
+                // Table shared by the DD carrier loop, the M&M slicer and the EVM estimator.
+                is_apsk16 = constellation_type == "16apsk";
+                if (parameters.count("gamma") > 0)
+                    d_gamma = parameters["gamma"].get<float>();
+                if (parameters.count("apsk_ted") > 0)
+                    d_apsk_ted = parameters["apsk_ted"].get<bool>();
+                if (parameters.count("sym_pll_bw") > 0)
+                    d_sym_pll_bw = parameters["sym_pll_bw"].get<float>();
+                if (is_apsk16)
+                    apsk16_const = std::make_unique<dsp::constellation_t>(dsp::APSK16_CCSDS, d_gamma);
+
                 // BPSK Stuff
                 is_bpsk = constellation_type == "bpsk";
 
@@ -89,6 +101,8 @@ namespace satdump
                     name = "OQPSK Demodulator";
                 else if (constellation_type == "8psk")
                     name = "8PSK Demodulator";
+                else if (constellation_type == "16apsk")
+                    name = "16APSK Demodulator";
 
                 // Show freq
                 show_freq = true;
@@ -100,10 +114,18 @@ namespace satdump
                     snr_order = 4;
                 else if (constellation_type == "8psk")
                     snr_order = 8;
+                else if (constellation_type == "16apsk")
+                    snr_order = 16; // only the order field; the APSK table is used below
                 snr_evm = EVMSNREstimator(snr_order, 0.001f);
+                if (is_apsk16)
+                    snr_evm.set_apsk_points(apsk16_const->get_points(), apsk16_const->get_states());
 
                 if (parameters.count("snr_estimator") > 0)
                     d_use_evm_snr = (parameters["snr_estimator"].get<std::string>() == "evm");
+
+                // M2M4 assumes a constant modulus; force the EVM path.
+                if (is_apsk16)
+                    d_use_evm_snr = true;
 
                 // Warn (non-fatally) about parameters this module does not understand, so silently
                 // dropped operator tuning is visible.
@@ -116,7 +138,8 @@ namespace satdump
                     // PSKDemodModule
                     "constellation", "rrc_alpha", "rrc_taps", "pll_bw", "costas_bw", "post_costas_dc", "has_carrier",
                     "clock_alpha", "clock_gain_omega", "clock_mu", "clock_gain_mu", "clock_omega_relative_limit",
-                    "carrier_pll_bw", "carrier_pll_max_offset", "costas_max_offset", "pll_max_offset", "snr_estimator"};
+                    "carrier_pll_bw", "carrier_pll_max_offset", "costas_max_offset", "pll_max_offset", "snr_estimator",
+                    "gamma", "apsk_ted", "sym_pll_bw"};
                 for (auto &kv : parameters.items())
                     if (known_keys.find(kv.key()) == known_keys.end())
                         logger->warn("%s", ("PSKDemod : unknown/ignored parameter \"" + kv.key() + "\"").c_str());
@@ -151,6 +174,16 @@ namespace satdump
                     carrier_dc = std::make_shared<dsp::CorrectIQBlock<complex_t>>(carrier_pll->output_stream);
                 }
 
+                // The DD detector slices all 4 sps samples (3 carry ISI), so the 8PSK
+                // loop bandwidth makes it cycle-slip: 0.002 is the usable maximum.
+                if (is_apsk16 && d_loop_bw > 0.002f)
+                {
+                    logger->info("16APSK: clamping PLL bandwidth %.4f -> 0.0020 (decision-directed loop); "
+                                 "0.0010-0.0020 is the useful range, 0.0010 trades ~0.4 dB of offset tolerance for ~1 dB of MER",
+                                 d_loop_bw);
+                    d_loop_bw = 0.002f;
+                }
+
                 // PLL
                 float costas_max_offset = d_has_carrier ? 0.2 : 1.0; // The offset in frequency should already be resolved on AM subcarriers
                 if (d_parameters.count("costas_max_offset") > 0)
@@ -164,6 +197,13 @@ namespace satdump
                     pll = std::make_shared<dsp::CostasLoopBlock>(rrc->output_stream, d_loop_bw, 4, costas_max_offset);
                 else if (constellation_type == "8psk")
                     pll = std::make_shared<dsp::CostasLoopBlock>(rrc->output_stream, d_loop_bw, 8, costas_max_offset);
+                else if (constellation_type == "16apsk")
+                {
+                    // Order 16 = decision-directed on the APSK table; the decoder
+                    // resolves the 4-fold rotation ambiguity.
+                    pll = std::make_shared<dsp::CostasLoopBlock>(rrc->output_stream, d_loop_bw, 16, costas_max_offset);
+                    pll->set_dd_constellation(apsk16_const.get());
+                }
 
                 if (d_post_costas_dc_blocking)
                     post_pll_dc = std::make_shared<dsp::CorrectIQBlock<complex_t>>(pll->output_stream);
@@ -176,6 +216,31 @@ namespace satdump
                                                                              d_clock_gain_omega, d_clock_mu, d_clock_gain_mu, d_clock_omega_relative_limit);
                 // Real constellations only; OQPSK and the higher orders keep the complex-slicer TED.
                 rec->bpsk_real_ted = is_bpsk;
+
+                // Nearest-APSK slicer for the TED (the QPSK sign slice biases between rings).
+                if (is_apsk16 && d_apsk_ted)
+                    rec->dd_const = apsk16_const.get();
+
+                // Optional symbol-rate phase loop after timing recovery: the 4-sps loop
+                // only keeps the constellation upright, this one works on clean symbols.
+                dsp::constellation_t *sym_const = nullptr;
+                if (is_apsk16)
+                    sym_const = apsk16_const.get();
+                else if (constellation_type == "8psk")
+                {
+                    psk8_sym_const = std::make_unique<dsp::constellation_t>(dsp::PSK8);
+                    sym_const = psk8_sym_const.get();
+                }
+
+                if (sym_const != nullptr && d_sym_pll_bw > 0)
+                {
+                    sym_pll = std::make_shared<dsp::CostasLoopBlock>(rec->output_stream, d_sym_pll_bw, 16, 0.05f);
+                    sym_pll->set_dd_constellation(sym_const);
+                    logger->info("%s: symbol-rate phase loop enabled (bw %.3f at high SNR, scaling to %.3f at low SNR, +-1.6 kHz)",
+                                 constellation_type.c_str(), d_sym_pll_bw, d_sym_pll_bw * 0.2f);
+                }
+
+                sym_stream = sym_pll ? sym_pll->output_stream : rec->output_stream;
             }
 
             PSKDemodModule::~PSKDemodModule() { delete[] sym_buffer; }
@@ -214,29 +279,40 @@ namespace satdump
                 if (is_oqpsk)
                     delay->start();
                 rec->start();
+                if (sym_pll)
+                    sym_pll->start();
 
                 int dat_size = 0;
                 while (demod_should_run())
                 {
-                    dat_size = rec->output_stream->read();
+                    dat_size = sym_stream->read();
 
                     if (dat_size <= 0)
                     {
-                        rec->output_stream->flush();
+                        sym_stream->flush();
                         continue;
                     }
 
                     // Push into constellation
-                    constellation.pushComplex(rec->output_stream->readBuf, dat_size);
+                    constellation.pushComplex(sym_stream->readBuf, dat_size);
 
                     // Estimate SNR
-                    snr_update(rec->output_stream->readBuf, dat_size);
+                    snr_update(sym_stream->readBuf, dat_size);
                     snr = snr_read();
 
                     if (snr > peak_snr)
                         peak_snr = snr;
 
                     pushSNRAudioFeedback(dat_size, d_symbolrate);
+
+                    // Optimum bandwidth follows SNR: wide slips into its own decision noise
+                    // at low SNR, narrow cannot track offset. Scale it 1:5 over 17..25 dB.
+                    if (sym_pll && d_sym_pll_bw > 0.0f)
+                    {
+                        float t = (snr - 17.0f) * 0.125f; // 17 dB -> 0, 25 dB -> 1
+                        t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+                        sym_pll->set_loop_bw(d_sym_pll_bw * (0.2f + 0.8f * t));
+                    }
 
                     // Update freq
                     display_freq = dsp::rad_to_hz(pll->getFreq(), final_samplerate);
@@ -250,7 +326,7 @@ namespace satdump
                         float pow_acc = 0.0f;
                         for (int i = 0; i < dat_size; i++)
                         {
-                            float v = rec->output_stream->readBuf[i].real;
+                            float v = sym_stream->readBuf[i].real;
                             pow_acc += v * v;
                         }
                         pow_acc /= (float)dat_size;
@@ -259,7 +335,7 @@ namespace satdump
                         d_sym_pow += k_sym_pow_ema * (pow_acc - d_sym_pow); // update for the NEXT block
                         for (int i = 0; i < dat_size; i++)
                         {
-                            sym_buffer[i] = clamp(rec->output_stream->readBuf[i].real * scale);
+                            sym_buffer[i] = clamp(sym_stream->readBuf[i].real * scale);
                         }
                     }
                     else // Otherwise, for all other consts, we need both
@@ -267,8 +343,8 @@ namespace satdump
                         float pow_acc = 0.0f;
                         for (int i = 0; i < dat_size; i++)
                         {
-                            float re = rec->output_stream->readBuf[i].real;
-                            float im = rec->output_stream->readBuf[i].imag;
+                            float re = sym_stream->readBuf[i].real;
+                            float im = sym_stream->readBuf[i].imag;
                             pow_acc += re * re + im * im;
                         }
                         pow_acc /= (float)dat_size;
@@ -277,12 +353,12 @@ namespace satdump
                         d_sym_pow += k_sym_pow_ema * (pow_acc - d_sym_pow); // update for the NEXT block
                         for (int i = 0; i < dat_size; i++)
                         {
-                            sym_buffer[i * 2] = clamp(rec->output_stream->readBuf[i].real * scale);
-                            sym_buffer[i * 2 + 1] = clamp(rec->output_stream->readBuf[i].imag * scale);
+                            sym_buffer[i * 2] = clamp(sym_stream->readBuf[i].real * scale);
+                            sym_buffer[i * 2 + 1] = clamp(sym_stream->readBuf[i].imag * scale);
                         }
                     }
 
-                    rec->output_stream->flush();
+                    sym_stream->flush();
 
                     if (output_data_type == DATA_FILE)
                         data_out.write((char *)sym_buffer, is_bpsk ? dat_size : dat_size * 2);
@@ -331,6 +407,11 @@ namespace satdump
                     post_pll_dc->stop();
                 if (is_oqpsk)
                     delay->stop();
+                if (sym_pll)
+                {
+                    sym_pll->stop();
+                    sym_pll->output_stream->stopReader();
+                }
                 rec->stop();
                 rec->output_stream->stopReader();
 

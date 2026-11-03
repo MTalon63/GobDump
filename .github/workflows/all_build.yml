@@ -413,7 +413,7 @@ jobs:
               uses: actions/cache@v4
               with:
                 path: deps
-                key: linux-uhd-410-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
+                key: linux-uhd-410-${{ github.job }}-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
 
             - name: Build patched UHD
               run: bash ./linux/build_deps.sh
@@ -568,7 +568,7 @@ jobs:
               uses: actions/cache@v4
               with:
                 path: deps
-                key: linux-uhd-410-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
+                key: linux-uhd-410-${{ github.job }}-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
 
             - name: Build patched UHD
               run: bash ./linux/build_deps.sh
@@ -641,7 +641,7 @@ jobs:
               uses: actions/cache@v4
               with:
                 path: deps
-                key: linux-uhd-410-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
+                key: linux-uhd-410-${{ github.job }}-${{ hashFiles('patches/uhd-4.10-b200-hotplug.patch', 'linux/build_deps.sh') }}
 
             - name: Build patched UHD
               run: bash ./linux/build_deps.sh

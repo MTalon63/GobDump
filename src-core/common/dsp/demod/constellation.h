@@ -14,7 +14,9 @@ namespace dsp
         OQPSK,
         PSK8,
         APSK16,
-        APSK32
+        APSK32,
+        // CCSDS 131.2-B-2 / DVB-S2 16APSK, average energy 1 (see the constructor).
+        APSK16_CCSDS
     };
 
     // Constellation parser; expects symbols around 1 and -1.
@@ -51,6 +53,9 @@ namespace dsp
         void make_lut(int resolution, float npwr = 1.0f);
         void set_noise_power(float npwr);
         float get_scale_factor() const { return const_amp * const_prescale; }
+        // int8 LLR scale; the 16APSK path adapts it to the measured noise.
+        void set_scale(float s) { const_sca = s; }
+        float get_scale() const { return const_sca; }
         void demod_soft_lut(complex_t sample, int8_t *bits, float *phase_error = nullptr);
 
         struct SoftLutView
@@ -118,6 +123,15 @@ namespace dsp
 
         complex_t mod(uint8_t symbol);                                                                        // Modulate a raw symbol. Proper resampling and RRC filtering is still required!
         uint8_t demod(complex_t sample);                                                                      // Demodulate a complex sample to hard bits
+
+        // Nearest-point helpers for decision-directed loops; same scaling as demod_soft_calc().
+        int nearest_index(complex_t sample) const;                 // Index (== label) of the nearest point
+        complex_t nearest(complex_t sample) const;                 // The nearest point itself
+        complex_t nearest_scaled(complex_t sample, float amp) const; // amp * nearest(sample / amp)
+
+        // Raw point table for external EVM/SNR estimators.
+        const complex_t *get_points() const { return constellation; }
+        int get_states() const { return const_states; }
         uint8_t soft_demod(int8_t *sample);                                                                   // Demodulate a complex sample stored as soft (I/Q) bits to hard bits
         void soft_demod(int8_t *samples, int size, uint8_t *bits);                                            // Demodulate a full buffer of softs
         void demod_soft_calc(complex_t sample, int8_t *bits, float *phase_error = nullptr, float npwr = 1.0); // Demodulate to soft symbols
