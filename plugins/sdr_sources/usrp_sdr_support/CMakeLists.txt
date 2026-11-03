@@ -10,6 +10,13 @@ if(UHD_LIBRARY) # OR ANDROID)
     add_library(usrp_sdr_support SHARED ${usrp_sdr_support_CPPS})
     target_include_directories(usrp_sdr_support PUBLIC src)
 
+    # find_library() locates UHD, but does not propagate its headers.  The
+    # bundled Linux build lives in deps/, while system installs may use the
+    # compiler's default include path.
+    if(EXISTS "${CMAKE_SOURCE_DIR}/deps/include/uhd.h")
+        target_include_directories(usrp_sdr_support PRIVATE "${CMAKE_SOURCE_DIR}/deps/include")
+    endif()
+
     if(MSVC)
         target_link_libraries(usrp_sdr_support PUBLIC gobdump_core uhd.dll)
         install(TARGETS usrp_sdr_support DESTINATION ${CMAKE_INSTALL_LIBDIR}/gobdump/plugins RUNTIME_DEPENDENCY_SET gobdump_deps)
