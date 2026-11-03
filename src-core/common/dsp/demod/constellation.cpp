@@ -101,6 +101,49 @@ namespace dsp
             constellation[1] = polar(r1, 4, 1.5) * const_amp;
             constellation[0] = polar(r1, 4, 2.5) * const_amp;
         }
+        else if (type == APSK16_CCSDS)
+        {
+            // CCSDS 131.2-B-2 fig 5-1(c): 4 inner on 45+90k, 12 outer on 15+30k,
+            // Gray, average energy 1 (R1^2 + 3 R2^2 = 4, gamma = R2/R1).
+            // Label = stream bit order (b0 = index MSB), as demod_soft_calc() emits:
+            //   0000 outer  45  0001 outer  75  0010 outer  15  0011 inner  45
+            //   0100 outer 135  0101 outer 105  0110 outer 165  0111 inner 135
+            //   1000 outer 315  1001 outer 285  1010 outer 345  1011 inner 315
+            //   1100 outer 225  1101 outer 255  1110 outer 195  1111 inner 225
+            const_states = 16;
+            const_bits = 4;
+
+            // Already the unit-energy point: no const_amp scaling.
+            const_amp = 1;
+            const_prescale = 1;
+            const_sca = 50; // same int8 LLR scale as the 8PSK path
+
+            constellation = new complex_t[const_states];
+
+            float gamma1 = g1;
+            if (!gamma1)
+                gamma1 = 2.60f; // 131.2-B-2 table 5-1, ACM format 17 (r = 0.874 ~ 7/8)
+
+            float r1 = 2.0f / sqrtf(1.0f + 3.0f * gamma1 * gamma1);
+            float r2 = gamma1 * r1;
+
+            constellation[0] = polar(r2, 12, 1.5);   // 0000 outer  45
+            constellation[1] = polar(r2, 12, 2.5);   // 0001 outer  75
+            constellation[2] = polar(r2, 12, 0.5);   // 0010 outer  15
+            constellation[3] = polar(r1, 4, 0.5);    // 0011 inner  45
+            constellation[4] = polar(r2, 12, 4.5);   // 0100 outer 135
+            constellation[5] = polar(r2, 12, 3.5);   // 0101 outer 105
+            constellation[6] = polar(r2, 12, 5.5);   // 0110 outer 165
+            constellation[7] = polar(r1, 4, 1.5);    // 0111 inner 135
+            constellation[8] = polar(r2, 12, 10.5);  // 1000 outer 315
+            constellation[9] = polar(r2, 12, 9.5);   // 1001 outer 285
+            constellation[10] = polar(r2, 12, 11.5); // 1010 outer 345
+            constellation[11] = polar(r1, 4, 3.5);   // 1011 inner 315
+            constellation[12] = polar(r2, 12, 7.5);  // 1100 outer 225
+            constellation[13] = polar(r2, 12, 8.5);  // 1101 outer 255
+            constellation[14] = polar(r2, 12, 6.5);  // 1110 outer 195
+            constellation[15] = polar(r1, 4, 2.5);   // 1111 inner 225
+        }
         else if (type == APSK32)
         {
             const_states = 32;
@@ -191,11 +234,51 @@ namespace dsp
             return 2 * (sample.imag > 0) + (sample.real > 0);
             break;
 
+        case APSK16_CCSDS:
+            return (uint8_t)nearest_index(sample);
+            break;
+
         default:
             return 0;
             break;
         }
     };
+
+    int constellation_t::nearest_index(complex_t sample) const
+    {
+        if (const_amp != 1)
+            sample = sample * const_amp;
+        if (const_prescale != 1)
+            sample = sample * const_prescale;
+
+        float min_dist = std::numeric_limits<float>::max();
+        int best = 0;
+
+        for (int i = 0; i < const_states; i++)
+        {
+            complex_t diff = sample - constellation[i];
+            float d2 = diff.real * diff.real + diff.imag * diff.imag;
+            if (d2 < min_dist)
+            {
+                min_dist = d2;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+    complex_t constellation_t::nearest(complex_t sample) const
+    {
+        return constellation[nearest_index(sample)];
+    }
+
+    complex_t constellation_t::nearest_scaled(complex_t sample, float amp) const
+    {
+        if (!(amp > 1e-6f) || !std::isfinite(amp))
+            return nearest(sample);
+        return nearest(sample / amp) * amp;
+    }
 
     uint8_t constellation_t::soft_demod(int8_t *sample)
     {

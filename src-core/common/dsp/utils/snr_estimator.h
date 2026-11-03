@@ -66,10 +66,20 @@ private:
     double d_alpha, d_beta;
     double d_signal, d_noise;
     std::vector<float> d_re, d_im; // scratch I/Q after deinterleave
+    std::vector<complex_t> d_pts;  // non-PSK point table (APSK), empty otherwise
 
 public:
     EVMSNREstimator(int order = 4, float alpha = 0.001);
     ~EVMSNREstimator() {}
+
+    // EVM against an arbitrary table of average energy 1 (gain invariant). Used for
+    // 16APSK, where M2M4 and the equal-radius PSK grid are both invalid.
+    void set_apsk_points(const complex_t *pts, int n);
+    void clear_apsk_points()
+    {
+        d_pts.clear();
+        reset();
+    }
 
     void update(complex_t *input, int size);
     void reset();

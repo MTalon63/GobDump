@@ -68,15 +68,22 @@ namespace satdump
                 uint8_t *ldpc_output_buffer;
                 uint8_t *deframer_buffer;
 
-                // 8PSK front-end.
+                // Higher-order (8PSK / 16APSK) front-end.
                 bool d_is_higher_order = false;
                 int d_bits_per_sym = 1;
                 int d_num_phases = 1;
                 int d_current_phase = 0;
                 bool hd_tracking = false;
                 bool hd_syncing = false;
+                bool hd_grid_ok = false; // frame grid confirmed by a good ASM bracket
+                // Frame accounting; the CADU count is quantised to the batch of 16.
+                uint64_t hd_frames_fed = 0;
+                uint64_t hd_frames_dropped = 0;
+                uint64_t hd_frames_weak_fed = 0;
                 int hd_sync_fail_count = 0;
-                static constexpr int HD_CHUNK_SYMS = 4096;
+                // Acquisition chunk: >= 2 frames, so the phase is scored on two ASMs
+                // (8192 symbols = 3 frames at 8PSK, 4 at 16APSK).
+                static constexpr int HD_CHUNK_SYMS = 8192;
                 int8_t *hd_sym_buffer = nullptr;
                 int8_t *hd_llr_buffer = nullptr;
                 int8_t *hd_llr_fifo = nullptr;
@@ -86,11 +93,30 @@ namespace satdump
                 float hd_phase_sin[16] = {0};
                 float d_correlator_threshold = 0.5f;
                 std::vector<uint8_t> hd_asm_bits;
-                float hd_asm_ref[3][64] = {}; // one matched filter per bit phase
-                float hd_asm_ref_sq[3] = {0};
-                int hd_fifo_bit_phase = 0; // bit phase (mod 3) of hd_llr_fifo[0]
+                // One matched filter per bit phase, sized for up to 8 bits/symbol.
+                float hd_asm_ref[8][64] = {};
+                float hd_asm_ref_sq[8] = {0};
+                int hd_fifo_bit_phase = 0; // bit phase (mod d_bits_per_sym) of hd_llr_fifo[0]
                 bool d_conjugate = false;
                 std::unique_ptr<dsp::constellation_t> hd_constellation;
+
+                // 16APSK demapper calibration: npwr from the per-chunk MER plus an int8
+                // LLR gain. At npwr = 1 the two rings put neighbours on both sides of a
+                // bit decision and ~13% of LLR signs come out wrong. Off = npwr 1 / 50.
+                //
+                // "16apsk" = dsp::APSK16_CCSDS; the legacy dsp::APSK16 mapping is not used.
+                float d_gamma = 2.60f;       // 16APSK ring ratio (TX/RX must match)
+                bool d_llr_noise_cal = false; // true for 16APSK
+                float d_demap_npwr = 1.0f;   // per-axis noise variance used for demapping (fixed per lock)
+                float d_npwr_implied = 1.0f; // latest per-axis noise variance implied by the MER
+                float d_npwr_smooth = 0.0f;  // smoothed version, the one actually used
+                int d_mer_updates = 0;
+                int d_mer_settle = 2;        // chunks to ignore after a reset (estimator warm-up)
+                float d_llr_gain = 50.0f;    // current const_sca for the demapper
+                float d_llr_target = 28.0f;  // mean |LLR| the gain controller aims for
+                bool d_mer_valid = false;
+                void hd_build_asm_ref(float npwr);
+                void hd_update_llr_gain(const int8_t *llr, int count);
 
                 std::unique_ptr<CorrelatorGeneric> correlator;
                 std::unique_ptr<codings::ldpc::CCSDSLDPC> ldpc_dec;
@@ -151,7 +177,8 @@ namespace satdump
 
                 // 8PSK helpers.
                 void feed_frame(int8_t *frame);
-                void decode_batch();
+                // Valid frames in the batch (-1 = full), used to flush at EOF.
+                void decode_batch(int lanes = -1);
                 void process_higher_order();
                 void demap_higher_order(const int8_t *sym, int nsyms, int phase, bool conjugate, int8_t *out);
                 float correlate_asm(const int8_t *bits, int pos, int nbits, const float *ref, float ref_sq, float &raw_out);
@@ -190,6 +217,8 @@ namespace satdump
                     v["internal_stream"] = false;
                     v["llr_scaling"] = "calibrated";
                     v["correlator_threshold"] = 0.5;
+                    v["gamma"] = 2.60;
+                    v["llr_noise_calibration"] = true;
                     return v;
                 }
                 static std::shared_ptr<ProcessingModule> getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters);

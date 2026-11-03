@@ -68,6 +68,13 @@ EVMSNREstimator::EVMSNREstimator(int order, float alpha)
     reset();
 }
 
+void EVMSNREstimator::set_apsk_points(const complex_t *pts, int n)
+{
+    d_pts.assign(pts, pts + n);
+    d_order = n;
+    reset();
+}
+
 void EVMSNREstimator::reset()
 {
     d_pwr = 0;
@@ -117,6 +124,27 @@ void EVMSNREstimator::update(complex_t *input, int size)
             double err_re = re - ideal_re;
             double err_im = im - ideal_im;
             err_pow = err_re * err_re + err_im * err_im;
+        }
+        else if (!d_pts.empty())
+        {
+            // APSK: nearest table point at amplitude sqrt(E[|z|^2]).
+            double A = sqrt(d_pwr);
+            int best = 0;
+            double best_e = 1e300;
+
+            for (int k = 0; k < (int)d_pts.size(); k++)
+            {
+                double dr = re - A * d_pts[k].real;
+                double di = im - A * d_pts[k].imag;
+                double e = dr * dr + di * di;
+                if (e < best_e)
+                {
+                    best_e = e;
+                    best = k;
+                }
+            }
+
+            err_pow = best_e;
         }
         else
         {
