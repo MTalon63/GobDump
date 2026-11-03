@@ -95,6 +95,7 @@ _Those libraries above are included directly as they are either header-only, not
 - [Liberation Serif](https://www.fontsquirrel.com/fonts/liberation-serif), for Solaris Motif theme
 - [Perfect DOS VGA 437](https://www.dafont.com/perfect-dos-vga-437.font), for Phosphor theme
 - [PX Sans Nouveaux](https://www.dafont.com/px-sans-nouveaux.font), for Windows 98 theme
+- [Sour Gummy](https://github.com/eifetx/Sour-Gummy-Fonts), for the Girlypop theme (licensed under the SIL Open Font License)
   _3270 Nerd Font and Roboto have been merged into a single font.ttf_
 
 # Original SatDump Authors
