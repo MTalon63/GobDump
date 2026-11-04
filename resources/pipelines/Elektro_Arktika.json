@@ -248,7 +248,7 @@
                 }
             },
             "products": {
-                "module": "elektro_lrit_data_decoder"
+                "module": "elektro_xrit_data_decoder"
             }
         }
     },
@@ -303,7 +303,7 @@
                 }
             },
             "products": {
-                "module": "elektro_lrit_data_decoder",
+                "module": "elektro_xrit_data_decoder",
                 "parameters": {}
             }
         }

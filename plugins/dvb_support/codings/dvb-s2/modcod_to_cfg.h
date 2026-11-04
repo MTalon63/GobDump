@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdexcept>
+
 #include "common/codings/dvb-s2/dvbs2.h"
 #include "common/dsp/demod/constellation.h"
 
@@ -150,6 +152,12 @@ namespace dvbs2
             throw std::runtime_error("MODCOD not (yet?) supported!");
 
         cfg.framesize = shortframes ? dvbs2::FECFRAME_SHORT : dvbs2::FECFRAME_NORMAL;
+
+        // DVB-S2 short-frame LDPC tables do not define the 9/10 code rate.
+        // Reject these MODCODs here rather than passing an uninitialised table
+        // into BBFrameLDPC (which used to crash while constructing the decoder).
+        if (shortframes && (modcod == 11 || modcod == 17 || modcod == 23 || modcod == 28))
+            throw std::runtime_error("This MODCOD does not support DVB-S2 short frames");
 
         return cfg;
     }
