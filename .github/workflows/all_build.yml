@@ -302,6 +302,30 @@ jobs:
                 java-version: "17"
                 distribution: "temurin"
 
+            - name: Validate Android signing configuration
+              shell: bash
+              env:
+                  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+                  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+                  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+                  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+              run: |
+                  set -euo pipefail
+                  : "${ANDROID_KEYSTORE_BASE64:?ANDROID_KEYSTORE_BASE64 is not set}"
+                  : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS is not set}"
+                  : "${ANDROID_KEYSTORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD is not set}"
+                  : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD is not set}"
+
+                  keystore="$RUNNER_TEMP/release.keystore"
+                  trap 'rm -f "$keystore"' EXIT
+                  if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"; then
+                      echo "ANDROID_KEYSTORE_BASE64 is not valid base64" >&2
+                      exit 1
+                  fi
+                  keytool -list -keystore "$keystore" \
+                      -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+                      -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
             - name: Set up Android SDK
               uses: android-actions/setup-android@v3
               with:
@@ -325,7 +349,7 @@ jobs:
               id: android-deps
               with:
                   path: android/deps/output
-                  key: android-deps-v3-${{ hashFiles('android/deps/build.sh') }}
+                  key: android-deps-v4-${{ hashFiles('android/deps/build.sh') }}
 
             - name: Install dependency build tools
               if: steps.android-deps.outputs.cache-hit != 'true'
@@ -335,6 +359,16 @@ jobs:
               if: steps.android-deps.outputs.cache-hit != 'true'
               shell: bash
               run: cd $GITHUB_WORKSPACE/android/deps && sh build.sh
+
+            # actions/cache normally saves only after the whole job succeeds. Save the
+            # expensive native dependency build now so a later Gradle or signing failure
+            # does not discard it.
+            - name: Save dependency cache
+              if: steps.android-deps.outputs.cache-hit != 'true'
+              uses: actions/cache/save@v4
+              with:
+                  path: android/deps/output
+                  key: android-deps-v4-${{ hashFiles('android/deps/build.sh') }}
 
             - name: Generate Gradle wrapper
               uses: gradle/actions/setup-gradle@v4
