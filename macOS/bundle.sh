@@ -62,19 +62,41 @@ then
     SIGN_FLAG="-ns"
 fi
 
-# Omp, openblas, and gfortran are not in $HOMEBREW_LIB/lib for some ungodly reason; we include their full paths instead
+# Omp, openblas, gfortran, and conda-installed UHD are not necessarily in
+# Homebrew's lib directory, so include their actual library directories.
 echo "Packaging and re-linking libraries..."
 plugin_args=$(ls MacApp/GobDump.app/Contents/Resources/plugins | xargs printf -- '-x MacApp/GobDump.app/Contents/Resources/plugins/%s ')
+source_args=(
+  -s .
+  -s "$GITHUB_WORKSPACE/deps/lib"
+  -s "$HOMEBREW_LIB/lib"
+  -s "$HOMEBREW_LIB/opt/libomp/lib"
+  -s "$HOMEBREW_LIB/opt/openblas/lib"
+  -s "$HOMEBREW_LIB/opt/gfortran/lib/gcc/current"
+)
+
+# UHD from radioconda/conda-forge uses @rpath for its versioned dylib.  Add
+# the conda prefix explicitly or dylibbundler asks interactively where to find
+# libuhd.4.9.0.dylib, which breaks non-interactive packaging.
+conda_lib_candidates=()
+if [[ -n "${RADIODONDA_PREFIX:-}" ]]; then
+  conda_lib_candidates+=("$RADIODONDA_PREFIX/lib")
+fi
+if [[ -n "${CONDA_PREFIX:-}" ]]; then
+  conda_lib_candidates+=("$CONDA_PREFIX/lib")
+fi
+conda_lib_candidates+=("$HOME/radioconda/lib")
+for conda_lib in "${conda_lib_candidates[@]}"; do
+  if [[ -d "$conda_lib" ]]; then
+    source_args+=( -s "$conda_lib" )
+  fi
+done
+
 dylibbundler $SIGN_FLAG \
   -cd \
   -b \
   -of \
-  -s . \
-  -s $GITHUB_WORKSPACE/deps/lib \
-  -s $HOMEBREW_LIB/lib \
-  -s $HOMEBREW_LIB/opt/libomp/lib \
-  -s $HOMEBREW_LIB/opt/openblas/lib \
-  -s $HOMEBREW_LIB/opt/gfortran/lib/gcc/current \
+  "${source_args[@]}" \
   -d MacApp/GobDump.app/Contents/libs \
   -x MacApp/GobDump.app/Contents/MacOS/gobdump-ui \
   -x MacApp/GobDump.app/Contents/MacOS/satdump_sdr_server \
