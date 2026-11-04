@@ -11,10 +11,18 @@ if(UHD_LIBRARY) # OR ANDROID)
     target_include_directories(usrp_sdr_support PUBLIC src)
 
     # find_library() locates UHD, but does not propagate its headers.  The
-    # bundled Linux build lives in deps/, while system installs may use the
-    # compiler's default include path.
-    if(EXISTS "${CMAKE_SOURCE_DIR}/deps/include/uhd.h")
-        target_include_directories(usrp_sdr_support PRIVATE "${CMAKE_SOURCE_DIR}/deps/include")
+    # bundled build lives in deps/, while package-manager installs (such as
+    # radioconda on macOS) keep headers beside the library prefix.
+    get_filename_component(UHD_LIBRARY_DIR "${UHD_LIBRARY}" DIRECTORY)
+    find_path(UHD_INCLUDE_DIR NAMES uhd.h
+        PATHS
+            "${CMAKE_SOURCE_DIR}/deps/include"
+            "${UHD_LIBRARY_DIR}/../include"
+    )
+    if(UHD_INCLUDE_DIR)
+        target_include_directories(usrp_sdr_support PRIVATE "${UHD_INCLUDE_DIR}")
+    else()
+        message(FATAL_ERROR "UHD library was found at ${UHD_LIBRARY}, but uhd.h was not found")
     endif()
 
     if(MSVC)
