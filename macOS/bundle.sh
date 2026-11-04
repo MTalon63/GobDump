@@ -106,6 +106,27 @@ dylibbundler $SIGN_FLAG \
 # SDRPlay is custom, not staticaly linked; we can copy it manually
 #cp $GITHUB_WORKSPACE/deps/lib/libsdrplay*.dylib MacApp/GobDump.app/Contents/libs
 
+# dylibbundler copies libad9361, but older libad9361 builds can still carry
+# the framework install name even when the plugin itself links to libiio.  Do
+# this defensively at bundle time as well, so an old deps/ tree cannot recreate
+# the broken framework reference in the app.
+iio_runtime=$(find MacApp/GobDump.app/Contents/libs -maxdepth 1 -type f -name 'libiio*.dylib' -print -quit)
+if [[ -z "$iio_runtime" ]]; then
+    echo "Could not find the bundled libiio runtime" >&2
+    exit 1
+fi
+iio_runtime_name=$(basename "$iio_runtime")
+for ad9361_lib in MacApp/GobDump.app/Contents/libs/libad9361*.dylib; do
+    if [[ -f "$ad9361_lib" ]]; then
+        while IFS= read -r iio_dependency; do
+            install_name_tool -change "$iio_dependency" \
+                "@executable_path/../libs/$iio_runtime_name" \
+                "$ad9361_lib"
+        done < <(otool -L "$ad9361_lib" | awk '/iio\.framework\/Versions\/.*\/iio$/{print $1}')
+        codesign -v --force --timestamp --sign - "$ad9361_lib"
+    fi
+done
+
 
 # Some libraries are processed more than once, dylibbundler is silly and doesn't check whether
 # it injects multiple LC_RPATH entries. MacOS is pissy about it and refuses to work with more than one,

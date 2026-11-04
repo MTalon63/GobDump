@@ -155,6 +155,27 @@ mkdir build && cd build
 cmake $build_args -DOSX_PACKAGE=OFF -DWITH_DOC=OFF -DENABLE_PACKAGING=OFF ..
 make -j$(sysctl -n hw.logicalcpu)
 make install
+
+# Some libad9361-iio releases still resolve libiio as the macOS framework,
+# even with OSX_PACKAGE disabled.  That leaves a framework reference embedded
+# in the installed dylib, which cannot be shipped by the app bundler.  The
+# project uses the ordinary libiio dylib, so normalize that dependency here.
+iio_runtime=$(find "$standard_lib" -maxdepth 1 -type f -name 'libiio*.dylib' -print -quit)
+if [[ -z "$iio_runtime" ]]; then
+    echo "Could not find the installed libiio runtime" >&2
+    exit 1
+fi
+iio_runtime_name=$(basename "$iio_runtime")
+for ad9361_lib in "$standard_lib"/libad9361*.dylib; do
+    if [[ -f "$ad9361_lib" ]]; then
+        while IFS= read -r iio_dependency; do
+            install_name_tool -change "$iio_dependency" \
+                "@rpath/$iio_runtime_name" \
+                "$ad9361_lib"
+        done < <(otool -L "$ad9361_lib" | awk '/iio\.framework\/Versions\/.*\/iio$/{print $1}')
+    fi
+done
+
 cd ../..
 rm -rf libad9361-iio
 
