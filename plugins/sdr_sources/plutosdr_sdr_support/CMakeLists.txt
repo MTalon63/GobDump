@@ -2,8 +2,28 @@ cmake_minimum_required(VERSION 3.12)
 project(plutosdr_sdr_support)
 
 
-find_library(IIO_LIBRARY iio)
-find_library(AD9361_LIBRARY ad9361)
+# On macOS, do not accidentally pick up stale framework installs from
+# /Library/Frameworks.  The project build produces the dylibs in deps/lib,
+# and those are the libraries the bundle can actually ship.
+if(APPLE)
+    # find_library() otherwise reuses old cache entries even after its search
+    # paths change, so clear the two dependency results before resolving them.
+    unset(IIO_LIBRARY CACHE)
+    unset(AD9361_LIBRARY CACHE)
+    find_library(IIO_LIBRARY
+        NAMES iio
+        PATHS "${CMAKE_SOURCE_DIR}/deps/lib"
+        NO_DEFAULT_PATH
+    )
+    find_library(AD9361_LIBRARY
+        NAMES ad9361
+        PATHS "${CMAKE_SOURCE_DIR}/deps/lib"
+        NO_DEFAULT_PATH
+    )
+else()
+    find_library(IIO_LIBRARY iio)
+    find_library(AD9361_LIBRARY ad9361)
+endif()
 
 if((IIO_LIBRARY AND AD9361_LIBRARY) OR ANDROID)
     message("Building with PlutoSDR support")
