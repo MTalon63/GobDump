@@ -303,6 +303,7 @@ jobs:
                 distribution: "temurin"
 
             - name: Validate Android signing configuration
+              if: ${{ github.event_name != 'pull_request' }}
               shell: bash
               env:
                   ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
