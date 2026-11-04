@@ -34,6 +34,8 @@ namespace satdump
                 std::string module;
                 nlohmann::json parameters;
                 std::string input_override;
+                float live_ui_weight = 1.0f;
+                bool live_ui_visible = true;
             };
 
         public:

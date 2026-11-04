@@ -28,6 +28,8 @@ namespace satdump
                     logger->debug("   - " + param.key() + " : " + param.value().dump());
 
                 modules.push_back(getModuleInstance(d_pipeline.steps[currentModule].module, "", d_output_dir + "/" + d_pipeline.id, final_parameters));
+                live_ui_weights.push_back(d_pipeline.steps[currentModule].live_ui_weight);
+                live_ui_visible.push_back(d_pipeline.steps[currentModule].live_ui_visible);
             }
         }
 
@@ -40,6 +42,8 @@ namespace satdump
                 logger->debug("   - " + param.key() + " : " + param.value().dump());
 
             modules.push_back(getModuleInstance(id, "", d_output_dir + "/" + d_pipeline.id, d_parameters));
+            live_ui_weights.push_back(1.0f);
+            live_ui_visible.push_back(true);
         }
 
         void LivePipeline::start(std::shared_ptr<dsp::stream<complex_t>> stream, ctpl::thread_pool &tp, bool server)

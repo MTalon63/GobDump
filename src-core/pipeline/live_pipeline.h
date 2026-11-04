@@ -25,6 +25,8 @@ namespace satdump
             ~LivePipeline();
 
             std::vector<std::shared_ptr<ProcessingModule>> modules;
+            std::vector<float> live_ui_weights;
+            std::vector<bool> live_ui_visible;
 
             void start(std::shared_ptr<dsp::stream<complex_t>> stream, ctpl::thread_pool &tp, bool server = false); // Start everything locally, "as usual", or in "server" mode
             void start_client(ctpl::thread_pool &tp);                                                               // Start a "client" setup, with no local input stream

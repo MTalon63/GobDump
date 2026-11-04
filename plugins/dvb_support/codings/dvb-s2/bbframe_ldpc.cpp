@@ -21,10 +21,12 @@
 #include "bbframe_ldpc.h"
 #include "codings/dvb-s2/ldpc/dvb_s2_tables.hh"
 #include <cstring>
+#include <stdexcept>
 
 namespace dvbs2
 {
     BBFrameLDPC::BBFrameLDPC(dvbs2_framesize_t framesize, dvbs2_code_rate_t rate)
+        : aligned_buffer(nullptr), ldpc(nullptr)
     {
         if (framesize == FECFRAME_NORMAL)
         {
@@ -105,6 +107,9 @@ namespace dvbs2
                 break;
             }
         }
+
+        if (ldpc == nullptr)
+            throw std::invalid_argument("Unsupported DVB-S2 frame size/code rate combination");
 
         decoder.init(ldpc);
         encoder.init(ldpc);

@@ -225,6 +225,9 @@
             "baseband": {},
             "bbframe": {
                 "module": "dvbs2_demod",
+                "live_ui": {
+                    "weight": 8
+                },
                 "parameters": {
                     //"agc_rate": 1e-5,
                     //"symbolrate": 1e6,
@@ -238,12 +241,18 @@
             },
             "ts": {
                 "module": "dvbs2_ts_extractor",
+                "live_ui": {
+                    "weight": 1
+                },
                 "parameters": {
                     //"bb_size": 58192
                 }
             },
             "net": {
                 "module": "network_server",
+                "live_ui": {
+                    "weight": 1
+                },
                 "parameters": {
                     "server_mode": "udp_send",
                     "server_address": "127.0.0.1",
