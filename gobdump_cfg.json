@@ -49,6 +49,12 @@
 			"name": "UI Scaling",
 			"description": "Defines the overall UI scale. This can be used to make UI elements bigger or smaller\n\n1.0 = normal\n0.5 = half size\n2.0 = double size"
 		},
+		"slider_width_scaling": {
+			"type": "float",
+			"value": 1.0,
+			"name": "Slider Touch Size",
+			"description": "Controls the minimum slider thumb size and touch target padding.\n\n1.0 = normal\n2.0 = larger touch targets"
+		},
 		"play_audio": {
 			"type": "bool",
 			"value": false,
