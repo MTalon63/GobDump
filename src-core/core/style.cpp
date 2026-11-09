@@ -142,6 +142,11 @@ namespace style
         }
         style.ScaleAllSizes(ui_scale);
 
+        const float slider_touch_scale = ImClamp(getValueOrDefault(
+            satdump::satdump_cfg.main_cfg["user_interface"]["slider_width_scaling"]["value"], 1.0f), 1.0f, 4.0f);
+        style.GrabMinSize *= slider_touch_scale;
+        style.TouchExtraPadding += ImVec2(4.0f, 4.0f) * (slider_touch_scale - 1.0f) * ui_scale;
+
         // Built-in ImGui colors
         if (data.contains("ImGuiColors") && data["ImGuiColors"].is_object())
         {
