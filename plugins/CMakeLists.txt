@@ -346,6 +346,12 @@ if(PLUGIN_HACKRF_SDR_SUPPORT)
   add_subdirectory(sdr_sources/hackrf_sdr_support)
 endif()
 
+option(PLUGIN_BIRRIASDR_SDR_SUPPORT "Enable BirriaSDR (MT7921AU) SDR Support plugin" ON)
+
+if(PLUGIN_BIRRIASDR_SDR_SUPPORT)
+  add_subdirectory(sdr_sources/birriasdr_sdr_support)
+endif()
+
 option(PLUGIN_LIMESDR_SDR_SUPPORT "Enable LimeSDR SDR Support plugin" OFF)
 
 if(PLUGIN_LIMESDR_SDR_SUPPORT)

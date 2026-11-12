@@ -31,8 +31,9 @@ int main(int argc, char *argv[])
         satdump::exitSatDump(); // --help/parse errors returned here without stopping the scheduler thread
         return v;
     }
-    h.run();
+    // run() returns true when a command failed, so errors are visible to scripts.
+    int ret = h.run() ? 1 : 0;
 
     satdump::exitSatDump();
-    return 0;
+    return ret;
 }
