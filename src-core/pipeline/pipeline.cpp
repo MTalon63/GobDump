@@ -135,6 +135,14 @@ namespace satdump
                     {
                         Pipeline::PipelineStep newStep;
                         newStep.level = pipelineStep.key();
+                        if (pipelineStep.value().contains("live_ui"))
+                        {
+                            const auto &live_ui = pipelineStep.value()["live_ui"];
+                            if (live_ui.contains("weight") && live_ui["weight"].is_number())
+                                newStep.live_ui_weight = std::max(0.0f, live_ui["weight"].get<float>());
+                            if (live_ui.contains("visible") && live_ui["visible"].is_boolean())
+                                newStep.live_ui_visible = live_ui["visible"].get<bool>();
+                        }
                         // logger->warn(newStep.level_name);
 
                         if (pipelineStep.value().contains("module"))

@@ -814,17 +814,25 @@ namespace satdump
                             if (live_pipeline)
                                 live_modules = live_pipeline->modules;
                         }
-                        float winwidth = live_modules.size() > 0 ? live_width / live_modules.size() : live_width;
+                        float totalWeight = 0.0f;
+                        for (size_t i = 0; i < live_modules.size(); ++i)
+                            if (i < live_pipeline->live_ui_visible.size() && live_pipeline->live_ui_visible[i])
+                                totalWeight += i < live_pipeline->live_ui_weights.size() ? live_pipeline->live_ui_weights[i] : 1.0f;
                         float currentPos = ImGui::GetCursorPosX();
                         ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImGui::GetStyleColorVec4(ImGuiCol_TitleBg));
-                        for (std::shared_ptr<pipeline::ProcessingModule> &module : live_modules)
+                        for (size_t i = 0; i < live_modules.size(); ++i)
                         {
+                            if (i >= live_pipeline->live_ui_visible.size() || !live_pipeline->live_ui_visible[i])
+                                continue;
+                            float winwidth = totalWeight > 0.0f ? live_width * (i < live_pipeline->live_ui_weights.size() ? live_pipeline->live_ui_weights[i] : 1.0f) / totalWeight : 0.0f;
+                            if (winwidth <= 0.0f)
+                                continue;
                             ImGui::SetNextWindowPos({currentPos, y_pos});
                             ImGui::SetNextWindowSize({(float)winwidth, (float)live_height});
-                            module->drawUI(false);
+                            live_modules[i]->drawUI(false);
                             currentPos += winwidth;
 
-                            // if (ImGui::GetCurrentContext()->last_window != NULL)
+                            // if (ImGui::GetCurrentContext()->last_window != NULL);
                             //     currentPos += ImGui::GetCurrentContext()->last_window->Size.x;
                             //  logger->info(ImGui::GetCurrentContext()->last_window->Name);
                         }
@@ -843,15 +851,22 @@ namespace satdump
                             float y_pos = ImGui::GetCursorPosY(); //+ 35 * ui_scale;
                             float live_width = recorder_size_x + 16 * ui_scale;
                             float live_height = _live_height * ui_scale;
-                            float winwidth = vfo.live_pipeline->modules.size() > 0 ? live_width / vfo.live_pipeline->modules.size() : live_width;
+                            float totalWeight = 0.0f;
+                            for (size_t i = 0; i < vfo.live_pipeline->modules.size(); ++i)
+                                if (i < vfo.live_pipeline->live_ui_visible.size() && vfo.live_pipeline->live_ui_visible[i])
+                                    totalWeight += i < vfo.live_pipeline->live_ui_weights.size() ? vfo.live_pipeline->live_ui_weights[i] : 1.0f;
                             float currentPos = ImGui::GetCursorPosX();
-                            ;
                             ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImGui::GetStyleColorVec4(ImGuiCol_TitleBg));
-                            for (std::shared_ptr<pipeline::ProcessingModule> &module : vfo.live_pipeline->modules)
+                            for (size_t i = 0; i < vfo.live_pipeline->modules.size(); ++i)
                             {
+                                if (i >= vfo.live_pipeline->live_ui_visible.size() || !vfo.live_pipeline->live_ui_visible[i])
+                                    continue;
+                                float winwidth = totalWeight > 0.0f ? live_width * (i < vfo.live_pipeline->live_ui_weights.size() ? vfo.live_pipeline->live_ui_weights[i] : 1.0f) / totalWeight : 0.0f;
+                                if (winwidth <= 0.0f)
+                                    continue;
                                 ImGui::SetNextWindowPos({currentPos, y_pos});
                                 ImGui::SetNextWindowSize({(float)winwidth, (float)live_height});
-                                module->drawUI(false);
+                                vfo.live_pipeline->modules[i]->drawUI(false);
                                 currentPos += winwidth;
 
                                 // if (ImGui::GetCurrentContext()->last_window != NULL)
@@ -871,10 +886,16 @@ namespace satdump
         else if (is_processing)
         {
             std::vector<std::shared_ptr<pipeline::ProcessingModule>> live_modules;
+            std::vector<float> live_ui_weights;
+            std::vector<bool> live_ui_visible;
             {
                 std::lock_guard<std::mutex> lck(live_pipeline_mtx);
                 if (live_pipeline)
+                {
                     live_modules = live_pipeline->modules;
+                    live_ui_weights = live_pipeline->live_ui_weights;
+                    live_ui_visible = live_pipeline->live_ui_visible;
+                }
             }
 
             if (processing_modules_floating_windows)
@@ -887,14 +908,22 @@ namespace satdump
                 float y_pos = ImGui::GetCursorPosY(); //+ 35 * ui_scale;
                 float live_width = recorder_size_x + 16 * ui_scale;
                 float live_height = _live_height * ui_scale;
-                float winwidth = live_modules.size() > 0 ? live_width / live_modules.size() : live_width;
+                float totalWeight = 0.0f;
+                for (size_t i = 0; i < live_modules.size(); ++i)
+                    if (i >= live_ui_visible.size() || live_ui_visible[i])
+                        totalWeight += i < live_ui_weights.size() ? live_ui_weights[i] : 1.0f;
                 float currentPos = ImGui::GetCursorPosX();
                 ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImGui::GetStyleColorVec4(ImGuiCol_TitleBg));
-                for (std::shared_ptr<pipeline::ProcessingModule> &module : live_modules)
+                for (size_t i = 0; i < live_modules.size(); ++i)
                 {
+                    if (i < live_ui_visible.size() && !live_ui_visible[i])
+                        continue;
+                    float winwidth = totalWeight > 0.0f ? live_width * (i < live_ui_weights.size() ? live_ui_weights[i] : 1.0f) / totalWeight : 0.0f;
+                    if (winwidth <= 0.0f)
+                        continue;
                     ImGui::SetNextWindowPos({currentPos, y_pos});
                     ImGui::SetNextWindowSize({(float)winwidth, (float)live_height});
-                    module->drawUI(false);
+                    live_modules[i]->drawUI(false);
                     currentPos += winwidth;
 
                     // if (ImGui::GetCurrentContext()->last_window != NULL)

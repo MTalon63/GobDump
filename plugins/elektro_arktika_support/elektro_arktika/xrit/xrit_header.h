@@ -7,7 +7,7 @@
 
 namespace elektro
 {
-    namespace lrit
+    namespace xrit
     {
         struct SegmentIdentificationHeader
         {

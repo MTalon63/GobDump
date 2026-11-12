@@ -4,8 +4,8 @@
 #include "image/jpeg_utils.h"
 #include "imgui/imgui_image.h"
 #include "logger.h"
-#include "lrit_header.h"
-#include "module_elektro_lrit_data_decoder.h"
+#include "xrit_header.h"
+#include "module_elektro_xrit_data_decoder.h"
 #include "utils/string.h"
 #include "xrit/identify.h"
 #include "xrit/msg/decomp.h"
@@ -13,9 +13,9 @@
 
 namespace elektro
 {
-    namespace lrit
+    namespace xrit
     {
-        void ELEKTROLRITDataDecoderModule::processLRITFile(satdump::xrit::XRITFile &file)
+        void ELEKTROXRITDataDecoderModule::processXRITFile(satdump::xrit::XRITFile &file)
         {
             std::string current_filename = file.filename;
 
@@ -45,5 +45,5 @@ namespace elektro
                 fileo.close();
             }
         }
-    } // namespace lrit
+    } // namespace xrit
 } // namespace elektro

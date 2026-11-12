@@ -1,4 +1,4 @@
-#include "module_elektro_lrit_data_decoder.h"
+#include "module_elektro_xrit_data_decoder.h"
 #include "common/utils.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_image.h"
@@ -11,18 +11,18 @@
 
 namespace elektro
 {
-    namespace lrit
+    namespace xrit
     {
-        ELEKTROLRITDataDecoderModule::ELEKTROLRITDataDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
+        ELEKTROXRITDataDecoderModule::ELEKTROXRITDataDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
             : satdump::pipeline::base::FileStreamToFileStreamModule(input_file, output_file_hint, parameters)
         {
             fsfsm_enable_output = false;
             processor.directory = d_output_file_hint.substr(0, d_output_file_hint.rfind('/')) + "/IMAGES";
         }
 
-        ELEKTROLRITDataDecoderModule::~ELEKTROLRITDataDecoderModule() {}
+        ELEKTROXRITDataDecoderModule::~ELEKTROXRITDataDecoderModule() {}
 
-        void ELEKTROLRITDataDecoderModule::process()
+        void ELEKTROXRITDataDecoderModule::process()
         {
             std::string directory = d_output_file_hint.substr(0, d_output_file_hint.rfind('/'));
 
@@ -45,7 +45,7 @@ namespace elektro
                 std::vector<satdump::xrit::XRITFile> files = lrit_demux.work(cadu);
 
                 for (auto &file : files)
-                    processLRITFile(file);
+                    processXRITFile(file);
             }
 
             cleanup();
@@ -53,9 +53,9 @@ namespace elektro
             processor.flush();
         }
 
-        void ELEKTROLRITDataDecoderModule::drawUI(bool window)
+        void ELEKTROXRITDataDecoderModule::drawUI(bool window)
         {
-            ImGui::Begin("ELEKTRO-L LRIT Data Decoder", NULL, window ? 0 : NOWINDOW_FLAGS);
+            ImGui::Begin("ELEKTRO-L xRIT Data Decoder", NULL, window ? 0 : NOWINDOW_FLAGS);
 
             satdump::xrit::renderAllTabsFromProcessors({&processor});
 
@@ -64,11 +64,11 @@ namespace elektro
             ImGui::End();
         }
 
-        std::string ELEKTROLRITDataDecoderModule::getID() { return "elektro_lrit_data_decoder"; }
+        std::string ELEKTROXRITDataDecoderModule::getID() { return "elektro_xrit_data_decoder"; }
 
-        std::shared_ptr<satdump::pipeline::ProcessingModule> ELEKTROLRITDataDecoderModule::getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
+        std::shared_ptr<satdump::pipeline::ProcessingModule> ELEKTROXRITDataDecoderModule::getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters)
         {
-            return std::make_shared<ELEKTROLRITDataDecoderModule>(input_file, output_file_hint, parameters);
+            return std::make_shared<ELEKTROXRITDataDecoderModule>(input_file, output_file_hint, parameters);
         }
-    } // namespace lrit
+    } // namespace xrit
 } // namespace elektro

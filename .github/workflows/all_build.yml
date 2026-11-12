@@ -302,22 +302,55 @@ jobs:
                 java-version: "17"
                 distribution: "temurin"
 
+            - name: Validate Android signing configuration
+              if: ${{ github.event_name != 'pull_request' }}
+              shell: bash
+              env:
+                  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+                  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+                  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+                  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+              run: |
+                  set -euo pipefail
+                  : "${ANDROID_KEYSTORE_BASE64:?ANDROID_KEYSTORE_BASE64 is not set}"
+                  : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS is not set}"
+                  : "${ANDROID_KEYSTORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD is not set}"
+                  : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD is not set}"
+
+                  keystore="$RUNNER_TEMP/release.keystore"
+                  trap 'rm -f "$keystore"' EXIT
+                  if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"; then
+                      echo "ANDROID_KEYSTORE_BASE64 is not valid base64" >&2
+                      exit 1
+                  fi
+                  keytool -list -keystore "$keystore" \
+                      -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+                      -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
             - name: Set up Android SDK
               uses: android-actions/setup-android@v3
               with:
-                  packages: platforms;android-34 build-tools;30.0.3 ndk;25.2.9519653 cmake;3.22.1
+                  packages: platforms;android-34 build-tools;30.0.3 ndk;25.2.9519653 cmake;3.31.6
 
             - name: Install NDK, platform, and CMake
               shell: bash
               run: |
-                  sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.22.1"
+                  sdkmanager --install "ndk;25.2.9519653" "platforms;android-34" "cmake;3.31.6"
+
+            - name: Select Android CMake
+              shell: bash
+              run: |
+                  export PATH="$ANDROID_HOME/cmake/3.31.6/bin:$PATH"
+                  echo "$ANDROID_HOME/cmake/3.31.6/bin" >> "$GITHUB_PATH"
+                  command -v cmake
+                  cmake --version
 
             - name: Cache dependencies
               uses: actions/cache@v4
               id: android-deps
               with:
                   path: android/deps/output
-                  key: android-deps-v3-${{ hashFiles('android/deps/build.sh') }}
+                  key: android-deps-v4-${{ hashFiles('android/deps/build.sh') }}
 
             - name: Install dependency build tools
               if: steps.android-deps.outputs.cache-hit != 'true'
@@ -327,6 +360,16 @@ jobs:
               if: steps.android-deps.outputs.cache-hit != 'true'
               shell: bash
               run: cd $GITHUB_WORKSPACE/android/deps && sh build.sh
+
+            # actions/cache normally saves only after the whole job succeeds. Save the
+            # expensive native dependency build now so a later Gradle or signing failure
+            # does not discard it.
+            - name: Save dependency cache
+              if: steps.android-deps.outputs.cache-hit != 'true'
+              uses: actions/cache/save@v4
+              with:
+                  path: android/deps/output
+                  key: android-deps-v4-${{ hashFiles('android/deps/build.sh') }}
 
             - name: Generate Gradle wrapper
               uses: gradle/actions/setup-gradle@v4
@@ -348,17 +391,32 @@ jobs:
             - name: Sign APK
               if: ${{ github.event_name != 'pull_request' }}
               shell: bash
+              env:
+                  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+                  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+                  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+                  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
               run: |
-                  APK=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-unsigned.apk
-                  SIGNED=$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-signed.apk
-                  echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.keystore
-                  $ANDROID_HOME/build-tools/30.0.3/apksigner sign \
+                  set -euo pipefail
+                  APK="$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+                  SIGNED="$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release-signed.apk"
+
+                  # Keep secret values out of the shell command line. In particular, an
+                  # unquoted/empty alias shifts the following apksigner arguments and
+                  # results in: "Unexpected parameter(s) after input APK (--key-pass)".
+                  : "${ANDROID_KEYSTORE_BASE64:?ANDROID_KEYSTORE_BASE64 is not set}"
+                  : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS is not set}"
+                  : "${ANDROID_KEYSTORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD is not set}"
+                  : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD is not set}"
+                  printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release.keystore
+
+                  "$ANDROID_HOME/build-tools/30.0.3/apksigner" sign \
                       --ks /tmp/release.keystore \
-                      --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
-                      --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-                      --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
-                      --out $SIGNED \
-                      $APK
+                      --ks-key-alias "$ANDROID_KEY_ALIAS" \
+                      --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+                      --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+                      --out "$SIGNED" \
+                      "$APK"
 
             - name: Upload APK
               uses: actions/upload-artifact@v4

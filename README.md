@@ -240,8 +240,17 @@ make build        # or: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release 
 make run          # CLI;  make ui  for the GUI
 ```
 
-To produce a bundle (`.app` / `.dmg`), configure with `-DBUNDLING_MODE=ON` and run
-`macOS/bundle.sh`; the result lands in `MacApp/`.
+To produce a bundle (`.app` / `.dmg`), configure with `BUNDLING_MODE` enabled before
+building, then run the bundling script from the repository root:
+
+```bash
+make reconfigure CMAKE_ARGS='-DBUNDLING_MODE=ON'
+make build
+./macOS/bundle.sh
+```
+
+The resulting `.app` and `.dmg` are written to `MacApp/` and the repository root,
+respectively.
 
 ### Linux
 

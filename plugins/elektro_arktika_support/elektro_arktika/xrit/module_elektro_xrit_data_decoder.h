@@ -6,20 +6,20 @@
 
 namespace elektro
 {
-    namespace lrit
+    namespace xrit
     {
-        class ELEKTROLRITDataDecoderModule : public satdump::pipeline::base::FileStreamToFileStreamModule
+        class ELEKTROXRITDataDecoderModule : public satdump::pipeline::base::FileStreamToFileStreamModule
         {
         protected:
             satdump::xrit::XRITChannelProcessor processor;
 
             std::string directory;
 
-            void processLRITFile(satdump::xrit::XRITFile &file);
+            void processXRITFile(satdump::xrit::XRITFile &file);
 
         public:
-            ELEKTROLRITDataDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
-            ~ELEKTROLRITDataDecoderModule();
+            ELEKTROXRITDataDecoderModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
+            ~ELEKTROXRITDataDecoderModule();
             void process();
             void drawUI(bool window);
 
@@ -29,5 +29,5 @@ namespace elektro
             static nlohmann::json getParams() { return {}; } // TODOREWORK
             static std::shared_ptr<ProcessingModule> getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
         };
-    } // namespace lrit
+    } // namespace xrit
 } // namespace elektro
