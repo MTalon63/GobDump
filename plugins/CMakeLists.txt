@@ -346,12 +346,6 @@ if(PLUGIN_HACKRF_SDR_SUPPORT)
   add_subdirectory(sdr_sources/hackrf_sdr_support)
 endif()
 
-option(PLUGIN_BIRRIASDR_SDR_SUPPORT "Enable BirriaSDR (MT7921AU) SDR Support plugin" ON)
-
-if(PLUGIN_BIRRIASDR_SDR_SUPPORT)
-  add_subdirectory(sdr_sources/birriasdr_sdr_support)
-endif()
-
 option(PLUGIN_LIMESDR_SDR_SUPPORT "Enable LimeSDR SDR Support plugin" OFF)
 
 if(PLUGIN_LIMESDR_SDR_SUPPORT)
@@ -391,25 +385,32 @@ else()
   option(PLUGIN_USRP_SDR_SUPPORT "Enable USRP SDR Support plugin" ON)
 endif()
 
-option(GOBDUMP_AUTO_BUILD_DEPS "Build bundled dependencies (patched UHD) automatically" ON)
-if(PLUGIN_USRP_SDR_SUPPORT AND UNIX AND NOT APPLE AND NOT ANDROID AND GOBDUMP_AUTO_BUILD_DEPS)
-  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/deps/.uhd-built")
-    message(STATUS "Building bundled UHD (patched). First build only, this takes a few minutes...")
+# Runs linux/build_deps.sh once for the bundled patched UHD and BirriaSDR.
+option(GOBDUMP_AUTO_BUILD_DEPS "Build bundled dependencies (patched UHD, BirriaSDR) automatically" ON)
+if(UNIX AND NOT APPLE AND NOT ANDROID AND GOBDUMP_AUTO_BUILD_DEPS)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/deps/.uhd-built" OR NOT EXISTS "${CMAKE_SOURCE_DIR}/deps/include/birriasdr.h")
+    message(STATUS "Building bundled dependencies (patched UHD, BirriaSDR). First build only, this takes a few minutes...")
     execute_process(
       COMMAND bash "${CMAKE_SOURCE_DIR}/linux/build_deps.sh"
       WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
       RESULT_VARIABLE _gobdump_uhd_result)
     if(NOT _gobdump_uhd_result EQUAL 0)
-      message(WARNING "Bundled UHD build failed, USRP support will be skipped. "
+      message(WARNING "Bundled dependency build failed, USRP and BirriaSDR support will be skipped. "
                       "Run linux/build_deps.sh manually for details.")
     endif()
   endif()
-elseif(PLUGIN_USRP_SDR_SUPPORT AND APPLE AND NOT EXISTS "${CMAKE_SOURCE_DIR}/deps")
-  message(STATUS "USRP support needs the bundled UHD: run macOS/build_deps.sh once before building.")
+elseif(APPLE AND NOT EXISTS "${CMAKE_SOURCE_DIR}/deps")
+  message(STATUS "USRP and BirriaSDR support need the bundled deps: run macOS/build_deps.sh once before building.")
 endif()
 
 if(PLUGIN_USRP_SDR_SUPPORT)
   add_subdirectory(sdr_sources/usrp_sdr_support)
+endif()
+
+option(PLUGIN_BIRRIASDR_SDR_SUPPORT "Enable BirriaSDR (MT7921AU) SDR Support plugin" ON)
+
+if(PLUGIN_BIRRIASDR_SDR_SUPPORT)
+  add_subdirectory(sdr_sources/birriasdr_sdr_support)
 endif()
 
 option(PLUGIN_RTLSDR_SDR_SUPPORT "Enable RTL-SDR SDR Support plugin" ON)

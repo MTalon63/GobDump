@@ -9,6 +9,22 @@ PATCH_FILE="$REPO_DIR/patches/uhd-4.10-b200-hotplug.patch"
 working_dir="$REPO_DIR/deps-temp"
 output_dir="$REPO_DIR/deps"
 
+# BirriaSDR is not packaged; built from MTalon63's fork, same pin as windows/Setup-MSYS2.sh.
+if [ ! -f "$output_dir/.birria-built" ]; then
+    echo "Building BirriaSDR..."
+    mkdir -p "$working_dir" "$output_dir"
+    rm -rf "$working_dir/birriasdr"
+    git clone --depth 1 -b gobdump-dep https://github.com/MTalon63/BirriaSDR.git "$working_dir/birriasdr"
+    cmake -S "$working_dir/birriasdr" -B "$working_dir/birriasdr/build" -G Ninja         -DCMAKE_BUILD_TYPE=Release         -DCMAKE_INSTALL_PREFIX="$output_dir"         -DBUILD_TESTING=OFF         -DBIRRIASDR_SOAPY=OFF
+    cmake --build "$working_dir/birriasdr/build" --parallel "$(nproc)"
+    cmake --install "$working_dir/birriasdr/build"
+    rm -rf "$working_dir/birriasdr"
+    touch "$output_dir/.birria-built"
+    echo "BirriaSDR installed to $output_dir"
+else
+    echo "BirriaSDR already built at $output_dir, skipping."
+fi
+
 if [ -f "$output_dir/.uhd-built" ]; then
     echo "Patched UHD already built at $output_dir, skipping."
     exit 0
