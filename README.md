@@ -165,7 +165,7 @@ wants the plugins.
 | `BUILD_TOOLS` | `OFF` | Extra tools programs |
 | `BUILD_DOCS` | `OFF` | Doxygen docs |
 | `ENABLE_I18N` | `ON` | Translations |
-| `GOBDUMP_AUTO_BUILD_DEPS` | `ON` | Linux: build the bundled patched UHD on first configure |
+| `GOBDUMP_AUTO_BUILD_DEPS` | `ON` | Linux: build the bundled deps (patched UHD, BirriaSDR) on first configure |
 
 #### Profiling the DSP kernels
 
@@ -275,7 +275,7 @@ sudo apt install libomp-dev                                       # Shouldn't be
 sudo apt install intel-opencl-icd                                 # Enables OpenCL for Intel Integrated Graphics
 sudo apt install mesa-opencl-icd                                  # For AMD Radeon cards *BEFORE series 5000*; newer cards need the official AMD drivers
 sudo apt install libarmadillo-dev
-sudo apt install libboost-all-dev libusb-1.0-0-dev python3-mako   # Only for USRP hardware (used by linux/build_deps.sh)
+sudo apt install libboost-all-dev libusb-1.0-0-dev python3-mako   # For USRP and BirriaSDR (used by linux/build_deps.sh)
 
 # One-liner to install all dependencies:
 sudo apt install git build-essential cmake ninja-build pkgconf libfftw3-dev libpng-dev \
@@ -447,6 +447,22 @@ Firmware/FPGA images are not part of libuhd on any platform. Install the
 `uhd-host` package (Linux) or run `uhd_images_downloader` once, and UHD finds
 them in `/usr/share/uhd/images`; alternatively point the "UHD Images Path"
 setting in the SDR configuration at the directory that contains them.
+
+#### BirriaSDR / MT7921AU hardware (Windows, Linux, macOS)
+
+BirriaSDR (MediaTek MT7921AU / MT7925 WiFi 6E dongles) is not packaged anywhere
+either, so the dependency scripts build
+[MTalon63's fork](https://github.com/MTalon63/BirriaSDR) at its `gobdump-dep`
+branch into the same `deps/` prefix the patched UHD uses:
+`windows/Setup-MSYS2.sh`, `linux/build_deps.sh` and `macOS/build_deps.sh` all do
+it, and on Linux the first CMake configure runs that script for you.
+
+The plugin (`PLUGIN_BIRRIASDR_SDR_SUPPORT`, on by default) only needs the library
+to be findable: when it is missing, configure prints
+`BirriaSDR Library could not be found! Not building.` and the rest of GobDump
+builds normally. MSVC builds (Windows x64/ARM64) cannot build it at all - the
+driver is POSIX C, so those jobs ship without this SDR source. Delete `deps/` to
+pick up a newer `gobdump-dep`.
 
 ### Raspberry Pi
 

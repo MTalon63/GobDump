@@ -186,6 +186,16 @@ cd ../../..
 rm -rf uhd
 
 
+echo "Building BirriaSDR..."
+git clone https://github.com/MTalon63/BirriaSDR.git --depth 1 -b gobdump-dep
+cd BirriaSDR
+mkdir build && cd build
+cmake $build_args -DBUILD_TESTING=OFF -DBIRRIASDR_SOAPY=OFF -DLIBUSB_INCLUDE_DIR=$libusb_include -DLIBUSB_LIBRARY=$libusb_lib ..
+make -j$(sysctl -n hw.logicalcpu)
+make install
+cd ../..
+rm -rf BirriaSDR
+
 # Broken after satdump page update xd
 # echo "Adding SDRPlay Library..."
 # curl -LJ --output sdrplay-macos.zip https://www.satdump.org/sdrplay-macos.zip
