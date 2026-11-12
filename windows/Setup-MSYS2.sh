@@ -134,6 +134,11 @@ build_cmake_dep bladeRF https://github.com/Nuand/bladeRF 2024.05 host \
     -DLIBUSB_LIBRARY_PATH_SUFFIX=bin \
     -DTREAT_WARNINGS_AS_ERRORS=OFF -DTEST_LIBBLADERF=OFF -DENABLE_backend_usb=ON
 
+# BirriaSDR is not packaged
+build_cmake_dep birriasdr https://github.com/MTalon63/BirriaSDR.git gobdump-dep . \
+    include/birriasdr.h \
+    -DBUILD_TESTING=OFF -DBIRRIASDR_SOAPY=OFF
+
 rmdir "$SRC_DIR" 2>/dev/null || true
 
 echo

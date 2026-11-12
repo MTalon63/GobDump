@@ -51,7 +51,7 @@ jobs:
               id: msys2-deps
               with:
                   path: msys2-deps
-                  key: msys2-deps-ucrt64-${{ hashFiles('windows/Setup-MSYS2.sh') }}
+                  key: msys2-deps-ucrt64-v2-${{ hashFiles('windows/Setup-MSYS2.sh') }}
 
             - name: Install dependencies
               run: ./windows/Setup-MSYS2.sh
