@@ -20,6 +20,24 @@ namespace satdump
             FolderFileIteratorItem(std::string path, std::string name) : FilesIteratorItem(name), path(path) {}
             ~FolderFileIteratorItem() {}
 
+            std::vector<uint8_t> getPayloadPrefix(size_t max_size)
+            {
+                std::vector<uint8_t> v;
+                std::ifstream input_file(path, std::ios::binary);
+                if (!input_file)
+                    return v;
+                input_file.seekg(0, std::ios::end);
+                size_t fsize = (size_t)input_file.tellg();
+                if (fsize > max_size)
+                    fsize = max_size;
+                v.resize(fsize);
+                input_file.seekg(0, std::ios::beg);
+                if (fsize)
+                    input_file.read((char *)&v[0], fsize);
+                input_file.close();
+                return v;
+            }
+
             std::vector<uint8_t> getPayload()
             {
                 std::vector<uint8_t> v;
