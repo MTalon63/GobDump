@@ -147,6 +147,7 @@ make test                                     # build, then run ctest
 make install                                  # install to CMAKE_INSTALL_PREFIX
 make reconfigure                              # re-run CMake after changing options
 make clean / make distclean                   # clean outputs / wipe the build dir
+make deps                                     # dependencies (Setup-MSYS2.sh, build_deps.sh per platform)
 ```
 
 The CMake commands below remain the canonical way to build; the `Makefile` only
@@ -454,15 +455,15 @@ BirriaSDR (MediaTek MT7921AU / MT7925 WiFi 6E dongles) is not packaged anywhere
 either, so the dependency scripts build
 [MTalon63's fork](https://github.com/MTalon63/BirriaSDR) at its `gobdump-dep`
 branch into the same `deps/` prefix the patched UHD uses:
-`windows/Setup-MSYS2.sh`, `linux/build_deps.sh` and `macOS/build_deps.sh` all do
-it, and on Linux the first CMake configure runs that script for you.
+`windows/Setup-MSYS2.sh`, `windows/build_deps.ps1`, `linux/build_deps.sh` and
+`macOS/build_deps.sh` all do it, and on Linux the first CMake configure runs that
+script for you.
 
 The plugin (`PLUGIN_BIRRIASDR_SDR_SUPPORT`, on by default) only needs the library
 to be findable: when it is missing, configure prints
 `BirriaSDR Library could not be found! Not building.` and the rest of GobDump
-builds normally. MSVC builds (Windows x64/ARM64) cannot build it at all - the
-driver is POSIX C, so those jobs ship without this SDR source. Delete `deps/` to
-pick up a newer `gobdump-dep`.
+builds normally. The MSVC ARM64 installer ships without this SDR source (that dep
+set has no libusb). Delete `deps/` to pick up a newer `gobdump-dep`.
 
 ### Raspberry Pi
 
