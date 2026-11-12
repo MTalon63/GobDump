@@ -62,7 +62,8 @@ build_fftw3() {
     cd fftw3
     mkdir build
     cd build
-    cmake $(get_cmake_command $1) -DCMAKE_INSTALL_PREFIX=$OUTPUT_DIR/$1 -DBUILD_SHARED_LIBS=OFF -DENABLE_FLOAT=ON ..
+    # FFTW 3.3.10 asks for cmake_minimum_required(VERSION 3.0), which CMake 4.x refuses
+    cmake $(get_cmake_command $1) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX=$OUTPUT_DIR/$1 -DBUILD_SHARED_LIBS=OFF -DENABLE_FLOAT=ON ..
     make -j$(nproc) install
     cd ..
     rm -rf build
