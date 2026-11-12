@@ -445,7 +445,7 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
                 -DMINGW_BIN=${MINGW_RUNTIME_BIN}
                 -DOBJDUMP=${OBJDUMP_EXECUTABLE}
                 -P \"${CMAKE_CURRENT_LIST_DIR}/cmake/MinGWCopyRuntime.cmake\")
-        )
+")
     endif()
 
     # Create uninstall target
