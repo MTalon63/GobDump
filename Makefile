@@ -15,6 +15,19 @@ endif
 
 STAMP := $(BUILD_DIR)/CMakeCache.txt
 
+# Dependency scripts are per platform; make deps picks the right one.
+UNAME_S := $(shell uname -s 2>/dev/null)
+
+ifneq (,$(filter MINGW% MSYS% CYGWIN%,$(UNAME_S)))
+DEPS_SCRIPT := windows/Setup-MSYS2.sh
+else ifeq ($(UNAME_S),Darwin)
+DEPS_SCRIPT := macOS/build_deps.sh
+else ifeq ($(UNAME_S),Linux)
+DEPS_SCRIPT := linux/build_deps.sh
+else
+DEPS_SCRIPT :=
+endif
+
 .PHONY: all build configure reconfigure run ui clean distclean install uninstall deps test docs docs-serve help
 
 all: build
@@ -56,7 +69,11 @@ distclean:
 	else echo "Nothing to clean, $(BUILD_DIR) is not configured."; fi
 
 deps:
-	./windows/Setup-MSYS2.sh
+	@if [ -z "$(DEPS_SCRIPT)" ]; then \
+		echo "No dependency script for $(UNAME_S); install the packages listed in README.md" >&2; \
+		exit 1; \
+	fi
+	$(DEPS_SCRIPT)
 
 docs:
 	python -m pip install -r docs/requirements.txt
@@ -76,7 +93,7 @@ help:
 	@echo "  uninstall   remove installed files"
 	@echo "  clean       remove build outputs, keep the cache"
 	@echo "  distclean   empty $(BUILD_DIR) entirely"
-	@echo "  deps        install dependencies (MSYS2 only)"
+	@echo "  deps        install dependencies (per platform)"
 	@echo "  reconfigure re-run cmake configure"
 	@echo "  docs        build the documentation site"
 	@echo "  docs-serve  preview the documentation locally"

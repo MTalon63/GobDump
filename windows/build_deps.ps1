@@ -185,6 +185,17 @@ cmake $cmake_params .. -DBUILD_SHARED_LIBS=ON
 ninja install
 cd ../..
 
+# BirriaSDR (MT7921AU). POSIX C, built from MTalon63 fork; the ARM64 job has no libusb.
+if(!$is_arm) {
+    git clone -c core.autocrlf=false https://github.com/MTalon63/BirriaSDR --depth 1 -b gobdump-dep
+    cd BirriaSDR
+    mkdir build
+    cd build
+    cmake $cmake_params .. -DBUILD_TESTING=OFF -DBIRRIASDR_SOAPY=OFF -DLIBUSB_INCLUDE_DIR="$output_folder_fwd/include/libusb-1.0" -DLIBUSB_LIBRARY="$output_folder_fwd/lib/usb-1.0.lib"
+    ninja install
+    cd ../..
+}
+
 # Libairspy
 # Stay on v1.0.10: newer libairspy restricts use to the Airspy ecosystem (non-FOSS).
 git clone -c core.autocrlf=false https://github.com/airspy/airspyone_host libairspy --depth 1 -b v1.0.10

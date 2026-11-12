@@ -434,6 +434,18 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
                 FILES_MATCHING PATTERN "*.dll"
                 PATTERN "plugins" EXCLUDE
                 PATTERN "CMakeFiles" EXCLUDE)
+
+        # copy-runtime-dlls can finish before the plugins link, so resolve their driver
+        # DLLs here, where the installed plugin set is complete.
+        install(CODE "
+            execute_process(COMMAND \"${CMAKE_COMMAND}\"
+                -DDEST_DIR=\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}
+                -DPLUGIN_DIR=\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/gobdump/plugins
+                -DUHD_SHARE_DEST=\${CMAKE_INSTALL_PREFIX}/share
+                -DMINGW_BIN=${MINGW_RUNTIME_BIN}
+                -DOBJDUMP=${OBJDUMP_EXECUTABLE}
+                -P \"${CMAKE_CURRENT_LIST_DIR}/cmake/MinGWCopyRuntime.cmake\")
+        )
     endif()
 
     # Create uninstall target
@@ -446,7 +458,7 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
     set(CPACK_PACKAGE_VENDOR "GobDump")
     set(CPACK_PACKAGE_CONTACT "MTalon63")
 
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libfftw3-bin, libvolk-bin | libvolk2-bin, libpng16-16, libnng1, librtlsdr0 | librtlsdr2, libhackrf0, libairspy0, libairspyhf1, libglfw3 | libglfw3-wayland, libzstd1, libjemalloc2 | libjemalloc1, libportaudiocpp0, libhdf5-hl-100t64 | libhdf5-hl-100 | libhdf5-103 | libhdf5-100 | libhdf5-310, libdbus-1-dev, libsqlite3-0, libxrandr2, libuhd4.1.0 | libuhd4.6.0 | libuhd4.8.0 | libuhd4.9.0")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libfftw3-bin, libvolk-bin | libvolk2-bin, libpng16-16, libnng1, librtlsdr0 | librtlsdr2, libhackrf0, libairspy0, libairspyhf1, libglfw3 | libglfw3-wayland, libzstd1, libjemalloc2 | libjemalloc1, libportaudiocpp0, libhdf5-hl-100t64 | libhdf5-hl-100 | libhdf5-103 | libhdf5-100 | libhdf5-310, libdbus-1-dev, libsqlite3-0, libusb-1.0-0, libxrandr2, libuhd4.1.0 | libuhd4.6.0 | libuhd4.8.0 | libuhd4.9.0")
     set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libomp5, ocl-icd-libopencl1, intel-opencl-icd, mesa-opencl-icd, uhd-host")
 
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")

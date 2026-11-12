@@ -6,11 +6,17 @@ if(NOT DEFINED OBJDUMP)
     set(OBJDUMP objdump)
 endif()
 
-file(GLOB roots
+set(_roots
     "${DEST_DIR}/*.exe"
     "${DEST_DIR}/*.dll"
-    "${DEST_DIR}/plugins/*.dll"
 )
+if(DEFINED PLUGIN_DIR)
+    list(APPEND _roots "${PLUGIN_DIR}/*.dll")
+else()
+    list(APPEND _roots "${DEST_DIR}/plugins/*.dll")
+endif()
+
+file(GLOB roots ${_roots})
 
 set(resolved "")
 set(pending ${roots})
@@ -56,9 +62,12 @@ list(LENGTH resolved total)
 message(STATUS "Runtime DLLs: ${total} required, ${copied} newly copied to ${DEST_DIR}")
 
 get_filename_component(_prefix "${MINGW_BIN}" DIRECTORY)
+if(NOT DEFINED UHD_SHARE_DEST)
+    set(UHD_SHARE_DEST "${DEST_DIR}/share")
+endif()
 if("libuhd.dll" IN_LIST resolved AND EXISTS "${_prefix}/share/uhd")
-    if(NOT EXISTS "${DEST_DIR}/share/uhd")
-        file(COPY "${_prefix}/share/uhd" DESTINATION "${DEST_DIR}/share")
-        message(STATUS "Copied UHD data to ${DEST_DIR}/share/uhd")
+    if(NOT EXISTS "${UHD_SHARE_DEST}/uhd")
+        file(COPY "${_prefix}/share/uhd" DESTINATION "${UHD_SHARE_DEST}")
+        message(STATUS "Copied UHD data to ${UHD_SHARE_DEST}/uhd")
     endif()
 endif()
