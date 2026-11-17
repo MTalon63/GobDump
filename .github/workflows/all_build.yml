@@ -573,17 +573,23 @@ jobs:
         # well on Windows or Mac.  You can convert this to a matrix build if you need
         # cross-platform coverage.
         # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+        # Ubuntu's older SONAMEs (notably libvolk.so.2.5 and libtiff.so.5)
+        # are not available on current Raspberry Pi OS/Debian systems.
         runs-on: ubuntu-22.04-arm
+        container: debian:trixie
 
         steps:
             - uses: actions/checkout@v4
 
-
-            - name: Update repositories
-              run: sudo apt update
-
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev ninja-build
+              run: |
+                  apt-get update
+                  apt-get install -y ca-certificates git build-essential cmake pkgconf ninja-build \
+                    libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk-dev \
+                    libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev \
+                    libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev \
+                    libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev \
+                    libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev
 
             - name: Delete build dir
               run: rm -rf ${{runner.workspace}}/build
