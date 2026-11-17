@@ -584,7 +584,7 @@ jobs:
             - name: Install dependencies
               run: |
                   apt-get update
-                  apt-get install -y ca-certificates git build-essential cmake pkgconf ninja-build \
+                  apt-get install -y ca-certificates git build-essential cmake pkgconf ninja-build file \
                     libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk-dev \
                     libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev \
                     libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev \
