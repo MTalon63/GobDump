@@ -631,6 +631,25 @@ jobs:
               shell: bash
               run: ninja package
 
+            - name: Verify Debian package
+              working-directory: build
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  deb=$(find . -maxdepth 1 -name '*.deb' -print -quit)
+                  test -n "$deb"
+                  dpkg-deb --info "$deb"
+                  dpkg-deb --extract "$deb" /tmp/gobdump-package
+                  for binary in gobdump gobdump-ui satdump_sdr_server; do
+                    if test -x "/tmp/gobdump-package/usr/bin/$binary"; then
+                      if ldd "/tmp/gobdump-package/usr/bin/$binary" | grep -q 'not found'; then
+                        echo "Unresolved shared library in $binary" >&2
+                        ldd "/tmp/gobdump-package/usr/bin/$binary" >&2
+                        exit 1
+                      fi
+                    fi
+                  done
+
             - name: Upload ZIP
               uses: actions/upload-artifact@v4
               with:
