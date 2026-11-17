@@ -266,6 +266,17 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# actions/checkout can fall back to downloading an archive when git is not
+# available in the container. In that case there is no commit hash, so provide
+# a valid Debian version suffix instead of generating a trailing '-'.
+if(GIT_HASH STREQUAL "")
+    if(NOT "$ENV{GITHUB_SHA}" STREQUAL "")
+        string(SUBSTRING "$ENV{GITHUB_SHA}" 0 7 GIT_HASH)
+    else()
+        set(GIT_HASH "0")
+    endif()
+endif()
+
 # GitHub Actions tag builds can have a shallow checkout without the tag ref.
 if(GIT_HAS_TAG STREQUAL "" AND "$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")
     set(GIT_HAS_TAG "$ENV{GITHUB_REF_NAME}")
