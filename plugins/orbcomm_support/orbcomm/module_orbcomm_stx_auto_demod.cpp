@@ -219,16 +219,11 @@ namespace orbcomm
     {
         ImGui::Begin(name.c_str(), NULL, window ? 0 : NOWINDOW_FLAGS);
 
-        ImGui::BeginGroup();
-        // Constellation
-        ImGui::EndGroup();
-
-        ImGui::SameLine();
-
-        ImGui::BeginGroup();
         {
             stx_link_lst_mtx.lock();
-            if (ImGui::BeginTable("##orbcommsatellitesdemodtable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+            // NB: an empty BeginGroup()/SameLine() pair previously collapsed the available width to 0 and
+            // hid this whole table under ImGui 1.90+; SizingFixedFit keeps the columns readable.
+            if (ImGui::BeginTable("##orbcommsatellitesdemodtable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit))
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -271,7 +266,6 @@ namespace orbcomm
             }
             stx_link_lst_mtx.unlock();
         }
-        ImGui::EndGroup();
 
         if (!d_is_streaming_input)
             ImGui::ProgressBar((double)progress / (double)filesize, ImVec2(ImGui::GetContentRegionAvail().x, 20 * ui_scale));

@@ -139,6 +139,8 @@ namespace satdump
         rec_cfg[sources[sdr_select_id].name]["xconverter_frequency"] = xconverter_frequency;
         rec_cfg[sources[sdr_select_id].name]["decimation"] = current_decimation;
         db->set_user_json("recorder_sdr_settings", rec_cfg);
+        // Persist FFT/waterfall settings on stop since Android kills processes without running destructors
+        save_settings();
     }
 
     void RecorderApplication::try_load_sdr_settings()

@@ -21,6 +21,8 @@
 
 namespace satdump
 {
+    SATDUMP_DLL std::atomic<bool> refresh_sdr_sources_requested{false};
+
     RecorderApplication::RecorderApplication(nlohmann::json cli_set) : handlers::Handler(), pipeline_selector(true)
     {
         automated_live_output_dir = satdump_cfg.main_cfg["satdump_directories"]["live_processing_autogen"]["value"].get<bool>();
@@ -194,8 +196,7 @@ namespace satdump
                 start_processing();
             }));
         event_handler_ids.push_back(eventBus->register_handler<RecorderStopProcessingEvent>([this](const RecorderStopProcessingEvent &) { stop_processing(); }));
-        event_handler_ids.push_back(eventBus->register_handler<events::RDASFillerEvent>(
-            [this](const events::RDASFillerEvent &evt) { rdas_filler_detected.store(evt.filler); }));
+        event_handler_ids.push_back(eventBus->register_handler<events::RDASFillerEvent>([this](const events::RDASFillerEvent &evt) { rdas_filler_detected.store(evt.filler); }));
 
         event_handler_ids.push_back(eventBus->register_handler<RecorderSetFFTSettingsEvent>(
             [this](const RecorderSetFFTSettingsEvent &evt)
@@ -299,7 +300,9 @@ namespace satdump
                 try_load_sdr_settings();
             }
             ImGui::SameLine();
-            if (ImGui::Button(u8" \uead2 "))
+            // Refresh on button press, or when the Android USB-permission callback flagged it (the
+            // one-shot flag is cleared here via exchange, so it triggers exactly once).
+            if (ImGui::Button(u8" \uead2 ") || (!assume_started && refresh_sdr_sources_requested.exchange(false)))
             {
                 sources = dsp::getAllAvailableSources();
 
@@ -310,9 +313,20 @@ namespace satdump
                     sdr_select_string += src.name + '\0';
                 }
 
+                // Re-select the SDR last used so a hot-plug refresh keeps the user's device.
+                auto dcfg = db->get_user_json("recorder_sdr_settings");
+                if (dcfg.contains("last_used_sdr"))
+                {
+                    std::string last_used_sdr = dcfg["last_used_sdr"].get<std::string>();
+                    for (int i = 0; i < (int)sources.size(); i++)
+                        if (sources[i].name == last_used_sdr)
+                            sdr_select_id = i;
+                }
+
                 while (sdr_select_id >= (int)sources.size())
                     sdr_select_id--;
 
+                source_ptr.reset();
                 source_ptr = getSourceFromDescriptor(sources[sdr_select_id]);
                 source_ptr->open();
                 set_frequency(frequency_hz);
@@ -753,32 +767,37 @@ namespace satdump
         {
             ImGui::BeginChild("RecorderFFT", {right_width, wf_size}, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
             {
-                // Fix for "could not allocate waterfall memory"
-                if (waterfall_ratio > 0.9)
-                    waterfall_ratio = 0.9;
+                waterfall_ratio = std::clamp(waterfall_ratio, 0.15f, 0.85f);
 
-                float fft_height = wf_size * (show_waterfall ? waterfall_ratio : 1.0);
-                float wf_height = wf_size * (1 - waterfall_ratio) + 15 * ui_scale;
+                float fft_height = wf_size * (show_waterfall ? waterfall_ratio : 1.0f);
+                float wf_height = std::max(1.0f, wf_size * (1.0f - waterfall_ratio) + 15 * ui_scale);
                 float wfft_widht = right_width - 9 * ui_scale;
 #ifdef __ANDROID__
                 int offset = 8;
 #else
                 int offset = 30;
 #endif
-                // ImGui::SetNextWindowSizeConstraints(ImVec2((right_width + offset * ui_scale), 50), ImVec2((right_width + offset * ui_scale), wf_size));
-                //                   ImGui::SetNextWindowSize(ImVec2((right_width + offset * ui_scale), show_waterfall ? waterfall_ratio * wf_size : wf_size));
-                ImGui::SetCursorScreenPos(ImVec2(left_width + 8, 25 * ui_scale));
-                if (ImGui::BeginChild("#fft", ImVec2((right_width + offset * ui_scale), (show_waterfall ? waterfall_ratio * wf_size : wf_size)), ImGuiChildFlags_ResizeY, //
+                // Keep #fft and waterfall horizontally aligned across all ui_scale factors
+                float target_fft_win_h = show_waterfall ? waterfall_ratio * wf_size : wf_size;
+                if (std::abs(wf_size - last_wf_size) > 1.0f)
+                {
+                    // Update ImGui's cached ResizeY window height when orientation or panel height changes
+                    ImGui::SetNextWindowSize(ImVec2(right_width + offset * ui_scale, target_fft_win_h));
+                    last_wf_size = wf_size;
+                }
+                ImGui::SetCursorScreenPos(ImVec2(left_width + 8 * ui_scale, 25 * ui_scale));
+                if (ImGui::BeginChild("#fft", ImVec2((right_width + offset * ui_scale), target_fft_win_h), ImGuiChildFlags_ResizeY,
                                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_NoScrollbar |
                                           ImGuiWindowFlags_NoScrollWithMouse))
                 {
+                    float fft_plot_x = ImGui::GetCursorScreenPos().x;
                     fft_plot->draw({float(wfft_widht), fft_height});
-                    if (show_waterfall) // && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
-                        waterfall_ratio = ImGui::GetWindowHeight() / wf_size;
+                    if (show_waterfall && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+                        waterfall_ratio = std::clamp(ImGui::GetWindowHeight() / wf_size, 0.15f, 0.85f);
                     if (ImGui::IsWindowHovered())
                     {
                         ImVec2 mouse_pos = ImGui::GetMousePos();
-                        float ratio = (mouse_pos.x - left_width - 16 * ui_scale) / (right_width - 9 * ui_scale) - 0.5;
+                        float ratio = (mouse_pos.x - fft_plot_x) / float(wfft_widht) - 0.5f;
                         ImGui::SetTooltip(
                             "%s",
                             ((ratio >= 0 ? "" : "- ") + format_notated(abs(ratio) * get_samplerate(), "Hz\n") + format_notated(source_ptr->get_frequency() + ratio * get_samplerate(), "Hz")).c_str());

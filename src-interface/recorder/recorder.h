@@ -74,7 +74,8 @@ namespace satdump
         float fft_min = -1;
         float fft_avgn = -1;
     };
-
+    // Set from the Android USB-permission callback (JNI) to ask the recorder to re-scan SDR sources.
+    extern SATDUMP_DLL std::atomic<bool> refresh_sdr_sources_requested;
     class RecorderApplication : public handlers::Handler
     {
     public:
@@ -107,6 +108,7 @@ namespace satdump
         bool dragging_panel = false;
         float panel_ratio = 0.2;
         float last_width = -1.0f;
+        float last_wf_size = -1.0f; // previous panel height; used to refit the #fft child on resize/orientation change
 
         std::string recording_path;
         std::string recorder_filename;

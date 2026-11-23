@@ -39,7 +39,7 @@ namespace lucky7
     public:
         static std::string getID();
         virtual std::string getIDM() { return getID(); };
-        static nlohmann::json getParams() { return {}; } // TODOREWORK
+        static nlohmann::json getParams() { return satdump::pipeline::demod::BaseDemodModule::getParams(); }
         static std::shared_ptr<ProcessingModule> getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
     };
 } // namespace lucky7

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/audio/audio_sink.h"
 #include "common/dsp/fft/fft_pan.h"
 #include "common/dsp/io/file_sink.h"
 #include "common/dsp/io/file_source.h"
@@ -10,17 +11,16 @@
 #include "common/dsp/utils/doppler_correct.h"
 #include "common/dsp/utils/freq_shift.h"
 #include "common/dsp/utils/snr_estimator.h"
-#include "common/audio/audio_sink.h"
 #include "common/widgets/constellation.h"
 #include "common/widgets/fft_plot.h"
 #include "common/widgets/snr_plot.h"
 #include "common/widgets/waterfall_plot.h"
 #include "pipeline/module.h"
 #include <atomic>
-#include <ctime>
-#include <fstream>
 #include <chrono>
 #include <cmath>
+#include <ctime>
+#include <fstream>
 #include <locale>
 #include <vector>
 
@@ -46,6 +46,7 @@ namespace satdump
                 std::shared_ptr<dsp::SplitterBlock> fft_splitter;
                 std::shared_ptr<dsp::FFTPanBlock> fft_proc;
                 std::shared_ptr<dsp::CorrectIQBlock<complex_t>> dc_blocker;
+                std::shared_ptr<dsp::IQSwapBlock> iq_swapper; // in the graph only for live (non-file) input with d_iq_swap set
                 std::shared_ptr<dsp::SmartResamplerBlock<complex_t>> resampler;
                 std::shared_ptr<dsp::AGCBlock<complex_t>> agc;
 
@@ -122,11 +123,11 @@ namespace satdump
 
                 bool showWaterfall = false;
                 void drawFFT();
-                
+
                 /** @brief Used to render the ETA nicely
-                *
-                * @param seconds Time to render as MM:SS or HH:MM:SS if we are at that point (DD seems excessive)
-                */
+                 *
+                 * @param seconds Time to render as MM:SS or HH:MM:SS if we are at that point (DD seems excessive)
+                 */
                 std::string render_eta_string(time_t seconds);
                 void drawETA();
                 time_t start_time;
@@ -167,6 +168,9 @@ namespace satdump
             public:
                 // static std::string getID();
                 // virtual std::string getIDM() { return getID(); };
+                // Parameters common to every demodulator (samplerate, symbolrate, dc_block, iq_swap, ...).
+                // Concrete demodulators should return BaseDemodModule::getParams() from their own
+                // getParams() so these shared options are exposed instead of an empty object.
                 static nlohmann::json getParams()
                 {
                     nlohmann::json v;

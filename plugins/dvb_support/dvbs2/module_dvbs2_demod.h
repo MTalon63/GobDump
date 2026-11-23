@@ -102,7 +102,7 @@ namespace satdump
 
                 // Adaptive LLR scaling
                 int frame_counter = 0;
-                static constexpr int LLR_UPDATE_INTERVAL = 100;  // Update LUT every N frames
+                static constexpr int LLR_UPDATE_INTERVAL = 100; // Update LUT every N frames
 
             public:
                 DVBS2DemodModule(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
@@ -119,7 +119,7 @@ namespace satdump
             public:
                 static std::string getID();
                 virtual std::string getIDM() { return getID(); };
-                static nlohmann::json getParams() { return {}; } // TODOREWORK
+                static nlohmann::json getParams() { return BaseDemodModule::getParams(); }
                 static std::shared_ptr<ProcessingModule> getInstance(std::string input_file, std::string output_file_hint, nlohmann::json parameters);
             };
         } // namespace dvb

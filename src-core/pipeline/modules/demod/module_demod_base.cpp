@@ -114,15 +114,20 @@ namespace satdump
                 // Init DSP Blocks
                 if (input_data_type == DATA_FILE)
                     file_source = std::make_shared<dsp::FileSourceBlock>(d_input_file, d_parameters["baseband_format"].get<std::string>(), d_buffer_size, d_iq_swap);
+                else if (d_iq_swap)
+                    // File input swaps I/Q inside FileSourceBlock; live DSP input needs its own block.
+                    iq_swapper = std::make_shared<dsp::IQSwapBlock>(input_stream);
+
+                std::shared_ptr<dsp::stream<complex_t>> raw_input = (input_data_type == DATA_FILE) ? file_source->output_stream : (d_iq_swap ? iq_swapper->output_stream : input_stream);
 
                 if (d_dc_block)
-                    dc_blocker = std::make_shared<dsp::CorrectIQBlock<complex_t>>(input_data_type == DATA_DSP_STREAM ? input_stream : file_source->output_stream);
+                    dc_blocker = std::make_shared<dsp::CorrectIQBlock<complex_t>>(raw_input);
 
                 // Mark start time for ETA
                 start_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
                 // Cleanup things a bit
-                std::shared_ptr<dsp::stream<complex_t>> input_data = d_dc_block ? dc_blocker->output_stream : (input_data_type == DATA_DSP_STREAM ? input_stream : file_source->output_stream);
+                std::shared_ptr<dsp::stream<complex_t>> input_data = d_dc_block ? dc_blocker->output_stream : raw_input;
 
                 if (d_frequency_shift != 0)
                     freq_shift = std::make_shared<dsp::FreqShiftBlock>(input_data, d_samplerate, d_frequency_shift);
@@ -223,6 +228,8 @@ namespace satdump
                 // Start
                 if (input_data_type == DATA_FILE)
                     file_source->start();
+                else if (d_iq_swap && iq_swapper)
+                    iq_swapper->start();
                 if (d_dc_block)
                     dc_blocker->start();
                 if (d_frequency_shift != 0)
@@ -251,6 +258,8 @@ namespace satdump
                 // Stop
                 if (input_data_type == DATA_FILE)
                     file_source->stop();
+                else if (d_iq_swap && iq_swapper)
+                    iq_swapper->stop();
                 if (d_dc_block)
                     dc_blocker->stop();
                 if (d_frequency_shift != 0)

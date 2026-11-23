@@ -376,7 +376,8 @@ namespace orbcomm
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%.2f", ephem.el);
                     ImGui::TableSetColumnIndex(3);
-                    ImGui::Text(PRIu64 " s", (uint64_t)(ctime - ephem.time));
+                    // PRIu64 must be preceded by "%": the previous literal passed the macro straight to Text().
+                    ImGui::Text("%" PRIu64 " s", (uint64_t)(ctime - ephem.time));
                 }
             }
             all_ephem_points_mtx.unlock();

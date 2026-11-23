@@ -124,7 +124,16 @@ bool FileSelectWidget::draw(std::string hint)
 
 std::string FileSelectWidget::getPath() { return path; }
 
-void FileSelectWidget::setPath(std::string new_path) { path = new_path; }
+void FileSelectWidget::setPath(std::string new_path)
+{
+    path = new_path;
+    // Validate immediately: callers such as the Settings dialog may set a path without ever
+    // drawing the widget, so validity must not depend on a prior draw().
+    std::error_code ec;
+    bool is_dir = std::filesystem::is_directory(path, ec);
+    file_valid = !path.empty() && std::filesystem::exists(path, ec) && (directory ? is_dir : !is_dir);
+    url_valid = allow_url && path.find("http") == 0;
+}
 
 void FileSelectWidget::setDefaultDir(std::string new_path)
 {
@@ -135,4 +144,14 @@ void FileSelectWidget::setDefaultDir(std::string new_path)
 #endif
 }
 
-bool FileSelectWidget::isValid() { return file_valid; }
+bool FileSelectWidget::isValid()
+{
+    // Re-check lazily when not already known valid (the path may have been set before the file existed).
+    if (!file_valid && !path.empty())
+    {
+        std::error_code ec;
+        bool is_dir = std::filesystem::is_directory(path, ec);
+        file_valid = std::filesystem::exists(path, ec) && (directory ? is_dir : !is_dir);
+    }
+    return file_valid;
+}

@@ -30,4 +30,17 @@ namespace dsp
         CorrectIQBlock(std::shared_ptr<dsp::stream<T>> input, float beta = 0.0001);
         ~CorrectIQBlock();
     };
+    /*
+    Swaps I and Q of a complex stream (equivalent to a source's "IQ swap" option).
+    Needed for live (DATA_DSP_STREAM) inputs, where FileSourceBlock's built-in swap does not run.
+    */
+    class IQSwapBlock : public Block<complex_t, complex_t>
+    {
+    private:
+        void work();
+
+    public:
+        IQSwapBlock(std::shared_ptr<dsp::stream<complex_t>> input);
+        ~IQSwapBlock();
+    };
 } // namespace dsp
