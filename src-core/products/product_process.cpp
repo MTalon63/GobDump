@@ -4,6 +4,8 @@
 #include "handlers/product/image_product_handler.h"
 #include "handlers/product/product_handler.h"
 #include "handlers/product/punctiform_product_handler.h"
+#include "products/image/product_expression.h"
+#include "products/image_product.h"
 #include <exception>
 
 namespace satdump
@@ -26,6 +28,14 @@ namespace satdump
                         continue;
                     if (!cfg["autogen"].get<bool>())
                         continue;
+
+                    // Verify all required channels exist before running handler->process(),
+                    // otherwise a failed do_process() leaves the previous preset's image in img_handler!
+                    if (p->type == "image" && cfg.contains("expression") && cfg["expression"].is_string())
+                    {
+                        if (!check_expression_product_composite(static_cast<ImageProduct *>(p.get()), cfg["expression"].get<std::string>()))
+                            continue;
+                    }
 
                     try
                     {

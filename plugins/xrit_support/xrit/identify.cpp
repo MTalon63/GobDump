@@ -51,7 +51,8 @@ namespace satdump
             i.satellite_name = "ELEKTRO-L" + std::to_string(sat_num);
             i.satellite_short_name = "L" + std::to_string(sat_num);
 
-            i.groupid = std::to_string(sat_num) + "_" + std::to_string((time_t)i.timestamp);
+            // Prefix groupid by mission so ELEKTRO-L3 and MSG-3 scans at identical timestamps never collide
+            i.groupid = "elektro_" + std::to_string(sat_num) + "_" + std::to_string((time_t)i.timestamp);
             if (parts[4] != "_________")
                 i.seg_groupid = parts[5] + "_" + i.groupid;
 
@@ -111,8 +112,7 @@ namespace satdump
             i.satellite_name = "MSG-" + std::to_string(sat_num);
             i.satellite_short_name = "MSG" + std::to_string(sat_num);
 
-            i.groupid = std::to_string(sat_num) + "_" + std::to_string((time_t)i.timestamp);
-
+            i.groupid = "msg_" + parts.at(2) + "_" + std::to_string((time_t)i.timestamp);
             if (file.all_headers.count(msg::SegmentIdentificationHeader::TYPE))
             {
                 i.channel = std::to_string(file.getHeader<msg::SegmentIdentificationHeader>().channel_id);
@@ -444,6 +444,8 @@ namespace satdump
             if (sscanf(file.filename.substr(12, 12).c_str(), "%4d%2d%2d%2d%2d", &timeS.tm_year, &timeS.tm_mon, &timeS.tm_mday, &timeS.tm_hour, &timeS.tm_min) != 5)
                 return false;
 
+            // Round strip acquisition minute down to the 10-minute full-disk scan slot
+            timeS.tm_min = (timeS.tm_min / 10) * 10;
             i.type = XRIT_HIMAWARI_AHI;
 
             timeS.tm_year -= 1900;
@@ -469,6 +471,12 @@ namespace satdump
                 i.channel = "13";
             else if (channel_name == "DK01IR2")
                 i.channel = "15";
+            else if (channel_name == "DK01B01")
+                i.channel = "1";
+            else if (channel_name == "DK01B02")
+                i.channel = "2";
+            else if (channel_name == "DK01B03")
+                i.channel = "3";
             else if (channel_name == "DK01B04")
                 i.channel = "4";
             else if (channel_name == "DK01B05")

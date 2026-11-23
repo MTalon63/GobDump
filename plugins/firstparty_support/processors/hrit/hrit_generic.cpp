@@ -1,4 +1,5 @@
 #include "hrit_generic.h"
+#include "libs/bzlib_utils.h"
 #include "xrit/xrit_file.h"
 
 #include "logger.h"
@@ -19,8 +20,28 @@ namespace satdump
     {
         void HRITGenericProcessor::ingestFile(std::vector<uint8_t> vec)
         {
+            // EUMETCast wraps HRIT/LRIT segments in bzip2 (.bz2)
+            if (vec.size() > 4 && vec.at(0) == 0x42 && vec.at(1) == 0x5a && vec.at(2) == 0x68)
+            {
+                std::vector<uint8_t> decomp(32 * 1024 * 1024);
+                size_t source_offset = 0, dest_offset = 0;
+                int bz2_result = BZ_OK;
+                while (bz2_result == BZ_OK && source_offset < vec.size())
+                {
+                    if (dest_offset == decomp.size())
+                        decomp.resize(decomp.size() * 2);
+                    unsigned int dest_length = decomp.size() - dest_offset;
+                    unsigned int consumed = 0;
+                    bz2_result = BZ2_bzBuffToBuffDecompress_M((char *)decomp.data() + dest_offset, &dest_length, (char *)vec.data() + source_offset, vec.size() - source_offset, &consumed, 0, 0);
+                    source_offset += consumed;
+                    dest_offset += dest_length;
+                }
+                decomp.resize(dest_offset);
+                vec = std::move(decomp);
+            }
+
             xrit::XRITFile file;
-            file.lrit_data = vec;
+            file.lrit_data = std::move(vec);
             file.parseHeaders();
 
             xrit::XRITFileInfo finfo = xrit::identifyXRITFIle(file);

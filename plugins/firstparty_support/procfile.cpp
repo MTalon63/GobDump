@@ -7,8 +7,11 @@
 #include "utils/file/folder_file_iterators.h"
 #include "utils/file/zip_file_iterators.h"
 #include <H5Cpp.h>
+#include <algorithm>
+#include <cmath>
 #include <exception>
 #include <memory>
+#include <vector>
 
 namespace satdump
 {
@@ -84,28 +87,76 @@ namespace satdump
                 else
                     fit = std::make_unique<satdump::utils::FolderFilesIterator>(std::filesystem::path(fpath).parent_path().string());
 
+                struct GroupItem
+                {
+                    FirstPartyProductInfo info;
+                    std::shared_ptr<satdump::utils::FilesIteratorItem> item;
+                };
+
+                std::vector<GroupItem> matched;
                 std::shared_ptr<satdump::utils::FilesIteratorItem> f;
                 while (fit->getNext(f))
                 {
                     if (!f)
                         continue;
 
-                    if (toproc_info.group_id == parseFirstPartyInfo(f).group_id)
-                    {
-                        logger->trace(" - " + f->name);
+                    auto finfo = parseFirstPartyInfo(f);
+                    if (toproc_info.group_id == finfo.group_id)
+                        matched.push_back({finfo, f});
+                }
 
-                        try
+                std::sort(matched.begin(), matched.end(),
+                          [](const GroupItem &a, const GroupItem &b)
+                          {
+                              if (a.info.timestamp != b.info.timestamp)
+                                  return a.info.timestamp < b.info.timestamp;
+                              return a.item->name < b.item->name;
+                          });
+
+                // Keep only the contiguous pass within +-30 minutes (1800s) containing toproc_info.timestamp
+                if (toproc_info.group_id.rfind("contig_", 0) == 0 && !matched.empty())
+                {
+                    size_t seed = 0;
+                    double best_diff = std::abs(matched.at(0).info.timestamp - toproc_info.timestamp);
+                    for (size_t idx = 1; idx < matched.size(); idx++)
+                    {
+                        double diff = std::abs(matched.at(idx).info.timestamp - toproc_info.timestamp);
+                        if (diff < best_diff)
                         {
-                            processor->ingestFile(f->getPayload());
+                            best_diff = diff;
+                            seed = idx;
                         }
-                        catch (std::exception &e)
-                        {
-                            logger->error("Error processing file! %s", e.what());
-                        }
-                        catch (H5::Exception &e)
-                        {
-                            logger->error("Error processing file! %s", e.getCDetailMsg());
-                        }
+                    }
+
+                    double max_gap = (toproc_info.group_id.rfind("contig_eum_", 0) == 0) ? 90.0 : 240.0;
+
+                    size_t lo = seed;
+                    while (lo > 0 && (matched.at(lo).info.timestamp - matched.at(lo - 1).info.timestamp) <= max_gap && (matched.at(seed).info.timestamp - matched.at(lo - 1).info.timestamp) <= 1800.0)
+                        lo--;
+
+                    size_t hi = seed;
+                    while (hi + 1 < matched.size() && (matched.at(hi + 1).info.timestamp - matched.at(hi).info.timestamp) <= max_gap &&
+                           (matched.at(hi + 1).info.timestamp - matched.at(seed).info.timestamp) <= 1800.0)
+                        hi++;
+
+                    matched = std::vector<GroupItem>(matched.begin() + lo, matched.begin() + hi + 1);
+                }
+
+                for (auto &g : matched)
+                {
+                    logger->trace(" - " + g.item->name);
+
+                    try
+                    {
+                        processor->ingestFile(g.item->getPayload());
+                    }
+                    catch (std::exception &e)
+                    {
+                        logger->error("Error processing file! %s", e.what());
+                    }
+                    catch (H5::Exception &e)
+                    {
+                        logger->error("Error processing file! %s", e.getCDetailMsg());
                     }
                 }
             }

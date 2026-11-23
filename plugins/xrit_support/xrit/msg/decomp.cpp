@@ -3,6 +3,7 @@
 #include "DecompWT/CompressWT.h"
 #include "image/jpeg_utils.h"
 #include "logger.h"
+#include <vector>
 
 namespace satdump
 {
@@ -68,13 +69,13 @@ namespace satdump
                     }
 
                     // Init variables
-                    uint8_t *image_ptr = NULL;
+                    std::vector<uint8_t> image_buf;
                     int buf_size = 0;
                     int out_pixels = 0;
 
                     // Decompress
                     {
-                        // We need to copy over that memory to its own buffer
+                        // We need to copy over that memory to its own buffer (CDataField's CSmartPtr takes ownership)
                         uint8_t *compressedData = new uint8_t[file.lrit_data.size() - primary_header.total_header_length];
                         std::memcpy(compressedData, &file.lrit_data[primary_header.total_header_length], file.lrit_data.size() - primary_header.total_header_length);
 
@@ -96,14 +97,15 @@ namespace satdump
                         }
                         catch (std::exception &e)
                         {
-                            logger->error("Failed decompression! %d", e.what());
+                            logger->error("Failed decompression! %s", e.what());
                         }
 
                         // Fill our output buffer
                         buf_size = decompressedImage.Size() / 8;
                         out_pixels = decompressedImage.Size() / image_structure_record.bit_per_pixel;
-                        image_ptr = new uint8_t[buf_size];
-                        decompressedImage.Read(0, image_ptr, buf_size);
+                        image_buf.resize(buf_size);
+                        if (buf_size > 0)
+                            decompressedImage.Read(0, image_buf.data(), buf_size);
                     }
 
                     if (out_pixels == image_structure_record.columns_count * image_structure_record.lines_count) // Matches?
@@ -113,6 +115,8 @@ namespace satdump
 
                         if (image_structure_record.bit_per_pixel == 10)
                         {
+                            const uint8_t *image_ptr = image_buf.data();
+
                             // Fill it back up converting to 16-bits
                             for (int i = 0; i < buf_size - (buf_size % 5); i += 5)
                             {
@@ -144,7 +148,7 @@ namespace satdump
                         }
                         else if (image_structure_record.bit_per_pixel == 8) // Just in case
                         {
-                            file.lrit_data.insert(file.lrit_data.end(), image_ptr, &image_ptr[buf_size]);
+                            file.lrit_data.insert(file.lrit_data.end(), image_buf.begin(), image_buf.end());
                         }
                         else
                         {

@@ -1,6 +1,7 @@
 #include "product_info.h"
 #include "common/utils.h"
 #include "core/exception.h"
+#include "libs/bzlib_utils.h"
 #include "logger.h"
 #include "processors/hdf/dmsp/ssmis_hdf.h"
 #include "processors/hdf/fy2/svissr_hdf.h"
@@ -141,7 +142,7 @@ namespace satdump
                                  &timeS.tm_sec, &len) == 7 &&
                           len == f->name.size()) ||
                          (sscanf(f->name.c_str(), "AVHR_xxx_1B_M%2d_%4d%2d%2d%2d%2d%2dZ_%*dZ_N_O_%*dZ.bz2%n", &sat_num, &timeS.tm_year, &timeS.tm_mon, &timeS.tm_mday, &timeS.tm_hour, &timeS.tm_min,
-                                 &timeS.tm_sec, &len) == 7 && // TODOREWORK the rest can be compressed too perhaps?
+                                 &timeS.tm_sec, &len) == 7 &&
                           len == f->name.size()))
                      {
                          i.type = NATIVE_METOP_AVHRR;
@@ -151,6 +152,8 @@ namespace satdump
                          i.timestamp = timegm(&timeS);
 
                          i.name = MetOpNumToName(sat_num) + " AVHRR/3 " + timestamp_to_string(i.timestamp);
+                         // Chain consecutive 3-minute global AVHRR granules into a continuous pass
+                         i.group_id = "contig_avhrr_glb_" + std::to_string(sat_num);
                      }
 
                      return i;
@@ -494,6 +497,27 @@ namespace satdump
 
                          i.group_id = std::string(sat_name) + "_" + std::to_string((time_t)i.timestamp);
                      }
+                     else
+                     {
+                         // EUMETCast FY-2 S-VISSR NOM variant:
+                         // Z_SATE_C_BABJ_<date><time>_O_FY2<sat>_FDI_<chan>_<seg>_NOM.HDF.gz
+                         std::string chan_name(8, '\0');
+                         int seg_num = 0;
+                         if (sscanf(f->name.c_str(), "Z_SATE_C_BABJ_%4d%2d%2d%2d%2d%2d_O_FY2%1s_FDI_%7[^_]_%3d_NOM.HDF.gz%n", &timeS.tm_year, &timeS.tm_mon, &timeS.tm_mday, &timeS.tm_hour,
+                                    &timeS.tm_min, &timeS.tm_sec, sat_name, &chan_name.at(0), &seg_num, &len) == 9 &&
+                             len == f->name.size())
+                         {
+                             i.type = HDF_FY2_IMAGER;
+
+                             timeS.tm_year -= 1900;
+                             timeS.tm_mon -= 1;
+                             i.timestamp = timegm(&timeS);
+
+                             i.name = "FY-2" + std::string(sat_name) + " S-VISSR " + timestamp_to_string(i.timestamp);
+
+                             i.group_id = std::string(sat_name) + "_" + std::to_string((time_t)i.timestamp);
+                         }
+                     }
 
                      return i;
                  },
@@ -531,6 +555,34 @@ namespace satdump
                              i.name = "FY-3" + std::string(sat_name) + " MERSI-3 " + timestamp_to_string(i.timestamp);
 
                          i.group_id = std::string(dtype) + "_" + std::string(sat_name) + "_" + std::to_string((time_t)i.timestamp);
+                     }
+                     else
+                     {
+                         int y1, m1, d1, h1, min1, s1, h2, min2, s2, orbit;
+                         if (sscanf(f->name.c_str(), "FY3%1s_%4d%2d%2d_%2d%2d%2d_%2d%2d%2d_%d_MERSI_1000M_L1B.HDF%n", sat_name, &y1, &m1, &d1, &h1, &min1, &s1, &h2, &min2, &s2, &orbit, &len) == 11 &&
+                             len == f->name.size())
+                         {
+                             i.type = HDF_FY3_MERSI;
+
+                             timeS.tm_year = y1 - 1900;
+                             timeS.tm_mon = m1 - 1;
+                             timeS.tm_mday = d1;
+                             timeS.tm_hour = h1;
+                             timeS.tm_min = min1;
+                             timeS.tm_sec = s1;
+                             i.timestamp = timegm(&timeS);
+
+                             if (std::string(sat_name) == "D")
+                                 i.name = "FY-3" + std::string(sat_name) + " MERSI-2 " + timestamp_to_string(i.timestamp);
+                             else if (std::string(sat_name) == "E")
+                                 i.name = "FY-3" + std::string(sat_name) + " MERSI-LL " + timestamp_to_string(i.timestamp);
+                             else if (std::string(sat_name) == "F" || std::string(sat_name) == "H")
+                                 i.name = "FY-3" + std::string(sat_name) + " MERSI-3 " + timestamp_to_string(i.timestamp);
+                             else if (std::string(sat_name) == "G")
+                                 i.name = "FY-3" + std::string(sat_name) + " MERSI-RM " + timestamp_to_string(i.timestamp);
+
+                             i.group_id = "contig_eum_" + std::string(sat_name);
+                         }
                      }
 
                      return i;
@@ -658,8 +710,52 @@ namespace satdump
                  {
                      FirstPartyProductInfo i;
 
+                     // Fast filename-only path for EUMETCast Himawari HRIT (.bz2), bucketed by 10-min FD slot
+                     if (f->name.rfind("IMG_DK01", 0) == 0 && f->name.size() >= 28 && f->name.substr(f->name.size() - 4) == ".bz2")
+                     {
+                         std::tm timeS;
+                         memset(&timeS, 0, sizeof(std::tm));
+                         if (sscanf(f->name.substr(12, 12).c_str(), "%4d%2d%2d%2d%2d", &timeS.tm_year, &timeS.tm_mon, &timeS.tm_mday, &timeS.tm_hour, &timeS.tm_min) == 5)
+                         {
+                             timeS.tm_min = (timeS.tm_min / 10) * 10;
+                             timeS.tm_year -= 1900;
+                             timeS.tm_mon -= 1;
+                             i.type = HRIT_GENERIC;
+                             i.timestamp = timegm(&timeS);
+                             i.name = "Himawari AHI " + timestamp_to_string(i.timestamp);
+                             i.group_id = std::to_string((time_t)i.timestamp);
+                             return i;
+                         }
+                     }
+
+                     if (f->name.rfind("H-000-", 0) != 0 && f->name.rfind("L-000-", 0) != 0 && f->name.rfind("IMG_", 0) != 0)
+                         return i;
+
+                     // Only the first 64 KB are needed to inspect headers (getPayloadPrefix avoids a
+                     // full-file read); .bz2 xRIT files are inflated just enough to expose the header.
+                     std::vector<uint8_t> payload = f->getPayloadPrefix(65536);
+                     if (payload.size() > 4 && payload.at(0) == 0x42 && payload.at(1) == 0x5a && payload.at(2) == 0x68)
+                     {
+                         std::vector<uint8_t> decomp(65536);
+                         size_t source_offset = 0, dest_offset = 0;
+                         int bz2_result = BZ_OK;
+                         while (bz2_result == BZ_OK && source_offset < payload.size() && dest_offset < 16384)
+                         {
+                             if (dest_offset == decomp.size())
+                                 decomp.resize(decomp.size() * 2);
+                             unsigned int dest_length = decomp.size() - dest_offset;
+                             unsigned int consumed = 0;
+                             bz2_result = BZ2_bzBuffToBuffDecompress_M((char *)decomp.data() + dest_offset, &dest_length, (char *)payload.data() + source_offset, payload.size() - source_offset,
+                                                                       &consumed, 0, 0);
+                             source_offset += consumed;
+                             dest_offset += dest_length;
+                         }
+                         decomp.resize(dest_offset);
+                         payload = std::move(decomp);
+                     }
+
                      xrit::XRITFile file;
-                     file.lrit_data = f->getPayloadPrefix(65536);
+                     file.lrit_data = std::move(payload);
                      file.parseHeaders(true);
 
                      xrit::XRITFileInfo ii = xrit::identifyXRITFIle(file);

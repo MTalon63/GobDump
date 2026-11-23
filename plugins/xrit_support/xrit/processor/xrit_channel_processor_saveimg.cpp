@@ -471,6 +471,10 @@ namespace satdump
             else if (meta.type == XRIT_ELEKTRO_MSUGS)
                 tryApplyELEKTROCalib(p.pro);
 
+            // Save the actual img BEFORE process_composites so lazyload_path can open it
+            if (!in_memory_mode)
+                image::save_img(img, directory_path + filename);
+
             if (!in_memory_mode)
             {
                 pro->save(directory_path);
@@ -482,10 +486,6 @@ namespace satdump
                     pro->save(directory_path);
                 }
             }
-
-            // Save the actual img
-            if (!in_memory_mode)
-                image::save_img(img, directory_path + filename);
         }
 
         void XRITChannelProcessor::process_composites(std::shared_ptr<products::ImageProduct> pro, std::string pro_path)
