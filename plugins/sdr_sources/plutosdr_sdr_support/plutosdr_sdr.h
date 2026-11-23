@@ -4,7 +4,6 @@
 #include "ad9361.h"
 #include "iio.h"
 #include <dlfcn.h>
-#include <sys/resource.h> // for testing live RDAS on android
 #include <sys/syscall.h>
 #include <unistd.h>
 #else
@@ -51,8 +50,6 @@ protected:
     {
         work_thread_mtx.lock();
 #ifdef __ANDROID__
-        setpriority(PRIO_PROCESS, 0, -10); // Prevent WALT scheduler from starving IIO USB/TCP refills during heavy live demodulation
-
         // Hint to Qualcomm/OxygenOS PowerHAL via ADPF that DSP threads need sustained high clocks
         void *libandroid = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
         void *hint_mgr = nullptr;
