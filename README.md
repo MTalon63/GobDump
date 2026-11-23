@@ -483,6 +483,23 @@ Supported SDR devices are :
 - LimeSDR Mini
 - HackRF
 
+#### PlutoSDR over the network
+
+PlutoSDR (and compatible AD936x devices such as PlutoPlus, AntSDR and LibreSDR) can be used
+over a network link instead of USB. Direct USB mode is preferred where it's available - it
+needs no network gadget or DHCP setup and works like any other USB SDR. When you do use a
+network link from the Android app, two things to know:
+
+- **Network/Ethernet adapter:** Android only brings an Ethernet interface up via DHCP, so the
+  link needs a DHCP server. A direct phone-to-Pluto cable has none, so in practice you run a
+  DHCP server on the Pluto itself.
+- **"PlutoSDR IP over USB":** the Pluto's USB network gadget must be set to **NCM** mode. In
+  RNDIS mode the interface is not exposed to the app. The Pluto then presents a USB-Ethernet
+  interface that is reached through the network (IP) path, not as a USB SDR.
+
+In both cases, pick the `PlutoSDR IP` source entry and set the address (default `192.168.2.1`),
+plus the port if the device uses a non-default iiod port.
+
 ### Docker
 
 Building and running under docker is a nice way to separate the build environment and libraries from the host OS.
