@@ -19,6 +19,11 @@ namespace dsp
 
         bool remote_ok = true;
 
+        // False for synthetic entry points that exist only so the user can type an address by hand
+        // (e.g. "PlutoSDR IP", "RTL-TCP"). Such entries are still listed and selectable, but are
+        // never picked automatically, so a detected USB/network device wins at startup.
+        bool auto_select_ok = true;
+
         NLOHMANN_DEFINE_TYPE_INTRUSIVE(SourceDescriptor,
                                        source_type, name, unique_id)
     };

@@ -193,7 +193,8 @@ std::vector<dsp::SourceDescriptor> PlutoSDRSource::getAvailableSources()
 {
     std::vector<dsp::SourceDescriptor> results;
 
-    results.push_back({"plutosdr", "PlutoSDR IP", "0", false});
+    // Manual-entry placeholder; not auto-selected (see SourceDescriptor::auto_select_ok).
+    results.push_back({"plutosdr", "PlutoSDR IP", "0", false, false});
 
 #ifdef __ANDROID__
     iio_scan_context *scan_ctx = iio_create_scan_context("usb", 0);

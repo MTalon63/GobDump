@@ -211,7 +211,8 @@ std::vector<dsp::SourceDescriptor> RTLTCPSource::getAvailableSources()
 {
     std::vector<dsp::SourceDescriptor> results;
 
-    results.push_back({"rtltcp", "RTL-TCP", "0", false});
+    // Manual-entry placeholder; not auto-selected (see SourceDescriptor::auto_select_ok).
+    results.push_back({"rtltcp", "RTL-TCP", "0", false, false});
 
     return results;
 }

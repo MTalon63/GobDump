@@ -90,9 +90,12 @@ namespace satdump
             }
         }
 
-        // If no source has been opened yet, open the first possible one
+        // If no source has been opened yet, open the first possible one. Synthetic manual entries
+        // (PlutoSDR IP / RTL-TCP / ...) are skipped so a real detected device is preferred.
         for (int i = 0; sdr_select_id == -1 && i < (int)sources.size(); i++)
         {
+            if (!sources[i].auto_select_ok)
+                continue;
             try
             {
                 source_ptr = dsp::getSourceFromDescriptor(sources[i]);
