@@ -29,7 +29,7 @@ namespace satdump
 #endif
         }
     }
-    std::vector<SatellitePass> getPassesForSatellite(int norad, double initial_time, double timespan, double qth_lon, double qth_lat, double qth_alt, std::vector<SatellitePass> premade_passes, int rdas_slot_seconds, int rdas_pass_seconds)
+    std::vector<SatellitePass> getPassesForSatellite(int norad, double initial_time, double timespan, double qth_lon, double qth_lat, double qth_alt, std::vector<SatellitePass> premade_passes, int rdas_slot_seconds, int rdas_pass_seconds, int rdas_slot_offset_seconds, bool rdas_skip_xrit_slots)
     {
         std::vector<SatellitePass> passes;
         predict_observer_t *observer_station = predict_create_observer("Main", qth_lat * DEG_TO_RAD, qth_lon * DEG_TO_RAD, qth_alt * DEG_TO_RAD);
@@ -55,7 +55,13 @@ namespace satdump
                 const double pass_seconds = std::max(60, rdas_pass_seconds);
                 const double slot_seconds = std::max(60, rdas_slot_seconds);
 
-                double epoch = (double)utc_midnight((std::time_t)initial_time) - 15;
+                // Anchor the slot grid to (midnight + per-satellite offset). Start one day before
+                // initial_time, then step forward to the last slot that still fits a full pass before
+                // now; this keeps slots phase-locked to 00:00 UTC across successive scheduling calls.
+                double epoch = (double)utc_midnight((std::time_t)initial_time) - 86400.0 + (double)rdas_slot_offset_seconds;
+                while (epoch + pass_seconds <= initial_time)
+                    epoch += slot_seconds;
+
                 while (epoch < initial_time + timespan)
                 {
                     predict_position satellite_orbit2;
@@ -77,11 +83,14 @@ namespace satdump
 
                     epoch += slot_seconds;
 
-                    // Skip the LRIT/HRIT slots every 3 hours.
-                    std::time_t t = (std::time_t)epoch;
-                    std::tm *utc = std::gmtime(&t);
-                    if (utc->tm_hour % 3 == 0 && (utc->tm_min == 14 || utc->tm_min == 44))
-                        epoch += slot_seconds;
+                    // Skip the LRIT/HRIT slots every 3 hours when enabled.
+                    if (rdas_skip_xrit_slots)
+                    {
+                        std::time_t t = (std::time_t)epoch;
+                        std::tm *utc = std::gmtime(&t);
+                        if (utc->tm_hour % 3 == 0 && (utc->tm_min == 14 || utc->tm_min == 44))
+                            epoch += slot_seconds;
+                    }
                 }
                 return passes;
             }

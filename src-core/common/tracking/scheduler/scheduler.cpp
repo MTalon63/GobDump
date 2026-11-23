@@ -81,6 +81,24 @@ namespace satdump
                 {
                     if (curr_time > p.second.los_time)
                     {
+                        // Continuous GEO pass (~12h window): refresh schedule and extend LOS if still active
+                        if ((p.second.los_time - p.second.aos_time) >= (12 * 3600 - 5))
+                        {
+                            updateAutotrackPasses(curr_time);
+                            bool still_active = false;
+                            for (auto &next_pass : upcoming_satellite_passes_sel)
+                            {
+                                if (next_pass.norad == p.first && next_pass.aos_time <= curr_time + 2.0)
+                                {
+                                    p.second.los_time = next_pass.los_time;
+                                    still_active = true;
+                                    break;
+                                }
+                            }
+                            if (still_active)
+                                continue;
+                        }
+
                         logger->critical("LOS!!!!!!!!!!!!!! %d ", p.first);
                         eventBus->fire_event<events::TrackingSchedulerLOSEvent>({p.second});
                         TrackedObject obj;
@@ -128,32 +146,49 @@ namespace satdump
 
                 if (upcoming_satellite_passes_sel.size() > 0 && curr_time > upcoming_satellite_passes_sel[0].los_time)
                 {
-                    if (autotrack_pass_has_started)
-                    {
-                        logger->critical("LOS!!!!!!!!!!!!!! %d", upcoming_satellite_passes_sel[0].norad);
-                        eventBus->fire_event<events::TrackingSchedulerLOSEvent>({upcoming_satellite_passes_sel[0]});
-                        TrackedObject obj;
-                        for (auto &v : enabled_satellites)
-                            if (v.norad == upcoming_satellite_passes_sel[0].norad)
-                                obj = v;
-                        los_callback(autotrack_cfg, upcoming_satellite_passes_sel[0], obj);
-                    }
-                    autotrack_pass_has_started = false;
+                    SatellitePass ended_pass = upcoming_satellite_passes_sel[0];
+                    bool was_continuous_geo = autotrack_pass_has_started &&
+                                              ((ended_pass.los_time - ended_pass.aos_time) >= (12 * 3600 - 5));
+
                     updateAutotrackPasses(curr_time);
 
-                    if (upcoming_satellite_passes_sel.size() > 0)
+                    // If the refreshed schedule immediately continues the same GEO satellite, keep it running without LOS/AOS restart
+                    if (was_continuous_geo &&
+                        upcoming_satellite_passes_sel.size() > 0 &&
+                        upcoming_satellite_passes_sel[0].norad == ended_pass.norad &&
+                        upcoming_satellite_passes_sel[0].aos_time <= curr_time + 2.0)
                     {
-                        TrackedObject obj;
-                        for (auto &v : enabled_satellites)
-                            if (v.norad == upcoming_satellite_passes_sel[0].norad)
-                                obj = v;
-                        eng_callback(autotrack_cfg, upcoming_satellite_passes_sel[0], obj);
+                        // Leave autotrack_pass_has_started = true so neither LOS nor AOS fires
+                    }
+                    else
+                    {
+                        if (autotrack_pass_has_started)
+                        {
+                            logger->critical("LOS!!!!!!!!!!!!!! %d", ended_pass.norad);
+                            eventBus->fire_event<events::TrackingSchedulerLOSEvent>({ended_pass});
+                            TrackedObject obj;
+                            for (auto &v : enabled_satellites)
+                                if (v.norad == ended_pass.norad)
+                                    obj = v;
+                            los_callback(autotrack_cfg, ended_pass, obj);
+                        }
+                        autotrack_pass_has_started = false;
+
+                        if (upcoming_satellite_passes_sel.size() > 0)
+                        {
+                            TrackedObject obj;
+                            for (auto &v : enabled_satellites)
+                                if (v.norad == upcoming_satellite_passes_sel[0].norad)
+                                    obj = v;
+                            eng_callback(autotrack_cfg, upcoming_satellite_passes_sel[0], obj);
+                        }
                     }
                 }
             }
 
             upcoming_satellite_passes_mtx.unlock();
         }
+
     }
 
     void AutoTrackScheduler::updateAutotrackPasses(double curr_time)
@@ -185,7 +220,12 @@ namespace satdump
                 if (slot_it != autotrack_cfg.rdas_slot_seconds.end())
                     slot_seconds = slot_it->second;
 
-                auto passes = getPassesForSatellite(obj.norad, curr_time, 12 * 3600, qth_lon, qth_lat, qth_alt, {}, slot_seconds, autotrack_cfg.rdas_pass_seconds);
+                int slot_offset = -15;
+                auto off_it = autotrack_cfg.rdas_slot_offset_seconds.find(obj.norad);
+                if (off_it != autotrack_cfg.rdas_slot_offset_seconds.end())
+                    slot_offset = off_it->second;
+
+                auto passes = getPassesForSatellite(obj.norad, curr_time, 12 * 3600, qth_lon, qth_lat, qth_alt, {}, slot_seconds, autotrack_cfg.rdas_pass_seconds, slot_offset, autotrack_cfg.rdas_skip_xrit_slots);
                 for (auto &pass : passes)
                     if (pass.max_elevation > obj.min_elevation)
                         upcoming_satellite_passes_all.push_back(pass);
@@ -224,15 +264,51 @@ namespace satdump
     void AutoTrackScheduler::setEngaged(bool v, double curr_time)
     {
         upcoming_satellite_passes_mtx.lock();
+
+        if (!v)
+        {
+            // Disengaging must fire LOS for whatever is currently running, otherwise a live
+            // pipeline/VFO is left open; multi-VFO and single-pass modes are handled separately.
+            if (autotrack_cfg.multi_mode)
+            {
+                for (auto &p : vfo_mode_norads_vis)
+                {
+                    eventBus->fire_event<events::TrackingSchedulerLOSEvent>({p.second});
+                    TrackedObject obj;
+                    for (auto &sat : enabled_satellites)
+                        if (sat.norad == p.first)
+                            obj = sat;
+                    los_callback(autotrack_cfg, p.second, obj);
+                }
+                vfo_mode_norads_vis.clear();
+            }
+            else if (autotrack_pass_has_started && upcoming_satellite_passes_sel.size() > 0)
+            {
+                eventBus->fire_event<events::TrackingSchedulerLOSEvent>({upcoming_satellite_passes_sel[0]});
+                TrackedObject obj;
+                for (auto &sat : enabled_satellites)
+                    if (sat.norad == upcoming_satellite_passes_sel[0].norad)
+                        obj = sat;
+                los_callback(autotrack_cfg, upcoming_satellite_passes_sel[0], obj);
+            }
+
+            autotrack_pass_has_started = false;
+            autotrack_engaged = false;
+            upcoming_satellite_passes_mtx.unlock();
+            return;
+        }
+
+        vfo_mode_norads_vis.clear();
+        autotrack_pass_has_started = false;
         autotrack_engaged = v;
         updateAutotrackPasses(curr_time);
 
         if (autotrack_engaged && upcoming_satellite_passes_sel.size() > 0)
         {
             TrackedObject obj;
-            for (auto &v : enabled_satellites)
-                if (v.norad == upcoming_satellite_passes_sel[0].norad)
-                    obj = v;
+            for (auto &sat : enabled_satellites)
+                if (sat.norad == upcoming_satellite_passes_sel[0].norad)
+                    obj = sat;
             eng_callback(autotrack_cfg, upcoming_satellite_passes_sel[0], obj);
             autotrack_pass_has_started = false;
         }

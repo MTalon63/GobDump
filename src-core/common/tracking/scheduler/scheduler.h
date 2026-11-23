@@ -18,13 +18,26 @@ namespace satdump
         bool stop_sdr_when_idle = false;
         bool multi_mode = false;
         bool use_localtime = false;
-        // Seconds between RDAS downlink slots, per NORAD. 900 = 15 minutes.
+// Seconds between RDAS downlink slots, per NORAD. 900 = 15 minutes.
         std::map<int, int> rdas_slot_seconds = {
-            {41105, 900}, {44903, 900}, {55506, 900}, {67756, 900}};
+            {41105, 900},
+            {44903, 900},
+            {55506, 900},
+            {67756, 900},
+        };
+        // Offset in seconds from 00:00 UTC for the first RDAS slot, per NORAD (-15s default).
+        std::map<int, int> rdas_slot_offset_seconds = {
+            {41105, -15},
+            {44903, -15},
+            {55506, -15},
+            {67756, -15},
+        };
         // Stop an RDAS pass after this many seconds without valid frames. -1 disables it.
         int rdas_filler_timeout = 10;
         int rdas_pass_seconds = 600;
-    };
+        // Skip the 3-hourly LRIT/HRIT slots (:14 / :44) during RDAS scheduling.
+        bool rdas_skip_xrit_slots = true;
+        };
 
     inline void to_json(nlohmann::ordered_json &j, const AutoTrackCfg &v)
     {
@@ -35,8 +48,12 @@ namespace satdump
         j["rdas_slot_seconds"] = nlohmann::ordered_json::object();
         for (auto &p : v.rdas_slot_seconds)
             j["rdas_slot_seconds"][std::to_string(p.first)] = p.second;
+        j["rdas_slot_offset_seconds"] = nlohmann::ordered_json::object();
+        for (auto &p : v.rdas_slot_offset_seconds)
+            j["rdas_slot_offset_seconds"][std::to_string(p.first)] = p.second;
         j["rdas_filler_timeout"] = v.rdas_filler_timeout;
         j["rdas_pass_seconds"] = v.rdas_pass_seconds;
+        j["rdas_skip_xrit_slots"] = v.rdas_skip_xrit_slots;
     }
 
     inline void from_json(const nlohmann::ordered_json &j, AutoTrackCfg &v)
@@ -58,10 +75,21 @@ namespace satdump
                 catch (...)
                 {
                 }
+        if (j.contains("rdas_slot_offset_seconds") && j["rdas_slot_offset_seconds"].is_object())
+            for (auto &p : j["rdas_slot_offset_seconds"].items())
+                try
+                {
+                    v.rdas_slot_offset_seconds[std::stoi(p.key())] = std::clamp(p.value().get<int>(), -3600, 86400);
+                }
+                catch (...)
+                {
+                }
         if (j.contains("rdas_filler_timeout"))
             v.rdas_filler_timeout = std::clamp(j["rdas_filler_timeout"].get<int>(), -1, 600);
         if (j.contains("rdas_pass_seconds"))
-            v.rdas_pass_seconds = std::clamp(j["rdas_pass_seconds"].get<int>(), 60, 3600);
+            v.rdas_pass_seconds = std::clamp(j["rdas_pass_seconds"].get<int>(), 60, 14400);
+        if (j.contains("rdas_skip_xrit_slots") && j["rdas_skip_xrit_slots"].is_boolean())
+            v.rdas_skip_xrit_slots = j["rdas_skip_xrit_slots"].get<bool>();
     }
 
     struct TrackedObject

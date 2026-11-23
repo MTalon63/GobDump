@@ -120,10 +120,12 @@ namespace satdump
             ImGui::OpenPopup("RDAS Slot Lengths");
         if (ImGui::BeginPopupModal("RDAS Slot Lengths", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::TextDisabled("Seconds between RDAS downlink slots, per satellite.");
+            ImGui::TextDisabled("Downlink slot interval and 00:00 UTC start offset (in seconds), per satellite.");
             ImGui::Spacing();
             for (auto &p : autotrack_cfg.rdas_slot_seconds)
             {
+                autotrack_cfg.rdas_slot_offset_seconds.try_emplace(p.first, -15);
+
                 std::string name;
                 for (auto &t : tle_registry)
                     if (t.norad == p.first)
@@ -154,11 +156,19 @@ namespace satdump
 
                 ImGui::PushID(p.first);
                 ImGui::Text("%s", name.c_str());
-                ImGui::SameLine(220 * ui_scale);
-                ImGui::SetNextItemWidth(120 * ui_scale);
+
+                ImGui::SameLine(180 * ui_scale);
+                ImGui::SetNextItemWidth(110 * ui_scale);
                 int seconds = p.second;
-                if (ImGui::InputInt("seconds##slot", &seconds))
+                if (ImGui::InputInt("interval##slot", &seconds))
                     p.second = std::clamp(seconds, 60, 86400);
+
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(110 * ui_scale);
+                int offset = autotrack_cfg.rdas_slot_offset_seconds[p.first];
+                if (ImGui::InputInt("offset##offset", &offset))
+                    autotrack_cfg.rdas_slot_offset_seconds[p.first] = std::clamp(offset, -3600, 86400);
+
                 ImGui::PopID();
             }
             ImGui::Spacing();
@@ -175,8 +185,9 @@ namespace satdump
             ImGui::SetNextItemWidth(120 * ui_scale);
             int pass_seconds = autotrack_cfg.rdas_pass_seconds;
             if (ImGui::InputInt("seconds##pass", &pass_seconds))
-                autotrack_cfg.rdas_pass_seconds = std::clamp(pass_seconds, 60, 3600);
+                autotrack_cfg.rdas_pass_seconds = std::clamp(pass_seconds, 60, 14400);
             ImGui::TextDisabled("Duration of each generated RDAS pass slot.");
+            ImGui::Checkbox("Skip 3-hourly xRIT slots (:14 / :44 UTC)", &autotrack_cfg.rdas_skip_xrit_slots);
             ImGui::Spacing();
             if (ImGui::Button("Close"))
                 ImGui::CloseCurrentPopup();
