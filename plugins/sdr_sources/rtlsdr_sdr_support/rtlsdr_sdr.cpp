@@ -2,13 +2,23 @@
 
 void RtlSdrSource::_rx_callback(unsigned char *buf, uint32_t len, void *ctx)
 {
+    // The callback can fire once more during device-removal teardown with a null/short buffer
+    // and an already-cleared stream; drop such callbacks rather than writing out of bounds.
+    if (!buf || len < 2 || !ctx)
+        return;
+
     std::shared_ptr<dsp::stream<complex_t>> stream = *((std::shared_ptr<dsp::stream<complex_t>> *)ctx);
-    for (int i = 0; i < (int)len / 2; i++)
+    if (!stream)
+        return;
+
+    // Never write more than writeBuf holds (some read_async calls pass a larger len).
+    int nsamples = std::min<int>((int)(len / 2), dsp::STREAM_BUFFER_SIZE);
+    for (int i = 0; i < nsamples; i++)
     {
         stream->writeBuf[i].real = (buf[i * 2 + 0] - 127.4f) / 128.0f;
         stream->writeBuf[i].imag = (buf[i * 2 + 1] - 127.4f) / 128.0f;
     }
-    stream->swap(len / 2);
+    stream->swap(nsamples);
 };
 
 void RtlSdrSource::set_gains()
@@ -211,16 +221,23 @@ void RtlSdrSource::stop()
 {
     if (is_started)
     {
-        rtlsdr_cancel_async(rtlsdr_dev_obj);
+        // Set the flag before cancelling so mainThread's post-read error path sees a clean
+        // shutdown; the handle guards cover the case where a hot-unplug already closed the device.
         thread_should_run = false;
+        if (rtlsdr_dev_obj != nullptr)
+            rtlsdr_cancel_async(rtlsdr_dev_obj);
         logger->info("Waiting for the thread...");
-        if (is_started)
+        if (output_stream)
             output_stream->stopWriter();
         if (work_thread.joinable())
             work_thread.join();
         logger->info("Thread stopped");
-        rtlsdr_set_bias_tee(rtlsdr_dev_obj, false);
-        rtlsdr_close(rtlsdr_dev_obj);
+        if (rtlsdr_dev_obj != nullptr)
+        {
+            rtlsdr_set_bias_tee(rtlsdr_dev_obj, false);
+            rtlsdr_close(rtlsdr_dev_obj);
+            rtlsdr_dev_obj = nullptr;
+        }
     }
     is_started = false;
 }

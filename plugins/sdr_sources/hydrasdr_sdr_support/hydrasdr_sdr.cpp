@@ -192,7 +192,9 @@ void HydraSDRSource::drawControlUI()
         gain_type = 1;
         gain_changed = true;
     }
-    if (RImGui::RadioButton("Manual", gain_type == 22))
+    // Manual gain is mode 2; the previous comparison against 22 never matched, so this
+    // radio button could never show as selected.
+    if (RImGui::RadioButton("Manual", gain_type == 2))
     {
         gain_type = 2;
         gain_changed = true;

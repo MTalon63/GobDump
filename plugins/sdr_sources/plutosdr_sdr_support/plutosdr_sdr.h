@@ -1,9 +1,12 @@
 #pragma once
-
 #include "common/dsp_source_sink/dsp_sample_source.h"
 #ifdef __ANDROID__
 #include "ad9361.h"
 #include "iio.h"
+#include <dlfcn.h>
+#include <sys/resource.h> // for testing live RDAS on android
+#include <sys/syscall.h>
+#include <unistd.h>
 #else
 #include <ad9361.h>
 #include <iio.h>
@@ -33,6 +36,7 @@ protected:
     int iq_mode = 0;
     int rf_input = 0;
     std::string ip_address = "192.168.2.1";
+    int port = 30431; // Default iiod network port (Pluto's standard)
 
     void set_gains();
     void set_rfinput();
@@ -46,6 +50,35 @@ protected:
     void mainThread()
     {
         work_thread_mtx.lock();
+#ifdef __ANDROID__
+        setpriority(PRIO_PROCESS, 0, -10); // Prevent WALT scheduler from starving IIO USB/TCP refills during heavy live demodulation
+
+        // Hint to Qualcomm/OxygenOS PowerHAL via ADPF that DSP threads need sustained high clocks
+        void *libandroid = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
+        void *hint_mgr = nullptr;
+        void *hint_session = nullptr;
+        typedef void *(*pfn_getManager)();
+        typedef void *(*pfn_createSession)(void *, const int32_t *, size_t, int64_t);
+        typedef int (*pfn_reportActual)(void *, int64_t);
+        typedef void (*pfn_closeSession)(void *);
+        pfn_reportActual report_actual = nullptr;
+        pfn_closeSession close_session = nullptr;
+
+        if (libandroid)
+        {
+            auto get_mgr = (pfn_getManager)dlsym(libandroid, "APerformanceHint_getManager");
+            auto create_sess = (pfn_createSession)dlsym(libandroid, "APerformanceHint_createSession");
+            report_actual = (pfn_reportActual)dlsym(libandroid, "APerformanceHint_reportActualWorkDuration");
+            close_session = (pfn_closeSession)dlsym(libandroid, "APerformanceHint_closeSession");
+            if (get_mgr && create_sess && report_actual)
+            {
+                hint_mgr = get_mgr();
+                int32_t tid = (int32_t)syscall(SYS_gettid);
+                if (hint_mgr)
+                    hint_session = create_sess(hint_mgr, &tid, 1, 10000000LL); // 10 ms target
+            }
+        }
+#endif
 
     restart:
         int blockSize = dsp::STREAM_BUFFER_SIZE;
@@ -53,7 +86,7 @@ protected:
             blockSize = std::min<int>(samplerate_widget.get_value() / 20.0, dsp::STREAM_BUFFER_SIZE);
         else
             blockSize = std::min<int>(samplerate_widget.get_value() / (20.0 * 2), dsp::STREAM_BUFFER_SIZE);
-        int kernel_buffer_cnt = 4;
+        int kernel_buffer_cnt = 16; // 16 buffers (~333 ms at 48 MSPS CS8) avoids DMA/TCP underflows on mobile schedulers
         struct iio_channel *rx0_i, *rx0_q;
         struct iio_buffer *rxbuf;
 
@@ -78,6 +111,13 @@ protected:
         if (!rxbuf)
         {
             logger->error("Could not create RX buffer");
+#ifdef __ANDROID__
+            if (hint_session && close_session)
+                close_session(hint_session);
+            if (libandroid)
+                dlclose(libandroid);
+#endif
+            work_thread_mtx.unlock();
             return;
         }
 
@@ -106,6 +146,10 @@ protected:
                 volk_8i_s32f_convert_32f((float *)output_stream->writeBuf, buf, 128.0f, blockSize * 2);
             }
             output_stream->swap(blockSize);
+#ifdef __ANDROID__
+            if (hint_session && report_actual)
+                report_actual(hint_session, 12000000LL); // Signal sustained compute demand (> target)
+#endif
         }
 
         iio_buffer_destroy(rxbuf);
@@ -129,6 +173,12 @@ protected:
             }
         }
 
+#ifdef __ANDROID__
+        if (hint_session && close_session)
+            close_session(hint_session);
+        if (libandroid)
+            dlclose(libandroid);
+#endif
         work_thread_mtx.unlock();
     }
 

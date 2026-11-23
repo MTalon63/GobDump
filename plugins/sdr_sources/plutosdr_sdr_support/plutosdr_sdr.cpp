@@ -4,14 +4,17 @@ F5OEO FixMe :
 - CS8/CS16 selection shoudl be available only if firmware text contains tezuka
 - Not tested with CLI
 */
-
 #include "plutosdr_sdr.h"
+#include "imgui/imgui.h"
+#include <array>
+#include <cerrno>
+#include <cstring>
 
-// Adapted from https://github.com/altillimity/SatDump/pull/111 and SDR++
+// Adapted from altillimity/SatDump PR #111 and SDR++
 
-const char *pluto_gain_mode[] = {"manual", "fast_attack", "slow_attack", "hybrid"};
-const char *pluto_iq_mode[] = {"cs16", "cs8"};
-const char *pluto_rf_input[] = {"rx1", "rx2"};
+const std::array<const char *, 4> pluto_gain_mode = {"manual", "fast_attack", "slow_attack", "hybrid"};
+const std::array<const char *, 2> pluto_iq_mode = {"cs16", "cs8"};
+const std::array<const char *, 2> pluto_rf_input = {"rx1", "rx2"};
 
 void PlutoSDRSource::set_rfinput()
 {
@@ -35,10 +38,10 @@ void PlutoSDRSource::set_gains()
 {
     if (is_open && is_started)
     {
-        iio_channel_attr_write(iio_device_find_channel(phy, "voltage0", false), "gain_control_mode", pluto_gain_mode[gain_mode]);
+        iio_channel_attr_write(iio_device_find_channel(phy, "voltage0", false), "gain_control_mode", pluto_gain_mode.at(gain_mode));
         // AD936x accepts -3 through 71
         iio_channel_attr_write_longlong(iio_device_find_channel(phy, "voltage0", false), "hardwaregain", round(gain - 2));
-        logger->debug("Set PlutoSDR gain to %d, mode %s", gain, pluto_gain_mode[gain_mode]);
+        logger->debug("Set PlutoSDR gain to %d, mode %s", gain, pluto_gain_mode.at(gain_mode));
     }
 }
 
@@ -57,6 +60,7 @@ void PlutoSDRSource::set_settings(nlohmann::json settings)
     gain = getValueOrDefault(d_settings["gain"], gain);
     gain_mode = getValueOrDefault(d_settings["gain_mode"], gain_mode);
     ip_address = getValueOrDefault(d_settings["ip_address"], ip_address);
+    port = getValueOrDefault(d_settings["port"], port);
     auto_reconnect = getValueOrDefault(d_settings["auto_reconnect"], auto_reconnect);
     manual_bandwidth = getValueOrDefault(d_settings["manual_bw"], manual_bandwidth);
     bandwidth_widget.set_value(getValueOrDefault(d_settings["manual_bw_value"], samplerate_widget.get_value()));
@@ -75,6 +79,7 @@ nlohmann::json PlutoSDRSource::get_settings()
     d_settings["gain"] = gain;
     d_settings["gain_mode"] = gain_mode;
     d_settings["ip_address"] = ip_address;
+    d_settings["port"] = port;
     d_settings["auto_reconnect"] = auto_reconnect;
     d_settings["manual_bw_value"] = bandwidth_widget.get_value();
     d_settings["iq_mode"] = iq_mode;
@@ -143,6 +148,8 @@ void PlutoSDRSource::drawControlUI()
     if (!is_usb)
     {
         RImGui::InputText("Address", &ip_address);
+        if (ImGui::InputInt("Port", &port))
+            port = std::clamp(port, 1, 65535);
         RImGui::Checkbox("Auto-Reconnect", &auto_reconnect);
     }
     if (RImGui::Combo("IQ Mode", &iq_mode, "CS16\0CS8\0")) {};
@@ -188,28 +195,31 @@ std::vector<dsp::SourceDescriptor> PlutoSDRSource::getAvailableSources()
 
     results.push_back({"plutosdr", "PlutoSDR IP", "0", false});
 
-    // Try to find local USB devices
+#ifdef __ANDROID__
+    iio_scan_context *scan_ctx = iio_create_scan_context("usb", 0);
+#else
     iio_scan_context *scan_ctx = iio_create_scan_context("usb:ip", 0);
-    struct iio_context_info **info;
-    ssize_t ret = iio_scan_context_get_info_list(scan_ctx, &info);
+#endif
 
-    if (ret > 0)
-        for (int contextidx = 0; contextidx < ret; contextidx++)
+    if (scan_ctx != nullptr)
+    {
+        struct iio_context_info **info;
+        ssize_t ret = iio_scan_context_get_info_list(scan_ctx, &info);
+
+        if (ret > 0)
         {
-            // Get dev info
-            const char *dev_id = iio_context_info_get_uri(info[contextidx]);
-            logger->trace("Context %s", dev_id);
-            // Parse to something we can store
-            uint8_t x1, x2, x3;
-            sscanf(dev_id, ":%hhd.%hhd.%hhd", &x1, &x2, &x3);
-
-            // std::string dev_str = "PlutoSDR " + std::to_string(x1) + "." + std::to_string(x2) + "." + std::to_string(x3);
-            std::string dev_str = "PlutoSDR " + std::string(dev_id);
-
-            results.push_back({"plutosdr", dev_str, std::string(dev_id)});
+            for (int contextidx = 0; contextidx < ret; contextidx++)
+            {
+                const char *dev_id = iio_context_info_get_uri(info[contextidx]);
+                logger->trace("Context %s", dev_id);
+                std::string dev_str = "PlutoSDR " + std::string(dev_id);
+                results.push_back({"plutosdr", dev_str, std::string(dev_id)});
+            }
+            iio_context_info_list_free(info);
         }
 
-    iio_scan_context_destroy(scan_ctx);
+        iio_scan_context_destroy(scan_ctx);
+    }
 
     return results;
 }
@@ -225,12 +235,23 @@ void PlutoSDRSource::sdr_startup()
     }
     else
     {
-        logger->trace("Using PlutoSDR IP Address " + ip_address);
-        ctx = iio_create_context_from_uri(std::string("ip:" + ip_address).c_str());
+        std::string uri = ip_address;
+        // Accept a full IIO URI (ip:/usb:/local:) verbatim; otherwise build ip:host[:port].
+        // A non-default port is appended only when the user set one, so a bare address keeps
+        // working for local Plutos while remote/LibreSDR units can use a custom iiod port.
+        if (uri.rfind("ip:", 0) != 0 && uri.rfind("usb:", 0) != 0 && uri.rfind("local:", 0) != 0)
+        {
+            if (uri.find(':') == std::string::npos && port > 0 && port != 30431)
+                uri = "ip:" + uri + ":" + std::to_string(port);
+            else
+                uri = "ip:" + uri;
+        }
+        logger->trace("Using PlutoSDR URI " + uri);
+        ctx = iio_create_context_from_uri(uri.c_str());
     }
 
     if (ctx == NULL)
-        throw satdump_exception("Could not open PlutoSDR device!");
+        throw satdump_exception("Could not open PlutoSDR device! (" + std::string(strerror(errno)) + ")");
     phy = iio_context_find_device(ctx, "ad9361-phy");
     if (phy == NULL)
     {

@@ -6,16 +6,17 @@
 #else
 #include <rtl-sdr.h>
 #endif
-#include "logger.h"
 #include "common/rimgui.h"
-#include <thread>
 #include "common/widgets/double_list.h"
+#include "logger.h"
+#include <atomic>
+#include <thread>
 
 class RtlSdrSource : public dsp::DSPSampleSource
 {
 protected:
     bool is_open = false, is_started = false;
-    rtlsdr_dev *rtlsdr_dev_obj;
+    rtlsdr_dev *rtlsdr_dev_obj = nullptr;
     static void _rx_callback(unsigned char *buf, uint32_t len, void *ctx);
 
     satdump::widgets::DoubleList samplerate_widget;
@@ -25,7 +26,7 @@ protected:
     int last_ppm = 0;
     float display_gain = 0.0f;
     float gain_step = 1.0f;
-    std::vector<int> available_gains = { 0, 496 };
+    std::vector<int> available_gains = {0, 496};
     bool changed_agc = true;
     bool bias_enabled = false;
     bool lna_agc_enabled = false;
@@ -37,24 +38,30 @@ protected:
 
     std::thread work_thread;
 
-    bool thread_should_run = false;
+    std::atomic<bool> thread_should_run{false}; // atomic: set by stop()/mainThread, read by the rx thread
 
     void mainThread()
     {
         int buffer_size = calculate_buffer_size_from_samplerate(samplerate_widget.get_value());
-        // std::min<int>(roundf(samplerate_widget.get_value() / (250 * 512)) * 512, dsp::STREAM_BUFFER_SIZE);
         logger->trace("RTL-SDR Buffer size %d", buffer_size);
 
         while (thread_should_run)
         {
-            rtlsdr_read_async(rtlsdr_dev_obj, _rx_callback, &output_stream, 0, buffer_size);
+            int r = rtlsdr_read_async(rtlsdr_dev_obj, _rx_callback, &output_stream, 0, buffer_size);
+            if (r < 0)
+            {
+                // On hot-unplug Android revokes the USB fd and read_async returns < 0; looping
+                // straight back into read_async here then SIGSEGV'd inside libusb_cancel_transfer.
+                if (thread_should_run)
+                    logger->error("RTL-SDR async read failed (%d) - device disconnected?", r);
+                thread_should_run = false;
+                break;
+            }
         }
     }
 
 public:
-    RtlSdrSource(dsp::SourceDescriptor source) : DSPSampleSource(source), samplerate_widget("Samplerate"), ppm_widget("Correction##ppm", 0, "ppm")
-    {
-    }
+    RtlSdrSource(dsp::SourceDescriptor source) : DSPSampleSource(source), samplerate_widget("Samplerate"), ppm_widget("Correction##ppm", 0, "ppm") {}
 
     ~RtlSdrSource()
     {

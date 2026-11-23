@@ -1,4 +1,5 @@
 #include "usrp_sdr.h"
+#include "init.h"
 
 void USRPSource::set_gains()
 {
@@ -46,18 +47,15 @@ void USRPSource::open_sdr()
 
     uhd::device_addr_t addr = devlist[device_id];
 
-    // USB transport parameters, optimal values from testing
-    addr["recv_frame_size"] = "8000"; // RX frame size
+    // Omit custom transport frame settings when UHD defaults are enabled, so UHD auto-selects per-interface settings
 
-#ifdef __APPLE__
-    // macOS appears to have a max size of 1024, iti s not happy above that
-    addr["num_recv_frames"] = "1024"; // RX buffer size
-#else
-    addr["num_recv_frames"] = "1900"; // RX buffer size
-#endif
-
-    // addr["send_frame_size"] = "8000";      // TX frame size
-    // addr["num_send_frames"] = "1900";      // TX buffer size
+    if (satdump::db->get_user("usrp_sdr_support/use_uhd_defaults", "") == "0")
+    {
+        addr["recv_frame_size"] = satdump::db->get_user("usrp_sdr_support/recv_frame_size", "");
+        addr["num_recv_frames"] = satdump::db->get_user("usrp_sdr_support/num_recv_frames", "");
+        addr["send_frame_size"] = satdump::db->get_user("usrp_sdr_support/send_frame_size", "");
+        addr["num_send_frames"] = satdump::db->get_user("usrp_sdr_support/num_send_frames", "");
+    }
 
     usrp_device = uhd::usrp::multi_usrp::make(addr);
 
@@ -156,6 +154,13 @@ void USRPSource::set_settings(nlohmann::json settings)
     antenna = getValueOrDefault(d_settings["antenna"], antenna);
     gain = getValueOrDefault(d_settings["gain"], gain);
     bit_depth = getValueOrDefault(d_settings["bit_depth"], bit_depth);
+    clock_source = getValueOrDefault(d_settings["clock_source"], clock_source);
+    if (clock_source == "internal")
+        selected_clock_source = 0;
+    else if (clock_source == "external")
+        selected_clock_source = 1;
+    else if (clock_source == "gpsdo")
+        selected_clock_source = 2;
 
     if (bit_depth == 8)
         selected_bit_depth = 0;
@@ -175,6 +180,7 @@ nlohmann::json USRPSource::get_settings()
     d_settings["antenna"] = antenna;
     d_settings["gain"] = gain;
     d_settings["bit_depth"] = bit_depth;
+    d_settings["clock_source"] = clock_source;
 
     return d_settings;
 }
@@ -199,6 +205,9 @@ void USRPSource::start()
 
     open_sdr();
     open_channel();
+    // Reference clock selection before starting a stream
+    usrp_device->set_clock_source(clock_source);
+    usrp_device->set_time_source(clock_source);
 
     uint64_t current_samplerate = samplerate_widget.get_value();
 
@@ -225,6 +234,9 @@ void USRPSource::start()
     sargs.cpu_format = "fc32";
     if (bit_depth == 8)
         sargs.otw_format = "sc8";
+    // Temporary sc12 for testing purposes, will get a compatibility check soon
+    else if (bit_depth == 12)
+        sargs.otw_format = "sc12";
     else if (bit_depth == 16)
         sargs.otw_format = "sc16";
 
@@ -318,12 +330,28 @@ void USRPSource::drawControlUI()
 
     if (RImGui::Combo("Bit depth", &selected_bit_depth,
                       "8-bits\0"
+                      "12-bits\0"
                       "16-bits\0"))
     {
         if (selected_bit_depth == 0)
             bit_depth = 8;
         else if (selected_bit_depth == 1)
+            bit_depth = 12;
+        else if (selected_bit_depth == 2)
             bit_depth = 16;
+    }
+    // Reference clock source selection
+    if (RImGui::Combo("Clock Source", &selected_clock_source,
+                      "Internal\0"
+                      "External\0"
+                      "GPSDO\0"))
+    {
+        if (selected_clock_source == 0)
+            clock_source = "internal";
+        if (selected_clock_source == 1)
+            clock_source = "external";
+        if (selected_clock_source == 2)
+            clock_source = "gpsdo";
     }
 
     if (is_started)

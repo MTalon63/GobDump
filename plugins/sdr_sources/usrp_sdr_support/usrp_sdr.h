@@ -1,14 +1,14 @@
 #pragma once
 
 #include "common/dsp_source_sink/dsp_sample_source.h"
+#include "common/rimgui.h"
+#include "common/widgets/double_list.h"
+#include "logger.h"
+#include <atomic>
+#include <thread>
 #include <uhd.h>
 #include <uhd/device.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
-#include "logger.h"
-#include "common/rimgui.h"
-#include <atomic>
-#include <thread>
-#include "common/widgets/double_list.h"
 
 class USRPSource : public dsp::DSPSampleSource
 {
@@ -26,7 +26,9 @@ protected:
     std::string channel_option_str;
     std::vector<std::string> usrp_antennas;
     std::string antenna_option_str;
-    int selected_bit_depth = 1;
+    int selected_bit_depth = 2;
+    int selected_clock_source = 0;
+    std::string clock_source = "internal";
 
     int channel = 0;
     int antenna = 0;
@@ -71,9 +73,7 @@ protected:
     }
 
 public:
-    USRPSource(dsp::SourceDescriptor source) : DSPSampleSource(source), samplerate_widget("Samplerate")
-    {
-    }
+    USRPSource(dsp::SourceDescriptor source) : DSPSampleSource(source), samplerate_widget("Samplerate") {}
 
     ~USRPSource()
     {
