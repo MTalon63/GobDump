@@ -270,8 +270,9 @@ XMLPUBFUN void XMLCALL xmlCheckVersion(int version);
  *
  * Whether iconv support is available
  */
+/* iconv is not provided by the Android NDK; leave LIBXML_ICONV_ENABLED undefined to avoid link errors */
 #if 1
-#define LIBXML_ICONV_ENABLED
+/* #undef LIBXML_ICONV_ENABLED */
 #endif
 
 /**

@@ -30,6 +30,8 @@ ImageViewWidget::~ImageViewWidget()
 void ImageViewWidget::update(image::Image &image)
 {
     image_mtx.lock();
+    // Guard against uninitialized or 0 maxTextureSize (e.g. Android 16 ANGLE before context init)
+    size_t tex_max = maxTextureSize >= 512 ? maxTextureSize : 4096;
     if (image.width() == 0 || image.height() == 0)
     {
         for (auto &chunk : img_chunks)
@@ -37,7 +39,7 @@ void ImageViewWidget::update(image::Image &image)
                 queueImageTextureDelete(chunk.texture_id);
         img_chunks.resize(0);
     }
-    else if (image.width() <= maxTextureSize && image.height() <= maxTextureSize)
+    else if (image.width() <= tex_max && image.height() <= tex_max)
     {
         for (size_t i = 1; i < img_chunks.size(); i++)
             if (img_chunks[i].texture_id != 0)
@@ -54,8 +56,8 @@ void ImageViewWidget::update(image::Image &image)
         fimg_width = image.width();
         fimg_height = image.height();
 
-        int chunksx = fimg_width / (maxTextureSize / 2);
-        int chunksy = fimg_height / (maxTextureSize / 2);
+        int chunksx = fimg_width / (tex_max / 2);
+        int chunksy = fimg_height / (tex_max / 2);
         if (chunksx == 0)
             chunksx = 1;
         if (chunksy == 0)

@@ -36,8 +36,12 @@
 
 int funcGetMaxTextureSize()
 {
-    int maxTextureSize;
+    // Android 16+ defaults legacy GLES apps to ANGLE, which returns 0 if queried
+    // before an EGL context is current; fall back to a safe 4096 px limit.
+    int maxTextureSize = 4096;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+    if (maxTextureSize < 2048 || maxTextureSize > 16384)
+        maxTextureSize = 4096;
     return maxTextureSize;
 }
 
@@ -63,18 +67,15 @@ void funcUpdateMMImageTexture(unsigned int gl_text, uint32_t *buffer, int width,
     glBindTexture(GL_TEXTURE_2D, gl_text);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // Avoid glGenerateMipmap on large NPOT textures (causes multi-second stalls on ANGLE/Vulkan)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-    glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void funcDeleteImageTexture(unsigned int gl_text)
-{
-    glDeleteTextures(1, &gl_text);
-}
+void funcDeleteImageTexture(unsigned int gl_text) { glDeleteTextures(1, &gl_text); }
 
 void bindImageTextureFunctions()
 {

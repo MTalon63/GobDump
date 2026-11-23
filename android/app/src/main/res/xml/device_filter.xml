@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <resources>
-    <!-- specifying no attributes matches every device -->
-    <usb-device  />
+    <!-- Analog Devices (ADALM-Pluto / Pluto Nano / LibreSDR): 0x0456 = 1110 -->
+    <usb-device vendor-id="1110" />
+    <!-- Realtek RTL-SDR only (exclude Realtek RTL8152/8153/8156 USB-Ethernet): 0x0bda = 3034 -->
+    <usb-device vendor-id="3034" product-id="10290" />
+    <usb-device vendor-id="3034" product-id="10296" />
+    <!-- Airspy / AirspyHF / HackRF / HydraSDR: 0x1d50 = 7504 -->
+    <usb-device vendor-id="7504" />
+    <!-- Airspy / HydraSDR NXP VID: 0x03eb = 1003 -->
+    <usb-device vendor-id="1003" />
+    <!-- LimeSDR / FTDI: 0x0403 = 1027, Cypress FX3: 0x04b4 = 1204 -->
+    <usb-device vendor-id="1027" />
+    <usb-device vendor-id="1204" />
+    <!-- Ettus Research / USRP (B200/B210/N200/N300/X300, ...): 0x2500 = 9472 -->
+    <usb-device vendor-id="9472" />
 </resources>
+

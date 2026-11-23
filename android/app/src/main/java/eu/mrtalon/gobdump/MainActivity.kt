@@ -1,7 +1,9 @@
 package eu.mrtalon.gobdump
 
 import android.app.NativeActivity
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import android.view.KeyEvent
@@ -14,7 +16,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import android.content.Intent;
 import android.app.Activity;
 import android.net.Uri;
-
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 
 import android.Manifest;
 import androidx.core.content.PermissionChecker;
@@ -54,22 +59,22 @@ fun Intent?.getFilePathDir(context: Context): String {
 class MainActivity : NativeActivity(), TextWatcher {
     private val TAG : String = "GobDump";
 
+    private external fun nativeOnUsbPermissionGranted()
+
     fun checkAndAsk(permission: String) {
         if (PermissionChecker.checkSelfPermission(this, permission) != PermissionChecker.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(permission), 1);
         }
     }
 
-    // // Adapted from Ryzerth's implementation, a lot cleaner than my old Java crap!
     private var ACTION_USB_PERMISSION = "libusb.android.USB_PERMISSION";
 
     private var usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (ACTION_USB_PERMISSION == intent.action) {
                 synchronized(this) {
-                    var _this = context as MainActivity;
-                    Log.w(TAG, "Got Intent Reply USB!!!! Reset Activity (libusb bug?)");
-                    _this.recreate();
+                    Log.i(TAG, "USB permission reply received; refreshing SDR sources")
+                    nativeOnUsbPermissionGranted()
                 }
             }
         }
@@ -91,7 +96,31 @@ class MainActivity : NativeActivity(), TextWatcher {
         //        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager;
         //        val permissionIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), 0)
         val filter = IntentFilter(ACTION_USB_PERMISSION)
-        registerReceiver(usbReceiver, filter)
+        // Android 13+ requires an explicit exported flag on context-registered receivers; the USB
+        // permission broadcast originates outside the app, so it must be RECEIVER_EXPORTED.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(usbReceiver, filter)
+        }
+
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val ethRequest = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            .build()
+
+        ethCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // Route GobDump's sockets (192.168.10.2) over eth0 even while Wi-Fi is active
+                cm.bindProcessToNetwork(network)
+            }
+
+            override fun onLost(network: Network) {
+                // Fall back to default routing (Wi-Fi / Mobile) when the eth adapter is unplugged
+                cm.bindProcessToNetwork(null)
+            }
+        }
+        cm.registerNetworkCallback(ethRequest, ethCallback!!)
 
         // Get permission for all USB devices
         // val devList = usbManager!!.getDeviceList();
@@ -104,6 +133,12 @@ class MainActivity : NativeActivity(), TextWatcher {
 
         // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Partial wake lock keeps the CPU running for live DSP while the screen is off; released in onDestroy().
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        cpuWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "GobDump::DSPCompute").apply {
+            acquire()
+        }
 
         // Text crap
         mLayout = RelativeLayout(this);
@@ -121,7 +156,19 @@ class MainActivity : NativeActivity(), TextWatcher {
 
         FreeDroidWarn.showWarningOnUpgrade(this, BuildConfig.VERSION_CODE);
     }
+    private var ethCallback: ConnectivityManager.NetworkCallback? = null
+    private var cpuWakeLock: PowerManager.WakeLock? = null
 
+    override fun onDestroy() {
+        cpuWakeLock?.let { if (it.isHeld) it.release() }
+        cpuWakeLock = null
+        ethCallback?.let {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            cm.unregisterNetworkCallback(it)
+            cm.bindProcessToNetwork(null)
+        }
+        super.onDestroy()
+    }
 
     public fun getAppDir(): String {
         val fdir = getFilesDir().getAbsolutePath();
@@ -181,9 +228,8 @@ class MainActivity : NativeActivity(), TextWatcher {
             if(before < count) {
                 var char2 = s.get(s.length - 1);
                 unicodeCharacterQueue.offer(char2.toInt());
-            } else if(before > count) {
-                unicodeCharacterQueue.offer(8); // BackSpace
             }
+	    // Backspace is already handled via AKEYCODE_DEL in ImGui_ImplAndroid_HandleInputEvent
         }
     }
 

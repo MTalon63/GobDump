@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- largeHeap prevents ART NativeAlloc GC stalls on large multi-channel satellite imagery;
+         libOpenCL allows linker namespace access to vendor GPU OpenCL drivers on Android 12+ -->
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher_round"
         android:allowBackup="true"
         android:hasCode="true"
-        android:extractNativeLibs="true">
-        <!--android:requestLegacyExternalStorage="true"-->
+        android:extractNativeLibs="true"
+        android:largeHeap="true">
+
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
 
         <activity
             android:name="eu.mrtalon.gobdump.MainActivity"
@@ -34,4 +40,10 @@
     <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
         android:resource="@xml/device_filter" />
     <uses-permission android:name="libusb.android.USB_PERMISSION" />
+    <!-- ACCESS/CHANGE_NETWORK_STATE: bind the process to the eth0 adapter used by network SDRs
+         (PlutoSDR/LibreSDR) while Wi-Fi stays up; WAKE_LOCK: keep live DSP alive with the screen off -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
 </manifest>

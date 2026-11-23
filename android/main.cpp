@@ -4,14 +4,21 @@
 #include "loader/loader.h"
 #include "logger.h"
 #include "main_ui.h"
+#include "recorder/recorder.h"
 #include <android/asset_manager.h>
 #include <android/log.h>
+#include <jni.h>
 #include <unistd.h>
+extern "C" __attribute__((visibility("default"))) JNIEXPORT void JNICALL Java_eu_mrtalon_gobdump_MainActivity_nativeOnUsbPermissionGranted(JNIEnv *, jobject)
+{
+    satdump::refresh_sdr_sources_requested.store(true);
+}
 
 // Data
 EGLDisplay g_EglDisplay = EGL_NO_DISPLAY;
 EGLSurface g_EglSurface = EGL_NO_SURFACE;
 static EGLContext g_EglContext = EGL_NO_CONTEXT;
+static EGLConfig g_EglConfig = nullptr;
 static bool g_Initialized = false;
 static char g_LogTag[] = "GobDump";
 extern struct android_app *g_App;
@@ -29,43 +36,47 @@ void init(struct android_app *app)
 {
     setenv("LIBUSB_ANDROID_JVM_PTR", std::to_string((size_t)app).c_str(), true);
 
-    if (g_Initialized)
+    if (g_Initialized || app->window == nullptr)
         return;
 
     g_App = app;
     ANativeWindow_acquire(g_App->window);
 
-    // Initialize EGL
-    // This is mostly boilerplate code for EGL...
+    // Initialize EGL display & context once; recreate only the window surface on resume
+    // so all OpenGL textures (Viewer imagery, waterfall, logo, font atlas) survive minimize/resume.
     {
-        g_EglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         if (g_EglDisplay == EGL_NO_DISPLAY)
-            __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglGetDisplay(EGL_DEFAULT_DISPLAY) returned EGL_NO_DISPLAY");
+        {
+            g_EglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+            if (g_EglDisplay == EGL_NO_DISPLAY)
+                __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglGetDisplay(EGL_DEFAULT_DISPLAY) returned EGL_NO_DISPLAY");
 
-        if (eglInitialize(g_EglDisplay, 0, 0) != EGL_TRUE)
-            __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglInitialize() returned with an error");
+            if (eglInitialize(g_EglDisplay, 0, 0) != EGL_TRUE)
+                __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglInitialize() returned with an error");
 
-        const EGLint egl_attributes[] = {EGL_BLUE_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_RED_SIZE, 8, EGL_DEPTH_SIZE, 24, EGL_SURFACE_TYPE, EGL_WINDOW_BIT, EGL_NONE};
-        EGLint num_configs = 0;
-        if (eglChooseConfig(g_EglDisplay, egl_attributes, nullptr, 0, &num_configs) != EGL_TRUE)
-            __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglChooseConfig() returned with an error");
-        if (num_configs == 0)
-            __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglChooseConfig() returned 0 matching config");
+            const EGLint egl_attributes[] = {EGL_BLUE_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_RED_SIZE, 8, EGL_DEPTH_SIZE, 24, EGL_SURFACE_TYPE, EGL_WINDOW_BIT, EGL_NONE};
+            EGLint num_configs = 0;
+            if (eglChooseConfig(g_EglDisplay, egl_attributes, nullptr, 0, &num_configs) != EGL_TRUE)
+                __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglChooseConfig() returned with an error");
+            if (num_configs == 0)
+                __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglChooseConfig() returned 0 matching config");
 
-        // Get the first matching config
-        EGLConfig egl_config;
-        eglChooseConfig(g_EglDisplay, egl_attributes, &egl_config, 1, &num_configs);
+            eglChooseConfig(g_EglDisplay, egl_attributes, &g_EglConfig, 1, &num_configs);
+        }
+
         EGLint egl_format;
-        eglGetConfigAttrib(g_EglDisplay, egl_config, EGL_NATIVE_VISUAL_ID, &egl_format);
+        eglGetConfigAttrib(g_EglDisplay, g_EglConfig, EGL_NATIVE_VISUAL_ID, &egl_format);
         ANativeWindow_setBuffersGeometry(g_App->window, 0, 0, egl_format);
 
-        const EGLint egl_context_attributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-        g_EglContext = eglCreateContext(g_EglDisplay, egl_config, EGL_NO_CONTEXT, egl_context_attributes);
-
         if (g_EglContext == EGL_NO_CONTEXT)
-            __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglCreateContext() returned EGL_NO_CONTEXT");
+        {
+            const EGLint egl_context_attributes[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+            g_EglContext = eglCreateContext(g_EglDisplay, g_EglConfig, EGL_NO_CONTEXT, egl_context_attributes);
+            if (g_EglContext == EGL_NO_CONTEXT)
+                __android_log_print(ANDROID_LOG_ERROR, g_LogTag, "%s", "eglCreateContext() returned EGL_NO_CONTEXT");
+        }
 
-        g_EglSurface = eglCreateWindowSurface(g_EglDisplay, egl_config, g_App->window, NULL);
+        g_EglSurface = eglCreateWindowSurface(g_EglDisplay, g_EglConfig, g_App->window, NULL);
         eglMakeCurrent(g_EglDisplay, g_EglSurface, g_EglSurface, g_EglContext);
     }
 
@@ -79,14 +90,10 @@ void init(struct android_app *app)
         // Disable loading/saving of .ini file from disk.
         // FIXME: Consider using LoadIniSettingsFromMemory() / SaveIniSettingsToMemory() to save in appropriate location for Android.
         io.IniFilename = NULL;
-    }
 
-    // Setup Platform/Renderer backends
-    ImGui_ImplAndroid_Init(g_App->window);
-    ImGui_ImplOpenGL3_Init("#version 300 es");
-
-    if (!was_init)
-    {
+        // Setup Platform/Renderer backends
+        ImGui_ImplAndroid_Init(g_App->window);
+        ImGui_ImplOpenGL3_Init("#version 300 es");
 
         // Setup Dear ImGui style
         // ImGui::StyleColorsDark();
@@ -113,7 +120,11 @@ void init(struct android_app *app)
         was_init = true;
     }
     else
+    {
+        ImGui_ImplAndroid_Init(g_App->window);
+        eglSwapInterval(g_EglDisplay, 1);
         HideSoftKeyboardInput();
+    }
 
     g_Initialized = true;
 }
@@ -121,7 +132,7 @@ void init(struct android_app *app)
 void tick()
 {
     ImGuiIO &io = ImGui::GetIO();
-    if (g_EglDisplay == EGL_NO_DISPLAY)
+    if (g_EglDisplay == EGL_NO_DISPLAY || g_EglSurface == EGL_NO_SURFACE || !g_Initialized)
         return;
 
     // Poll Unicode characters via JNI
@@ -140,35 +151,41 @@ void tick()
     satdump::renderMainUI();
 }
 
-void shutdown()
+void shutdown(bool destroy_context = false)
 {
-    if (!g_Initialized)
-        return;
-
-    // Cleanup
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplAndroid_Shutdown();
-    // ImGui::DestroyContext();
-
-    if (g_EglDisplay != EGL_NO_DISPLAY)
+    if (g_Initialized)
     {
-        eglMakeCurrent(g_EglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        ImGui_ImplAndroid_Shutdown();
+        if (destroy_context)
+            ImGui_ImplOpenGL3_Shutdown();
 
-        if (g_EglContext != EGL_NO_CONTEXT)
-            eglDestroyContext(g_EglDisplay, g_EglContext);
+        if (g_EglDisplay != EGL_NO_DISPLAY)
+        {
+            eglMakeCurrent(g_EglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-        if (g_EglSurface != EGL_NO_SURFACE)
-            eglDestroySurface(g_EglDisplay, g_EglSurface);
+            if (g_EglSurface != EGL_NO_SURFACE)
+            {
+                eglDestroySurface(g_EglDisplay, g_EglSurface);
+                g_EglSurface = EGL_NO_SURFACE;
+            }
+        }
 
-        eglTerminate(g_EglDisplay);
+        if (g_App && g_App->window)
+            ANativeWindow_release(g_App->window);
+
+        g_Initialized = false;
     }
 
-    g_EglDisplay = EGL_NO_DISPLAY;
-    g_EglContext = EGL_NO_CONTEXT;
-    g_EglSurface = EGL_NO_SURFACE;
-    ANativeWindow_release(g_App->window);
-
-    g_Initialized = false;
+    if (destroy_context && g_EglDisplay != EGL_NO_DISPLAY)
+    {
+        if (g_EglContext != EGL_NO_CONTEXT)
+        {
+            eglDestroyContext(g_EglDisplay, g_EglContext);
+            g_EglContext = EGL_NO_CONTEXT;
+        }
+        eglTerminate(g_EglDisplay);
+        g_EglDisplay = EGL_NO_DISPLAY;
+    }
 }
 
 static void handleAppCmd(struct android_app *app, int32_t appCmd)
@@ -176,15 +193,19 @@ static void handleAppCmd(struct android_app *app, int32_t appCmd)
     switch (appCmd)
     {
     case APP_CMD_INIT_WINDOW:
-        init(app);
+    case APP_CMD_RESUME:
+        if (!g_Initialized && app->window != nullptr)
+            init(app);
         break;
     case APP_CMD_TERM_WINDOW:
+        shutdown(false);
+        break;
     case APP_CMD_PAUSE:
-        shutdown();
+        break;
+    case APP_CMD_DESTROY:
+        shutdown(true);
         break;
     case APP_CMD_SAVE_STATE:
-        // satdump::recorder_app->save_settings(); // TODOREWORK!!!!
-        // satdump::explorer_app->save_settings(); // TODOREWORK!!!!
         satdump::satdump_cfg.saveUser();
         break;
     }
@@ -263,6 +284,24 @@ std::string getPluginsDir(struct android_app *app)
 void android_main(struct android_app *app)
 {
     g_App = app;
+
+    // NativeActivity is loaded via dlopen, so the Java-side `external fun
+    // nativeOnUsbPermissionGranted()` cannot be bound automatically; register it explicitly so
+    // the USB-permission broadcast can wake the recorder to re-scan for SDR sources.
+    {
+        JNIEnv *java_env = nullptr;
+        if (app->activity->vm->AttachCurrentThread(&java_env, nullptr) == JNI_OK)
+        {
+            jclass clazz = java_env->GetObjectClass(app->activity->clazz);
+            static const JNINativeMethod methods[] = {
+                {"nativeOnUsbPermissionGranted", "()V", reinterpret_cast<void *>(Java_eu_mrtalon_gobdump_MainActivity_nativeOnUsbPermissionGranted)},
+            };
+            java_env->RegisterNatives(clazz, methods, 1);
+            java_env->DeleteLocalRef(clazz);
+            app->activity->vm->DetachCurrentThread();
+        }
+    }
+
     bindImageTextureFunctions();
     bindBackendFunctions();
 

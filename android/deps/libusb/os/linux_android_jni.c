@@ -480,12 +480,66 @@
      r = android_jni_env(jni, &jni_env);
      if (r != LIBUSB_SUCCESS)
          return r;
- 
-     /* Intent intent = new Intent(permission_action); */
-     intent =
-         (*jni_env)->NewObject(jni_env,
-             jni->Intent, jni->Intent_init,
-             jni->permission_action);
+         
+    /* Skip USB-Ethernet adapters (e.g. Realtek RTL8152/8153/8156) so libusb doesn't
+       trigger Android UsbManager permission popups on network interfaces */
+    {
+        jclass dev_cls = (*jni_env)->GetObjectClass(jni_env, device);
+        jmethodID get_vid = (*jni_env)->GetMethodID(jni_env, dev_cls, "getVendorId", "()I");
+        jmethodID get_pid = (*jni_env)->GetMethodID(jni_env, dev_cls, "getProductId", "()I");
+        jmethodID get_cls = (*jni_env)->GetMethodID(jni_env, dev_cls, "getDeviceClass", "()I");
+        jint vid = (*jni_env)->CallIntMethod(jni_env, device, get_vid);
+        jint pid = (*jni_env)->CallIntMethod(jni_env, device, get_pid);
+        jint dcls = (*jni_env)->CallIntMethod(jni_env, device, get_cls);
+        (*jni_env)->DeleteLocalRef(jni_env, dev_cls);
+
+        if (dcls == 2 || (vid == 0x0bda && ((pid & 0xff00) == 0x8100))) {
+            return LIBUSB_SUCCESS;
+        }
+    }
+
+    /* Verify the device is still physically connected in UsbManager.getDeviceList()
+       and does not already have permission before prompting the user */
+    {
+        jboolean already_has = (*jni_env)->CallBooleanMethod(jni_env,
+            jni->usb_manager, jni->UsbManager_hasPermission, device);
+        if (already_has) {
+            return LIBUSB_SUCCESS;
+        }
+
+        jint target_id = (*jni_env)->CallIntMethod(jni_env, device, jni->UsbDevice_getDeviceId);
+        jobject dev_map = (*jni_env)->CallObjectMethod(jni_env,
+            jni->usb_manager, jni->UsbManager_getDeviceList);
+        jobject dev_col = (*jni_env)->CallObjectMethod(jni_env,
+            dev_map, jni->HashMap_values);
+        (*jni_env)->DeleteLocalRef(jni_env, dev_map);
+
+        jobject dev_iter = (*jni_env)->CallObjectMethod(jni_env,
+            dev_col, jni->Collection_iterator);
+        (*jni_env)->DeleteLocalRef(jni_env, dev_col);
+
+        jboolean still_connected = JNI_FALSE;
+        while ((*jni_env)->CallBooleanMethod(jni_env, dev_iter, jni->Iterator_hasNext)) {
+            jobject cur_dev = (*jni_env)->CallObjectMethod(jni_env, dev_iter, jni->Iterator_next);
+            jint cur_id = (*jni_env)->CallIntMethod(jni_env, cur_dev, jni->UsbDevice_getDeviceId);
+            (*jni_env)->DeleteLocalRef(jni_env, cur_dev);
+            if (cur_id == target_id) {
+                still_connected = JNI_TRUE;
+                break;
+            }
+        }
+        (*jni_env)->DeleteLocalRef(jni_env, dev_iter);
+
+        if (!still_connected) {
+            return LIBUSB_ERROR_NO_DEVICE;
+        }
+    }
+
+    /* Intent intent = new Intent(permission_action); */
+    intent =
+        (*jni_env)->NewObject(jni_env,
+            jni->Intent, jni->Intent_init,
+            jni->permission_action);
  
      /* PendingIntent permission_intent =
          PendingIntent.getBroadcast(application_context, 0, intent, 0); */
@@ -536,11 +590,16 @@
  
      if (!has_permission)
          return LIBUSB_ERROR_ACCESS;
- 
+
      /* UsbDeviceConnection local_connection = usb_manager.openDevice(device); */
      local_connection =
          (*jni_env)->CallObjectMethod(jni_env,
              jni->usb_manager, jni->UsbManager_openDevice, device);
+     /* openDevice() returns null if the device detached or permission was revoked between the
+        check above and here; fail cleanly instead of dereferencing a null connection. */
+     if (!local_connection) {
+         return LIBUSB_ERROR_ACCESS;
+     }
  
      /* fd output */
      /* fd = local_connection.getFileDescriptor(); */

@@ -5,13 +5,15 @@
 #define LIBIIO_VERSION_MINOR	24
 #define LIBIIO_VERSION_GIT	"d23cbaf9"
 
-#define LOG_LEVEL Info_L
+/* Quiet libiio's per-transfer Info_L logging in logcat at high sample rates; surface errors only */
+#define LOG_LEVEL Error_L
 
 #define LIBIIO_SCAN_BACKENDS	"usb"
 
 #define WITH_LOCAL_BACKEND 0
-#define WITH_XML_BACKEND 0
-#define WITH_NETWORK_BACKEND 0
+/* Enabled on Android so USB/network iiod contexts can parse device XML descriptors */
+#define WITH_XML_BACKEND 1
+#define WITH_NETWORK_BACKEND 1
 #define WITH_USB_BACKEND 1
 #define WITH_SERIAL_BACKEND 0
 

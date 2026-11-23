@@ -142,6 +142,15 @@ namespace style
         }
         style.ScaleAllSizes(ui_scale);
 
+#ifdef __ANDROID__
+        // Expand touch hitboxes for fingers on mobile screens (scrollbars, table/sidebar splitters, and child resize borders)
+        style.TouchExtraPadding = ImVec2(6.0f * ui_scale, 6.0f * ui_scale);
+        style.ScrollbarSize = std::max(style.ScrollbarSize, 24.0f * ui_scale);
+        style.GrabMinSize = std::max(style.GrabMinSize, 20.0f * ui_scale);
+        style.WindowBorderSize = std::max(style.WindowBorderSize, 2.0f * ui_scale);
+        ImGui::GetIO().MouseDragThreshold = 10.0f * ui_scale;
+#endif
+
         // Built-in ImGui colors
         if (data.contains("ImGuiColors") && data["ImGuiColors"].is_object())
         {
