@@ -31,6 +31,16 @@ namespace satdump
                     if (val == CALIBRATION_INVALID_VALUE)
                         return val; // Special case
 
+                    // Same guard as SunAngleConverter : without a projection there is no way to
+                    // know which pixel this is (and hence the solar elevation), so the conversion
+                    // is simply unavailable. Calling proj.inverse() on an uninitialized transform
+                    // throws "Invalid Channel Transform!", which aborted the whole application
+                    // (uncaught exception -> std::terminate) when the mouse-over readout in
+                    // image_product_handler ran over a product with no projection config, such as
+                    // the FY-2 S-VISSR HDF products.
+                    if (!((UnitConverter *)c)->proj_valid)
+                        return CALIBRATION_INVALID_VALUE;
+
                     geodetic::geodetic_coords_t pos;
                     double timestamp = -1;
                     if (((UnitConverter *)c)->proj.inverse(x, y, pos, &timestamp, false))
