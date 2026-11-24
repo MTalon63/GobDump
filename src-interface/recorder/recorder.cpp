@@ -10,6 +10,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_stdlib.h"
 #include "logger.h"
+#include <algorithm>
 #include <math.h>
 
 #include "main_ui.h"
@@ -21,7 +22,7 @@
 
 namespace satdump
 {
-    SATDUMP_DLL std::atomic<bool> refresh_sdr_sources_requested{false};
+    std::atomic<bool> refresh_sdr_sources_requested{false};
 
     RecorderApplication::RecorderApplication(nlohmann::json cli_set) : handlers::Handler(), pipeline_selector(true)
     {

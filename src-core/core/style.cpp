@@ -10,6 +10,7 @@
 #include "logger.h"
 #include "nlohmann/json_utils.h"
 #include "style.h"
+#include <algorithm>
 #include <filesystem>
 
 #ifdef __APPLE__

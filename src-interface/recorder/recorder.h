@@ -75,7 +75,7 @@ namespace satdump
         float fft_avgn = -1;
     };
     // Set from the Android USB-permission callback (JNI) to ask the recorder to re-scan SDR sources.
-    extern SATDUMP_DLL std::atomic<bool> refresh_sdr_sources_requested;
+    extern std::atomic<bool> refresh_sdr_sources_requested;
     class RecorderApplication : public handlers::Handler
     {
     public:

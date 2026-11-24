@@ -6,6 +6,7 @@ F5OEO FixMe :
 */
 #include "plutosdr_sdr.h"
 #include "imgui/imgui.h"
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstring>
