@@ -8,6 +8,7 @@
 #include <exception>
 #include <thread>
 #include "common/utils.h"
+#include <cmath>
 
 namespace satdump
 {
@@ -33,12 +34,14 @@ namespace satdump
 
     std::string strLE(double val, int sz)
     {
+        // Packed TLE form: value sign, (sz - 3) mantissa digits with an implied leading decimal
+        // point, then the exponent's SIGN and one exponent digit. So -.2934936E+1 is "-29349+1".
         if (val == 0)
         {
             std::string res(sz - 2, '0');
             return res + "-0";
         }
-        else if (val < 1)
+        else if (val > -1 && val < 1)
         {
             int mult = 0;
             while (fmod(val * pow(10, mult), 1) != 0)
@@ -64,7 +67,36 @@ namespace satdump
             return res;
         }
         else
-            throw satdump_exception("Error, value must be below 1!");
+        {
+            // Magnitude >= 1, i.e. a POSITIVE exponent. The old code threw here, and for negative
+            // values it fell into the fmod() loop above, whose condition never becomes false --
+            // an infinite loop. Both are reachable with real data: Celestrak and ReTLEctor publish
+            // "-.2934936E+1" (= -2.93) for genuine objects. A single such row in the database
+            // aborted (or hung) the app on every start while it rebuilt TLEs.
+            double a = fabs(val);
+            int exp = 0;
+            while (a >= 1.0 && exp < 10)
+            {
+                a /= 10.0;
+                exp++;
+            }
+
+            if (exp > 9)
+                throw satdump_exception("Error, value too large to encode!");
+
+            int mant = (int)llround(a * pow(10, sz - 3));
+            if (mant >= (int)pow(10, sz - 3)) // rounding carried into an extra digit
+            {
+                mant /= 10;
+                exp++;
+            }
+
+            std::string res = std::to_string(mant);
+            while (res.size() < (size_t)(sz - 3))
+                res = "0" + res;
+
+            return std::string(val < 0 ? "-" : " ") + res + "+" + std::to_string(exp);
+        }
     }
 
     // TLE checksum: digits add their value, '-' adds 1, anything else adds 0
@@ -91,7 +123,12 @@ namespace satdump
         int tle_id = kep.satellite_number > 99999 ? 99999 : kep.satellite_number;
 
         time_t tmptime = kep.epoch;
-        tm timeS = *gmtime(&tmptime);
+        // A corrupted/uninitialized epoch dereferenced a NULL gmtime() result and crashed. Return an
+        // empty TLE so get_all_tles() can skip the row.
+        struct tm *tmp_tm = gmtime(&tmptime);
+        if (tmp_tm == nullptr)
+            return TLE();
+        tm timeS = *tmp_tm;
         int year = timeS.tm_year;
         // logger->critical(year);
         memset(&timeS, 0, sizeof(struct tm));
@@ -169,12 +206,15 @@ namespace satdump
             std::tm timeS;
             double seconds;
             memset(&timeS, 0, sizeof(std::tm));
-            if (sscanf(elems[2].c_str(), "%4d-%2d-%2dT%2d:%2d:%lf", &timeS.tm_year, &timeS.tm_mon, &timeS.tm_mday, &timeS.tm_hour, &timeS.tm_min, &seconds) == 6)
-            {
-                timeS.tm_year -= 1900;
-                timeS.tm_mon -= 1;
-                kep.epoch = timegm(&timeS) + seconds;
-            }
+            // Require a valid epoch: otherwise kep.epoch kept its stack garbage (the struct had no
+            // initializers) and that value was written to the database, to be dereferenced through
+            // gmtime() on the next start.
+            if (sscanf(elems[2].c_str(), "%4d-%2d-%2dT%2d:%2d:%lf", &timeS.tm_year, &timeS.tm_mon, &timeS.tm_mday, &timeS.tm_hour, &timeS.tm_min, &seconds) != 6)
+                return false;
+
+            timeS.tm_year -= 1900;
+            timeS.tm_mon -= 1;
+            kep.epoch = timegm(&timeS) + seconds;
 
             kep.name = elems[0];
             kep.designator = elems[1];
@@ -193,6 +233,15 @@ namespace satdump
             kep.bstar_drag_term = std::stod(elems[14]);
             kep.derivative_mean_motion = std::stod(elems[15]);
             kep.second_derivative_mean_motion = std::stod(elems[16]);
+
+            // Only reject values that cannot be encoded at all. Magnitudes >= 1 are LEGITIMATE --
+            // Celestrak publishes BSTAR as "-.2934936E+1" and the packed TLE field carries a signed
+            // exponent -- so they must not be filtered out here; strLE() encodes them.
+            if (!std::isfinite(kep.bstar_drag_term) || !std::isfinite(kep.second_derivative_mean_motion) || !std::isfinite(kep.epoch))
+            {
+                logger->warn("Skipping OMM %s (%s): non-finite element value", kep.name.c_str(), kep.designator.c_str());
+                return false;
+            }
         }
         catch (std::exception &e)
         {

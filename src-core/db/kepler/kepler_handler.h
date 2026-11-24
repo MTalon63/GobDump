@@ -3,28 +3,31 @@
 #include "common/tracking/tle.h"
 #include "core/exception.h"
 #include "db/db_handler.h"
+#include "logger.h"
 #include <mutex>
 #include <vector>
 
 namespace satdump
 {
+    // Fields are zero-initialized: a row parsed from a malformed feed used to leave whatever was
+    // on the stack (notably epoch) and that garbage got persisted.
     struct KeplerData
     {
-        int satellite_number;                 // Satellite number
-        long element_number;                  // Element number
-        std::string name;                     // Satellite Name
-        std::string designator;               // International designator
-        double epoch;                         // Epoch (Unix Time)
-        double inclination;                   // Inclination
-        double right_ascension;               // Right Ascension of the Ascending Node [Degrees]
-        double eccentricity;                  // Eccentricity
-        double argument_of_perigee;           // Argument of Perigee [Degrees]
-        double mean_anomaly;                  // Mean Anomaly [Degrees]
-        double mean_motion;                   // Mean Motion [Revs per day]
-        double derivative_mean_motion;        // First Time Derivative of the Mean Motion divided by two
-        double second_derivative_mean_motion; // Second Time Derivative of Mean Motion divided by six
-        double bstar_drag_term;               // BSTAR drag term
-        int revolutions_at_epoch;             // Number of revolutions around Earth at epoch
+        int satellite_number = 0;                 // Satellite number
+        long element_number = 0;                  // Element number
+        std::string name;                         // Satellite Name
+        std::string designator;                   // International designator
+        double epoch = 0;                         // Epoch (Unix Time)
+        double inclination = 0;                   // Inclination
+        double right_ascension = 0;               // Right Ascension of the Ascending Node [Degrees]
+        double eccentricity = 0;                  // Eccentricity
+        double argument_of_perigee = 0;           // Argument of Perigee [Degrees]
+        double mean_anomaly = 0;                  // Mean Anomaly [Degrees]
+        double mean_motion = 0;                   // Mean Motion [Revs per day]
+        double derivative_mean_motion = 0;        // First Time Derivative of the Mean Motion divided by two
+        double second_derivative_mean_motion = 0; // Second Time Derivative of Mean Motion divided by six
+        double bstar_drag_term = 0;               // BSTAR drag term
+        int revolutions_at_epoch = 0;             // Number of revolutions around Earth at epoch
     };
 
     TLE keplerToTle(KeplerData kep);
@@ -87,7 +90,24 @@ namespace satdump
             std::vector<TLE> tles;
             auto keps = getAllNewestKepler();
             for (auto &kep : keps)
-                tles.push_back(keplerToTle(kep));
+            {
+                // One unusable row must not take the whole app down: this runs during startup, and
+                // the TLE builder throws for values it cannot encode (a feed writing BSTAR as
+                // "-.2934936E+1" = -2.93 was persisted, then every later start died here). Such rows
+                // are already in users' databases, so skip them instead of aborting.
+                try
+                {
+                    TLE tle = keplerToTle(kep);
+                    if (!tle.line1.empty())
+                        tles.push_back(tle);
+                    else
+                        logger->warn("Skipping Kepler %d (%s): epoch out of range", kep.satellite_number, kep.name.c_str());
+                }
+                catch (std::exception &e)
+                {
+                    logger->warn("Skipping Kepler %d (%s): %s", kep.satellite_number, kep.name.c_str(), e.what());
+                }
+            }
             return tles;
         }
 
