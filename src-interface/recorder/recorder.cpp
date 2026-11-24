@@ -92,20 +92,27 @@ namespace satdump
         }
 
         // If no source has been opened yet, open the first possible one. Synthetic manual entries
-        // (PlutoSDR IP / RTL-TCP / ...) are skipped so a real detected device is preferred.
-        for (int i = 0; sdr_select_id == -1 && i < (int)sources.size(); i++)
+        // (PlutoSDR IP / RTL-TCP / ...) are skipped, and a real detected device is preferred over the
+        // File Source; the File Source is only used as a last resort (pass 1). A previously saved
+        // last-used source -- including the File Source -- is honoured above and never reaches here.
+        for (int pass = 0; pass < 2 && sdr_select_id == -1; pass++)
         {
-            if (!sources[i].auto_select_ok)
-                continue;
-            try
+            for (int i = 0; sdr_select_id == -1 && i < (int)sources.size(); i++)
             {
-                source_ptr = dsp::getSourceFromDescriptor(sources[i]);
-                source_ptr->open();
-                sdr_select_id = i;
-            }
-            catch (std::runtime_error &e)
-            {
-                logger->error(e.what());
+                if (!sources[i].auto_select_ok)
+                    continue;
+                if (pass == 0 && sources[i].source_type == "file")
+                    continue; // prefer a real device; fall back to the File Source only if nothing else opens
+                try
+                {
+                    source_ptr = dsp::getSourceFromDescriptor(sources[i]);
+                    source_ptr->open();
+                    sdr_select_id = i;
+                }
+                catch (std::runtime_error &e)
+                {
+                    logger->error(e.what());
+                }
             }
         }
 
