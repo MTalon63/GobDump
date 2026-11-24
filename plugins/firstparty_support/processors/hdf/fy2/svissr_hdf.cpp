@@ -169,7 +169,9 @@ namespace satdump
             // Ordered by ascending wavelength to match SatDump's fy2_svissr calibrator:
             // 0: VIS (0.725um), 1: IR4 (3.75um), 2: IR3 (6.75um), 3: IR1 (10.8um), 4: IR2 (12.0um)
             const std::vector<ChannelDef> channels = {
-                {0, "SVISSR-1", "1", "NOMChannelVIS1KM", "CALChannelVIS1KM", "ch1_lut", 0.725e-6, 6, true, false},
+                // The 1km VIS file ships its VIS calibration table as CALChannelVIS (there is no
+                // CALChannelVIS1KM in the NOM files), so both VIS entries read the same table.
+                {0, "SVISSR-1", "1", "NOMChannelVIS1KM", "CALChannelVIS", "ch1_lut", 0.725e-6, 6, true, false},
                 {0, "SVISSR-1", "1", "NOMChannelVIS", "CALChannelVIS", "ch1_lut", 0.725e-6, 6, true, true},
                 {1, "SVISSR-2", "2", "NOMChannelIR4", "CALChannelIR4", "ch2_lut", 3.75e-6, 10, false, false},
                 {2, "SVISSR-3", "3", "NOMChannelIR3", "CALChannelIR3", "ch3_lut", 6.75e-6, 10, false, false},
