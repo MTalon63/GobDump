@@ -74,6 +74,7 @@ namespace satdump
                 double ut1_utc;
             };
             std::vector<IersEntry> entries;
+            int no_data = 0; // days the feed carries as empty strings (values not published yet)
 
             try
             {
@@ -84,6 +85,16 @@ namespace satdump
                     {
                         if (v["dataEOP"]["pole"][0]["source"] != "BulletinA")
                             continue;
+
+                        // The feed runs ~50 days PAST the last published data, carrying empty
+                        // strings (for both BulletinA and BulletinB) until values exist. That is
+                        // normal, not a parse failure, so it is counted and summarised below
+                        // instead of logging one "malformed entry" line per day, every update.
+                        if (v["dataEOP"]["pole"][0]["X"].get<std::string>().empty())
+                        {
+                            no_data++;
+                            continue;
+                        }
 
                         IersEntry entry;
                         entry.time = ((std::stod(v["time"]["MJD"].get<std::string>()) - 40587) * 86400);
@@ -102,6 +113,9 @@ namespace satdump
             {
                 logger->error("Error parsing IERS data! %s", e.what());
             }
+
+            if (no_data > 0)
+                logger->debug("Skipped %d IERS entries with no published values yet", no_data);
 
             if (!entries.empty())
             {
@@ -210,7 +224,11 @@ namespace satdump
         IERSInfo r;
         sqlite3_stmt *res = nullptr;
 
-        if (sqlite3_prepare_v2(h->db, ("select a_pole_x,a_pole_y,ut1_utc from iers order by abs(" + std::to_string(time) + ") asc limit 1").c_str(), -1, &res, 0) != SQLITE_OK)
+        // NOTE: this used to read `order by abs(<time>)`, which never references the time COLUMN --
+        // so it ordered by a constant, left every row tied and returned whichever row came first
+        // (the oldest in the table, e.g. 1973). Absent the subtraction it is not a nearest-time
+        // lookup at all; the Kepler query next door does it correctly.
+        if (sqlite3_prepare_v2(h->db, ("select a_pole_x,a_pole_y,ut1_utc from iers order by abs(time - " + std::to_string(time) + ") asc limit 1").c_str(), -1, &res, 0) != SQLITE_OK)
             logger->error("Couldn't fetch IERS data from DB! " + std::string(sqlite3_errmsg(h->db)));
         else if (sqlite3_step(res) == SQLITE_ROW)
         {
