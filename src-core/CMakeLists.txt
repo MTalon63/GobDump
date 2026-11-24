@@ -14,7 +14,29 @@ else()
     set(LIBRARIES_PATH "${CMAKE_INSTALL_FULL_LIBDIR}/gobdump/")
 endif()
 
-configure_file(${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx ${PROJECT_BINARY_DIR}/satdump_varst.cpp @ONLY)
+# The version translation unit is generated at BUILD time, not at configure time (see
+# cmake/version.cmake): a configure-time configure_file() froze the commit into the binary, so
+# rebuilding and reinstalling the same build directory after later commits left the banner and
+# --help naming an older commit, mislabelling installs handed out for testing. The command re-runs
+# only when a git file it depends on changes, and configure_file() leaves the output untouched when
+# the string is unchanged, so ordinary builds neither re-run it nor relink for nothing.
+set(GOBDUMP_VERSION_CPP ${PROJECT_BINARY_DIR}/satdump_varst.cpp)
+add_custom_command(
+    OUTPUT ${GOBDUMP_VERSION_CPP}
+    COMMAND ${CMAKE_COMMAND}
+        -DGOBDUMP_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -DGOBDUMP_PROJECT_VERSION=${PROJECT_VERSION}
+        -DGOBDUMP_VERSION_TYPE=${GOBDUMP_VERSION_TYPE}
+        -DGOBDUMP_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DGOBDUMP_VERSION_TEMPLATE=${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx
+        -DGOBDUMP_VERSION_OUTPUT=${GOBDUMP_VERSION_CPP}
+        -DRESOURCES_PATH=${RESOURCES_PATH}
+        -DLIBRARIES_PATH=${LIBRARIES_PATH}
+        -P ${PROJECT_SOURCE_DIR}/cmake/version.cmake
+    DEPENDS ${PROJECT_SOURCE_DIR}/src-core/satdump_varst.cxx ${GOBDUMP_VERSION_DEPENDS}
+    VERBATIM
+)
+add_custom_target(gobdump_version ALL DEPENDS ${GOBDUMP_VERSION_CPP})
 
 # NOTE: the generated satdump_varst.cpp is added explicitly below. Do NOT pass its absolute
 # path to GLOB_RECURSE: an absolute path makes CMake walk the whole binary tree, so any nested
