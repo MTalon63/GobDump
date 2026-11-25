@@ -277,6 +277,17 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# actions/checkout can fall back to downloading an archive when git is not
+# available in the container. In that case there is no commit hash, so provide
+# a valid Debian version suffix instead of generating a trailing '-'.
+if(GIT_HASH STREQUAL "")
+    if(NOT "$ENV{GITHUB_SHA}" STREQUAL "")
+        string(SUBSTRING "$ENV{GITHUB_SHA}" 0 7 GIT_HASH)
+    else()
+        set(GIT_HASH "0")
+    endif()
+endif()
+
 # GitHub Actions tag builds can have a shallow checkout without the tag ref.
 if(GIT_HAS_TAG STREQUAL "" AND "$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")
     set(GIT_HAS_TAG "$ENV{GITHUB_REF_NAME}")
@@ -458,8 +469,12 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
     set(CPACK_PACKAGE_VENDOR "GobDump")
     set(CPACK_PACKAGE_CONTACT "MTalon63")
 
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libfftw3-bin, libvolk-bin | libvolk2-bin, libpng16-16, libnng1, librtlsdr0 | librtlsdr2, libhackrf0, libairspy0, libairspyhf1, libglfw3 | libglfw3-wayland, libzstd1, libjemalloc2 | libjemalloc1, libportaudiocpp0, libhdf5-hl-100t64 | libhdf5-hl-100 | libhdf5-103 | libhdf5-100 | libhdf5-310, libdbus-1-dev, libsqlite3-0, libusb-1.0-0, libxrandr2, libuhd4.1.0 | libuhd4.6.0 | libuhd4.8.0 | libuhd4.9.0")
-    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libomp5, ocl-icd-libopencl1, intel-opencl-icd, mesa-opencl-icd, uhd-host")
+    # Keep distro-independent runtime dependencies here, and let CPack derive the
+    # exact SONAME packages (e.g. libvolk2.5 vs libvolk3.2 and libtiff5 vs
+    # libtiff6) from the binaries.  The old libvolk-bin/libvolk2-bin entries are
+    # utility packages and do not provide the libvolk shared library.
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libfftw3-bin, libpng16-16, libnng1, librtlsdr0 | librtlsdr2, libhackrf0, libairspy0, libairspyhf1, libglfw3 | libglfw3-wayland, libzstd1, libjemalloc2 | libjemalloc1, libportaudiocpp0, libhdf5-hl-100t64 | libhdf5-hl-100 | libhdf5-103 | libhdf5-100 | libhdf5-310, libdbus-1-dev, libsqlite3-0, libxrandr2, libuhd4.1.0 | libuhd4.6.0 | libuhd4.8.0 | libuhd4.9.0")
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libomp5, ocl-icd-libopencl1, intel-opencl-icd, mesa-opencl-icd")
 
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
     set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
@@ -528,7 +543,7 @@ if((NOT ANDROID) AND ENABLE_INSTALL)
         endif()
     else()
         set(CPACK_GENERATOR DEB)
-        #set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+        set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
         set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
         set(CPACK_DEB_COMPONENT_INSTALL ON)
     endif()

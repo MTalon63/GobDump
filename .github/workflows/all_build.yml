@@ -657,17 +657,23 @@ jobs:
         # well on Windows or Mac.  You can convert this to a matrix build if you need
         # cross-platform coverage.
         # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+        # Ubuntu's older SONAMEs (notably libvolk.so.2.5 and libtiff.so.5)
+        # are not available on current Raspberry Pi OS/Debian systems.
         runs-on: ubuntu-22.04-arm
+        container: debian:trixie
 
         steps:
             - uses: actions/checkout@v4
 
-
-            - name: Update repositories
-              run: sudo apt update
-
             - name: Install dependencies
-              run: sudo apt install -y libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk2-dev build-essential cmake pkgconf libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev ninja-build
+              run: |
+                  apt-get update
+                  apt-get install -y ca-certificates git build-essential cmake pkgconf ninja-build file \
+                    libdbus-1-dev libcurl4-openssl-dev libglfw3-dev libfftw3-dev libvolk-dev \
+                    libjpeg-dev libpng-dev libtiff-dev libairspy-dev libairspyhf-dev \
+                    libhackrf-dev librtlsdr-dev libomp-dev libnng-dev libiio-dev libzstd-dev \
+                    libad9361-dev libbladerf-dev libuhd-dev liblimesuite-dev ocl-icd-opencl-dev \
+                    libjemalloc-dev portaudio19-dev libhdf5-dev libsqlite3-dev
 
             - name: Install UHD build dependencies
               run: sudo apt install -y libboost-all-dev libusb-1.0-0-dev python3-mako
@@ -683,18 +689,18 @@ jobs:
 
 
             - name: Delete build dir
-              run: rm -rf ${{runner.workspace}}/build
+              run: rm -rf build
 
             - name: Create Build Environment
               # Some projects don't allow in-source building, so create a separate build directory
               # We'll use this as our working directory for all subsequent commands
-              run: cmake -E make_directory ${{runner.workspace}}/build
+              run: cmake -E make_directory build
 
             - name: Configure CMake
               # Use a bash shell so we can use the same syntax for environment variable
               # access regardless of the host operating system
               shell: bash
-              working-directory: ${{runner.workspace}}/build
+              working-directory: build
               # Note the current convention is to use the -S and -B options here to specify source
               # and build directories, but this is only available with CMake 3.13 and higher.
               # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
@@ -713,20 +719,39 @@ jobs:
                     -DPLUGIN_TUBSAT=ON
 
             - name: Build
-              working-directory: ${{runner.workspace}}/build
+              working-directory: build
               shell: bash
               run: ninja
 
             - name: Package
-              working-directory: ${{runner.workspace}}/build
+              working-directory: build
               shell: bash
               run: ninja package
+
+            - name: Verify Debian package
+              working-directory: build
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  deb=$(find . -maxdepth 1 -name '*.deb' -print -quit)
+                  test -n "$deb"
+                  dpkg-deb --info "$deb"
+                  dpkg-deb --extract "$deb" /tmp/gobdump-package
+                  for binary in gobdump gobdump-ui satdump_sdr_server; do
+                    if test -x "/tmp/gobdump-package/usr/bin/$binary"; then
+                      if ldd "/tmp/gobdump-package/usr/bin/$binary" | grep -q 'not found'; then
+                        echo "Unresolved shared library in $binary" >&2
+                        ldd "/tmp/gobdump-package/usr/bin/$binary" >&2
+                        exit 1
+                      fi
+                    fi
+                  done
 
             - name: Upload ZIP
               uses: actions/upload-artifact@v4
               with:
                   name: GobDump-Pi64-Latest
-                  path: ${{runner.workspace}}/build/*.deb
+                  path: build/*.deb
 
     build_macos_intel:
         runs-on: macos-15-intel
