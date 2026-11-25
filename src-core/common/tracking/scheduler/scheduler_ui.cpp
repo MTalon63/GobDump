@@ -243,7 +243,14 @@ namespace satdump
                         double cpass_xs = ((cpass.aos_time - curr_time) / (12.0 * 3600.0)) * d_pplot_size;
                         double cpass_xe = ((cpass.los_time - curr_time) / (12.0 * 3600.0)) * d_pplot_size;
 
-                        std::string name = "NORAD " + norad;
+                        // NOTE: this was "NORAD " + norad, which for an int is POINTER ARITHMETIC on
+                        // the string literal, not concatenation. For any real NORAD the pointer
+                        // landed tens of KB past the literal, and std::string then read until a NUL
+                        // and sized its allocation from that bogus length. On Android the wrapped
+                        // capacity arithmetic made operator new fail with std::bad_alloc, which was
+                        // uncaught and killed the app -- triggered by drawing passes, i.e. right
+                        // after Update Passes.
+                        std::string name = "NORAD " + std::to_string(norad);
 #if 0
                         std::optional<TLE> this_tle = db_keplers->get_from_norad(norad);
                         if (this_tle.has_value())
