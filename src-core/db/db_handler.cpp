@@ -17,23 +17,29 @@ namespace satdump
         else
             logger->info("Opened SQLite Database!");
         sqlite3_busy_timeout(db, 1000);
-    }
 
-    void DBHandler::init()
-    {
-        // Create meta table used to store random simple fields
+        // The base tables must exist as soon as the file is open, NOT later in init(): init() is
+        // only reached after the config is loaded, the plugins are loaded and db->get_user(
+        // "language") has already been read. On a FRESH database all of that ran against an empty
+        // file, so each use failed with "no such table: user" and startup-time settings were
+        // silently dropped. Existing databases hid this because their tables came from a past run.
         std::string sql_create_meta = "CREATE TABLE IF NOT EXISTS meta("
                                       "id TEXT PRIMARY KEY NOT NULL,"
                                       "val TEXT NOT NULL);";
         if (run_sql(sql_create_meta))
             throw satdump_exception("Failed creating meta table!");
 
-        // Create meta table used to store random simple fields
         std::string sql_create_user = "CREATE TABLE IF NOT EXISTS user("
                                       "id TEXT PRIMARY KEY NOT NULL,"
                                       "val TEXT NOT NULL);";
         if (run_sql(sql_create_user))
             throw satdump_exception("Failed creating user table!");
+    }
+
+    void DBHandler::init()
+    {
+        // meta and user are already created by the constructor -- they have to exist before the
+        // config and plugins are loaded, which all happens before this is called.
 
         // Let everything else do the same!
         logger->info("Setting up database...");
