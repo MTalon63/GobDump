@@ -62,8 +62,7 @@ build_fftw3() {
     cd fftw3
     mkdir build
     cd build
-    # FFTW's CMakeLists.txt predates CMake 3.5. CMake 4 rejects that
-    # declaration unless the old policy compatibility floor is explicitly set.
+    # FFTW 3.3.10 asks for cmake_minimum_required(VERSION 3.0), which CMake 4.x refuses.
     cmake $(get_cmake_command $1) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX=$OUTPUT_DIR/$1 -DBUILD_SHARED_LIBS=OFF -DENABLE_FLOAT=ON ..
     make -j$(nproc) install
     cd ..

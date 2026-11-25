@@ -21,10 +21,12 @@
 #include "type.h"
 #include "utils/string.h"
 #include "utils/time.h"
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
 #include <string>
 
 #include "processors/nat/msg/seviri_nat.h"
@@ -36,6 +38,57 @@ namespace satdump
 {
     namespace firstparty
     {
+        // Download managers tag names ("...-140708_0.nc"); the parsers demand exact names.
+        static bool stripTrailingNumberTag(std::string &stem)
+        {
+            size_t i = stem.size();
+            while (i > 0 && std::isdigit((unsigned char)stem[i - 1]))
+                i--;
+            if (i == stem.size() || i < 2)
+                return false;
+            if (stem[i - 1] != '-' && stem[i - 1] != '_')
+                return false;
+            stem.resize(i - 1);
+            return true;
+        }
+
+        static std::string stripNameJunk(std::string name)
+        {
+            std::filesystem::path p(name);
+            std::string stem = p.stem().string();
+            std::string ext = p.extension().string();
+
+            for (int n = 0; n < 3; n++)
+            {
+                if (stem.size() > 4 && stem.back() == ')')
+                {
+                    size_t o = stem.rfind(" (");
+                    if (o != std::string::npos && o > 0 && stem.find_first_not_of("0123456789", o + 2) == stem.size() - 1)
+                    {
+                        stem.resize(o);
+                        continue;
+                    }
+                }
+                if (!stripTrailingNumberTag(stem))
+                    break;
+            }
+
+            return stem + ext;
+        }
+
+        class RenamedIteratorItem : public satdump::utils::FilesIteratorItem
+        {
+        private:
+            std::shared_ptr<satdump::utils::FilesIteratorItem> base;
+
+        public:
+            RenamedIteratorItem(std::string name, std::shared_ptr<satdump::utils::FilesIteratorItem> base) : FilesIteratorItem(name), base(base) {}
+
+            std::vector<uint8_t> getPayload() { return base->getPayload(); }
+
+            std::vector<uint8_t> getPayloadPrefix(size_t max_size) { return base->getPayloadPrefix(max_size); }
+        };
+
         // TODOREWORK move!
         std::string MetOpNumToName(int num)
         {
@@ -606,7 +659,7 @@ namespace satdump
                      FirstPartyProductInfo i;
 
                      xrit::XRITFile file;
-                     file.lrit_data = f->getPayload();
+                     file.lrit_data = f->getPayloadPrefix(65536);
                      file.parseHeaders(true);
 
                      xrit::XRITFileInfo ii = xrit::identifyXRITFIle(file);
@@ -633,6 +686,23 @@ namespace satdump
                 if (finfo.type != PRODUCT_NONE)
                     return finfo;
             }
+
+            std::string cleaned = stripNameJunk(f->name);
+            if (cleaned != f->name)
+            {
+                std::shared_ptr<satdump::utils::FilesIteratorItem> cf = std::make_shared<RenamedIteratorItem>(cleaned, f);
+
+                for (auto &p : getRegisteredProducts())
+                {
+                    auto finfo = p.testFile(cf);
+                    if (finfo.type != PRODUCT_NONE)
+                    {
+                        logger->debug("Identified %s after stripping name suffix", cleaned.c_str());
+                        return finfo;
+                    }
+                }
+            }
+
             return FirstPartyProductInfo();
         }
 

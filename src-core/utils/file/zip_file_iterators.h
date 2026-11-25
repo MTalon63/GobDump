@@ -20,6 +20,27 @@ namespace satdump
             ZipFileIteratorItem(mz_zip_archive *zip, int num, std::string name) : FilesIteratorItem(name), zip(zip), num(num) {}
             ~ZipFileIteratorItem() {}
 
+            std::vector<uint8_t> getPayloadPrefix(size_t max_size)
+            {
+                mz_zip_archive_file_stat stat;
+                if (!mz_zip_reader_file_stat((mz_zip_archive *)zip, num, &stat))
+                    return {};
+
+                size_t fsize = (size_t)stat.m_uncomp_size;
+                if (fsize > max_size)
+                    fsize = max_size;
+
+                std::vector<uint8_t> vec;
+                if (fsize == 0)
+                    return vec;
+                vec.resize(fsize);
+
+                if (!mz_zip_reader_extract_to_mem((mz_zip_archive *)zip, num, vec.data(), fsize, 0))
+                    vec.clear();
+
+                return vec;
+            }
+
             std::vector<uint8_t> getPayload()
             {
                 size_t filesize = 0;
