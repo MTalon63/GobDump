@@ -41,6 +41,34 @@ namespace satdump
             v.line2 = j["line2"].get<std::string>();
     }
 
+    // Minimal, conservative sanity check for a pair of TLE element lines. This is what
+    // keeps garbage away from the orbit propagator: a malformed pair makes predict_*()
+    // return constants, and the AOS/pass searches around it then loop forever. The check
+    // is deliberately loose on formatting (no checksum requirement) so real rows fetched
+    // from Celestrak or rebuilt from the database always pass, while empty, truncated,
+    // shifted or unrelated lines cannot.
+    inline bool isValidTle(const std::string &line1, const std::string &line2)
+    {
+        if (line1.size() < 60 || line2.size() < 60)
+            return false;
+        if (line1[0] != '1' || line2[0] != '2')
+            return false;
+
+        // Both lines must carry the same satellite-number field (columns 3-7). Compare the field
+        // as-is rather than demanding five digits: strL() pads with SPACES, so a 4-digit NORAD is
+        // published as " 6235", and a digits-only test would reject a real satellite. Requiring at
+        // least one digit still rejects a pair of blank fields, and a shifted, duplicated or
+        // mismatched pair fails the equality test below.
+        const std::string n1 = line1.substr(2, 5);
+        const std::string n2 = line2.substr(2, 5);
+        if (n1 != n2)
+            return false;
+        for (char c : n1)
+            if (c >= '0' && c <= '9')
+                return true;
+        return false;
+    }
+
     struct TLEsUpdatedEvent
     {
     };

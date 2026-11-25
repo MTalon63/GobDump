@@ -1,5 +1,6 @@
 #include "passes.h"
 #include "common/geodetic/geodetic_coordinates.h"
+#include "common/tracking/tle.h"
 #include "init.h"
 #include "libs/predict/predict.h"
 #include "logger.h"
@@ -11,6 +12,10 @@ namespace satdump
 {
     namespace
     {
+        // Bounds the AOS search further down, same reasoning as in object_tracker_backend.cpp:
+        // a valid pass converges in tens of steps, so this only trips on malformed input.
+        const int MAX_AOS_SEARCH_STEPS = 10000;
+
         bool is_elektro_l_rdas(int norad)
         {
             return norad == 41105 || norad == 44903 || norad == 55506 || norad == 67756;
@@ -41,7 +46,23 @@ namespace satdump
             return passes;
         }
 
+        // A malformed row would hand garbage to the propagator and the AOS search below could then
+        // loop forever, so refuse it up front. get_all_tles() already skips bad rows; this also
+        // covers hand-edited or externally supplied databases.
+        if (!isValidTle(tle->line1, tle->line2))
+        {
+            logger->error("TLE for NORAD %d is malformed; skipping pass calculation", norad);
+            predict_destroy_observer(observer_station);
+            return passes;
+        }
+
         predict_orbital_elements_t *satellite_object_ = predict_parse_tle(tle->line1.c_str(), tle->line2.c_str());
+        if (satellite_object_ == nullptr)
+        {
+            logger->error("Could not parse TLE for NORAD %d; skipping pass calculation", norad);
+            predict_destroy_observer(observer_station);
+            return passes;
+        }
         double current_time = initial_time;
 
         if (predict_is_geosynchronous(satellite_object_))
@@ -118,10 +139,18 @@ namespace satdump
                 // Calculate the AOS before that LOS
                 double next_aos_time_, next_los_time_;
                 next_aos_time_ = next_los_time_ = predict_from_julian(next_los.time);
+                int aos_search_steps = 0;
                 do
                 {
                     next_aos = predict_next_aos(observer_station, satellite_object_, predict_to_julian_double(next_aos_time_));
                     next_aos_time_ -= 10;
+                    if (++aos_search_steps > MAX_AOS_SEARCH_STEPS)
+                    {
+                        logger->error("AOS search did not converge after %d steps; skipping NORAD %d", aos_search_steps, norad);
+                        predict_destroy_orbital_elements(satellite_object_);
+                        predict_destroy_observer(observer_station);
+                        return passes;
+                    }
                 } while (predict_from_julian(next_aos.time) >= next_los_time_);
 
                 next_los_time_ = predict_from_julian(next_los.time);
@@ -131,6 +160,11 @@ namespace satdump
                 predict_position satellite_orbit2;
                 predict_observation observation_pos2;
                 double time_step = abs(next_los_time_ - next_aos_time_) / 50.0;
+
+                // A zero or non-finite step would make the sampling loop below never advance.
+                if (!(time_step > 0))
+                    time_step = 1.0;
+
                 for (double ctime = next_aos_time_; ctime <= next_los_time_; ctime += time_step)
                 {
                     predict_orbit(satellite_object_, &satellite_orbit2, predict_to_julian_double(ctime));
@@ -157,6 +191,11 @@ namespace satdump
                 predict_position satellite_orbit2;
                 predict_observation observation_pos2;
                 double time_step = abs(pass.los_time - pass.aos_time) / 50.0;
+
+                // A zero or non-finite step would make the sampling loop below never advance.
+                if (!(time_step > 0))
+                    time_step = 1.0;
+
                 for (double ctime = pass.aos_time; ctime <= pass.los_time; ctime += time_step)
                 {
                     predict_orbit(satellite_object_, &satellite_orbit2, predict_to_julian_double(ctime));

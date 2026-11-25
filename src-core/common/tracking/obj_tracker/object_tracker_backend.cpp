@@ -9,6 +9,17 @@
 
 namespace satdump
 {
+    namespace
+    {
+        // A well-formed pass converges in tens of steps: a measured ISS pass needs ~39, and
+        // even a two-hour pass is ~720. The AOS search only fails to converge when the orbit
+        // predictions stop moving, which means a malformed TLE reached the propagator, so
+        // these caps can never fire for valid data. They replace an endless spin while
+        // holding general_mutex, which used to freeze the entire UI and stop autotrack.
+        const int MAX_AOS_SEARCH_STEPS = 10000;
+        const int MAX_MERIDIAN_SCAN_STEPS = 200000;
+    }
+
     void ObjectTracker::backend_run()
     {
         while (backend_should_run)
@@ -71,14 +82,35 @@ namespace satdump
                 }
                 else if (tracking_mode == TRACKING_SATELLITE)
                 {
-                    if (satellite_object != nullptr)
-                        predict_destroy_orbital_elements(satellite_object);
-
+                    // current_satellite_id is a position recorded when the object was selected, but
+                    // all_ is rebuilt on every TLE update, so it can now point at a different
+                    // satellite or past the end of the vector. Reading out of bounds fed the
+                    // propagator garbage element lines, and the unbounded AOS search in
+                    // updateNextPass() then spun forever while holding general_mutex, freezing the
+                    // UI and stopping autotrack. Refuse an out-of-range or malformed row and keep
+                    // the last good orbit instead.
                     auto &reg = db_keplers->all_;
-                    auto &tle = reg[current_satellite_id];
+                    if (current_satellite_id < 0 || current_satellite_id >= (int)reg.size())
+                    {
+                        logger->error("Tracked satellite index %d is out of range (%d TLEs in registry); keeping the current orbit",
+                                      current_satellite_id, (int)reg.size());
+                    }
+                    else
+                    {
+                        auto &tle = reg[current_satellite_id];
+                        if (!isValidTle(tle.line1, tle.line2))
+                        {
+                            logger->error("TLE for NORAD %d is malformed; keeping the current orbit", tle.norad);
+                        }
+                        else
+                        {
+                            if (satellite_object != nullptr)
+                                predict_destroy_orbital_elements(satellite_object);
 
-                    satellite_object = predict_parse_tle(tle.line1.c_str(), tle.line2.c_str());
-                    updateNextPass(current_time);
+                            satellite_object = predict_parse_tle(tle.line1.c_str(), tle.line2.c_str());
+                            updateNextPass(current_time);
+                        }
+                    }
                 }
 
                 backend_needs_update = false;
@@ -168,6 +200,10 @@ namespace satdump
             {
                 double time_step = abs(next_los_time - next_aos_time) / 50.0;
 
+                // A zero or non-finite step would make the sampling loop below never advance.
+                if (!(time_step > 0))
+                    time_step = 1.0;
+
                 for (double ctime = next_aos_time; ctime <= next_los_time; ctime += time_step)
                 {
                     int iter = 0;
@@ -193,12 +229,21 @@ namespace satdump
             predict_observation next_aos, next_los;
             next_aos = next_los = predict_next_los(satellite_observer_station, satellite_object, predict_to_julian_double(getTime()));
 
-            // Calculate the AOS before that LOS
+            // Calculate the AOS before that LOS. This search only terminates when the predictions
+            // actually move; with a malformed TLE predict_next_aos() can keep returning the same
+            // value and the loop never ends, spinning forever while holding general_mutex.
             next_aos_time = next_los_time = predict_from_julian(next_los.time);
+            int aos_search_steps = 0;
             do
             {
                 next_aos = predict_next_aos(satellite_observer_station, satellite_object, predict_to_julian_double(next_aos_time));
                 next_aos_time -= 10;
+                if (++aos_search_steps > MAX_AOS_SEARCH_STEPS)
+                {
+                    logger->error("AOS search did not converge after %d steps; aborting pass calculation", aos_search_steps);
+                    upcoming_passes_mtx.unlock();
+                    return;
+                }
             } while (predict_from_julian(next_aos.time) >= next_los_time);
 
             next_los_time = predict_from_julian(next_los.time);
@@ -219,6 +264,7 @@ namespace satdump
                 predict_orbit(satellite_object, &satellite_orbit2, predict_to_julian_double(currTime));
                 predict_observe_orbit(satellite_observer_station, &satellite_orbit2, &observation_pos_prev);
                 currTime += 1.0;
+                int meridian_scan_steps = 0;
                 do
                 {
                     predict_orbit(satellite_object, &satellite_orbit2, predict_to_julian_double(currTime));
@@ -233,6 +279,12 @@ namespace satdump
                     }
                     currTime += 1.0;
                     observation_pos_prev = observation_pos_cur;
+                    if (++meridian_scan_steps > MAX_MERIDIAN_SCAN_STEPS)
+                    {
+                        logger->error("Meridian scan did not converge after %d steps; aborting pass calculation", meridian_scan_steps);
+                        upcoming_passes_mtx.unlock();
+                        return;
+                    }
                 } while (next_los_time > currTime);
             }
 
@@ -243,6 +295,10 @@ namespace satdump
                 predict_observation observation_pos2;
 
                 double time_step = abs(next_los_time - next_aos_time) / 50.0;
+
+                // A zero or non-finite step would make the sampling loop below never advance.
+                if (!(time_step > 0))
+                    time_step = 1.0;
 
                 for (double ctime = next_aos_time; ctime <= next_los_time; ctime += time_step)
                 {

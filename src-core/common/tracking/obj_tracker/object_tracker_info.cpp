@@ -12,7 +12,11 @@ namespace satdump
         if (tracking_mode == TRACKING_HORIZONS)
             obj_name = horizonsoptions[current_horizons_id].second;
         else if (tracking_mode == TRACKING_SATELLITE)
-            obj_name = satoptions[current_satellite_id];
+        {
+            // The selection can outlive a TLE update, so never index the list unchecked.
+            if (current_satellite_id >= 0 && current_satellite_id < (int)satoptions.size())
+                obj_name = satoptions[current_satellite_id];
+        }
         v["object_name"] = obj_name;
         v["sat_current_pos"] = sat_current_pos;
 

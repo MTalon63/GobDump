@@ -147,7 +147,11 @@ namespace satdump
             if (tracking_mode == TRACKING_HORIZONS)
                 obj_name = horizonsoptions[current_horizons_id].second;
             else if (tracking_mode == TRACKING_SATELLITE)
-                obj_name = satoptions[current_satellite_id];
+            {
+                // The selection can outlive a TLE update, so never index the list unchecked.
+                if (current_satellite_id >= 0 && current_satellite_id < (int)satoptions.size())
+                    obj_name = satoptions[current_satellite_id];
+            }
             ImVec2 size = ImGui::CalcTextSize(obj_name.c_str());
             draw_list->AddRectFilled(curs, ImVec2(curs.x + size.x + 2 * style.FramePadding.x, curs.y + size.y), style::theme.overlay_bg);
             ImGui::TextColored(style::theme.green, "%s", obj_name.c_str());
@@ -238,7 +242,11 @@ namespace satdump
         }
         else if (tracking_mode == TRACKING_SATELLITE)
         {
-            if (ImGui::BeginCombo("###satelliteselectcombo", satoptions[current_satellite_id].c_str()))
+            // The selection can outlive a TLE update, so never index the list unchecked.
+            const char *current_sat_name = (current_satellite_id >= 0 && current_satellite_id < (int)satoptions.size())
+                                               ? satoptions[current_satellite_id].c_str()
+                                               : "None";
+            if (ImGui::BeginCombo("###satelliteselectcombo", current_sat_name))
             {
                 ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
                 ImGui::InputTextWithHint("##searchsatellitetracking", u8"\uf422   Search", &satellite_searchstr);
