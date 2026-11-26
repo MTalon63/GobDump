@@ -24,18 +24,20 @@ namespace satdump
             complex_t *fft_input_buffer;
             float *fft_output_buffer = nullptr;
 
-            int in_reshape_buffer = 0;
-            complex_t *fft_reshape_buffer;
-
             fftwf_complex *fftw_in;
             fftwf_complex *fftw_out;
             fftwf_plan fftw_plan;
 
             int rbuffer_rate = 0;
             int rbuffer_size = 0;
-            int rbuffer_skip = 0;
 
-            int reshape_buffer_size = 0;
+            // Position within the current decimation window, and how much of that window's
+            // leading samples have been collected for the pending line. Samples in between
+            // are skipped in place instead of being copied into a reshape buffer.
+            int line_pos = 0;
+            int line_fill = 0;
+
+            void emit_line();
 
         public:
             int p_size = 65536;
