@@ -790,11 +790,16 @@ namespace satdump
 #endif
                 // Keep #fft and waterfall horizontally aligned across all ui_scale factors
                 float target_fft_win_h = show_waterfall ? waterfall_ratio * wf_size : wf_size;
-                if (std::abs(wf_size - last_wf_size) > 1.0f)
+                // Refit when the panel height changes (resize/orientation), and when Show Waterfall
+                // toggles. Keying off the toggle rather than target_fft_win_h matters: during a
+                // ResizeY drag the ratio changes every frame, so comparing heights would call
+                // SetNextWindowSize continuously and cut the drag short (seen on Android touch).
+                if (std::abs(wf_size - last_wf_size) > 1.0f || show_waterfall != last_show_waterfall)
                 {
                     // Update ImGui's cached ResizeY window height when orientation or panel height changes
                     ImGui::SetNextWindowSize(ImVec2(right_width + offset * ui_scale, target_fft_win_h));
                     last_wf_size = wf_size;
+                    last_show_waterfall = show_waterfall;
                 }
                 ImGui::SetCursorScreenPos(ImVec2(left_width + 8 * ui_scale, 25 * ui_scale));
                 if (ImGui::BeginChild("#fft", ImVec2((right_width + offset * ui_scale), target_fft_win_h), ImGuiChildFlags_ResizeY,

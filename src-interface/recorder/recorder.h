@@ -109,6 +109,7 @@ namespace satdump
         float panel_ratio = 0.2;
         float last_width = -1.0f;
         float last_wf_size = -1.0f; // previous panel height; used to refit the #fft child on resize/orientation change
+        bool last_show_waterfall = true; // previous Show Waterfall state; refits the #fft child when it toggles
 
         std::string recording_path;
         std::string recorder_filename;
