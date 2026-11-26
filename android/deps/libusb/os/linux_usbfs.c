@@ -1618,6 +1618,20 @@ static int op_open(struct libusb_device_handle *handle)
 	if (r < 0)
 		close(fd);
 
+#ifdef __ANDROID__
+	if (r == 0 && priv->android_jni_device != NULL)
+	{
+		/* This fd came from UsbDeviceConnection.getFileDescriptor(), so the Java connection owns it
+		 * and android_jni_disconnect() closes it via UsbDeviceConnection.close(). Closing it here as
+		 * well double-closed the descriptor: once the number was recycled by another file, Android's
+		 * fdsan aborted the process ("attempted to close file descriptor N, expected to be unowned,
+		 * actually owned by unique_fd"), during device enumeration in getAllAvailableSources().
+		 * fd_keep marks it as not ours to close (see op_close()). */
+		struct linux_device_handle_priv *hpriv = usbi_get_device_handle_priv(handle);
+		hpriv->fd_keep = 1;
+	}
+#endif
+
 	return r;
 }
 
