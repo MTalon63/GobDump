@@ -100,7 +100,8 @@ namespace satdump
 
         ImageHandler::~ImageHandler()
         {
-            ProcessingHandler::~ProcessingHandler();
+            waitForProcessing(); // was ProcessingHandler::~ProcessingHandler(), which destroyed the
+                                 // base twice (double mutex destruction -> Android aborts). Same order.
             if (file_save_thread.joinable())
                 file_save_thread.join();
         }

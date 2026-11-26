@@ -31,10 +31,17 @@ namespace satdump
         {
         public:
             ProcessingHandler() {}
+            /** Join the async processing thread. Idempotent, and safe to call from a derived
+             *  destructor when the base's thread must be stopped before the derived's own members
+             *  are torn down. Do NOT call ~ProcessingHandler() by hand for that ordering: the base
+             *  is then destroyed twice, and on Android bionic aborts the process with
+             *  "pthread_mutex_destroy called on a destroyed mutex".
+             */
+            void waitForProcessing() { if (async_thread.joinable()) async_thread.join(); }
+
             ~ProcessingHandler()
             {
-                if (async_thread.joinable())
-                    async_thread.join();
+                waitForProcessing();
             }
 
         protected:

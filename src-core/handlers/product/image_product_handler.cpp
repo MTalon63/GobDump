@@ -91,7 +91,9 @@ namespace satdump
             tryApplyDefaultPreset();
         }
 
-        ImageProductHandler::~ImageProductHandler() { ProcessingHandler::~ProcessingHandler(); }
+        // Was an explicit ProcessingHandler::~ProcessingHandler() call, which destroyed the base
+        // twice: bionic aborts with "pthread_mutex_destroy called on a destroyed mutex".
+        ImageProductHandler::~ImageProductHandler() { waitForProcessing(); }
 
         void ImageProductHandler::drawMenu()
         {

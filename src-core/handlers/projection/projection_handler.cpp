@@ -40,7 +40,8 @@ namespace satdump
 
         ProjectionHandler::~ProjectionHandler()
         {
-            ProcessingHandler::~ProcessingHandler();
+            waitForProcessing(); // was ProcessingHandler::~ProcessingHandler() -- that destroyed the
+                                 // base twice; see the note in processing_handler.h. Same order.
             satdump::db->set_user_json("projection_defaults", getConfig());
         }
 
