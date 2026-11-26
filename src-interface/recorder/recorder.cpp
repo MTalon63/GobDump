@@ -780,7 +780,6 @@ namespace satdump
             {
                 waterfall_ratio = std::clamp(waterfall_ratio, 0.15f, 0.85f);
 
-                float fft_height = wf_size * (show_waterfall ? waterfall_ratio : 1.0f);
                 float wf_height = std::max(1.0f, wf_size * (1.0f - waterfall_ratio) + 15 * ui_scale);
                 float wfft_widht = right_width - 9 * ui_scale;
 #ifdef __ANDROID__
@@ -801,13 +800,21 @@ namespace satdump
                     last_wf_size = wf_size;
                     last_show_waterfall = show_waterfall;
                 }
+                // Stop the ResizeY drag at the same ratio the plot and waterfall are laid out with.
+                // Without this the child keeps growing past the clamp while the plot stays at 85%,
+                // leaving a gap between the two.
+                if (show_waterfall)
+                    ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0.15f * wf_size), ImVec2(FLT_MAX, 0.85f * wf_size));
                 ImGui::SetCursorScreenPos(ImVec2(left_width + 8 * ui_scale, 25 * ui_scale));
                 if (ImGui::BeginChild("#fft", ImVec2((right_width + offset * ui_scale), target_fft_win_h), ImGuiChildFlags_ResizeY,
                                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_NoScrollbar |
                                           ImGuiWindowFlags_NoScrollWithMouse))
                 {
                     float fft_plot_x = ImGui::GetCursorScreenPos().x;
-                    fft_plot->draw({float(wfft_widht), fft_height});
+                    // Fill whatever height the child actually has, rather than recomputing it from
+                    // waterfall_ratio: if the two ever disagree the plot would leave a gap.
+                    float fft_draw_h = std::max(1.0f, ImGui::GetContentRegionAvail().y);
+                    fft_plot->draw({float(wfft_widht), fft_draw_h});
                     if (show_waterfall && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
                         waterfall_ratio = std::clamp(ImGui::GetWindowHeight() / wf_size, 0.15f, 0.85f);
                     if (ImGui::IsWindowHovered())
