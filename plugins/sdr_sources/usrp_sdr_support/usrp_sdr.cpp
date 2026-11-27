@@ -162,10 +162,15 @@ void USRPSource::set_settings(nlohmann::json settings)
     else if (clock_source == "gpsdo")
         selected_clock_source = 2;
 
+    // Combo order is 8 / 12 / 16, so the restore mapping must match it exactly. It previously
+    // mapped 16 to slot 1 and had no case for 12 at all, so a saved 12-bit setting came back
+    // displayed as 16-bit and a saved 16-bit one as 12-bit.
     if (bit_depth == 8)
         selected_bit_depth = 0;
-    else if (bit_depth == 16)
+    else if (bit_depth == 12)
         selected_bit_depth = 1;
+    else
+        selected_bit_depth = 2;
 
     if (is_started)
     {
@@ -239,6 +244,9 @@ void USRPSource::start()
         sargs.otw_format = "sc12";
     else if (bit_depth == 16)
         sargs.otw_format = "sc16";
+
+    logger->debug("USRP bit depth %d, wire format %s", bit_depth,
+                  sargs.otw_format.empty() ? "default" : sargs.otw_format.c_str());
 
     usrp_streamer = usrp_device->get_rx_stream(sargs);
     if (!usrp_streamer)
