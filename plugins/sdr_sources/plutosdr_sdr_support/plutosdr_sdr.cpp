@@ -5,10 +5,14 @@ F5OEO FixMe :
 - Not tested with CLI
 */
 #include "plutosdr_sdr.h"
+#include "core/config.h"
 #include "imgui/imgui.h"
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <cstdlib>
+#include <cmath>
+#include <cctype>
 #include <cstring>
 
 // Adapted from altillimity/SatDump PR #111 and SDR++
@@ -116,15 +120,26 @@ void PlutoSDRSource::start()
 {
     DSPSampleSource::start();
     sdr_startup();
+    start_temp_worker();
     start_thread();
 }
 
 void PlutoSDRSource::stop()
 {
     stop_thread();
-    if (is_started)
+    // The readout shares our context, so it must be quiesced before the context is destroyed; if it
+    // cannot be (wedged read) stop_temp_worker abandons the context rather than freeing it.
+    stop_temp_worker();
+    if (is_started && ctx)
         iio_context_destroy(ctx);
     is_started = false;
+
+    // Everything looked up from the context (phy, dev, channels) dies with it. Leaving these
+    // dangling made the temperature readout touch freed memory on the next frame after a stop,
+    // and again when the device was unplugged before stopping.
+    ctx = nullptr;
+    phy = nullptr;
+    dev = nullptr;
 }
 
 void PlutoSDRSource::close() {}
@@ -137,6 +152,280 @@ void PlutoSDRSource::set_frequency(uint64_t frequency)
         logger->debug("Set PlutoSDR frequency to %d", frequency);
     }
     DSPSampleSource::set_frequency(frequency);
+}
+
+// Parse a millidegree-Celsius attribute value. Rejects empty/garbage text and implausible
+// readings rather than displaying a bogus 0.0 C, since a wedged attribute read can hand back an
+// empty string without reporting an error.
+static bool parse_millidegrees(const char *text, float &out_celsius)
+{
+    if (!text || !*text)
+        return false;
+
+    char *end = nullptr;
+    double v = strtod(text, &end);
+    if (end == text || !std::isfinite(v))
+        return false;
+    if (v < -200000.0 || v > 200000.0) // -200..200 C, far outside any sane die temperature
+        return false;
+
+    out_celsius = (float)(v / 1000.0);
+    return true;
+}
+
+// Reads both die temperatures. A channel that is simply absent is not a failure - firmware may not
+// expose it - but a channel that exists and will not read means the link is gone.
+static void read_temp_values(iio_context *ctx, iio_device *phy, bool &has_ad, float &ad,
+                             bool &has_zy, float &zy, bool &failed)
+{
+    has_ad = has_zy = failed = false;
+    ad = zy = 0;
+
+    char buf[128];
+
+    // AD936x: the driver publishes the die sensor as a processed channel, already in m C.
+    if (phy)
+    {
+        iio_channel *temp_ch = iio_device_find_channel(phy, "temp0", false);
+        if (temp_ch)
+        {
+            if (iio_channel_attr_read(temp_ch, "input", buf, sizeof(buf)) > 0 && parse_millidegrees(buf, ad))
+                has_ad = true;
+            else
+                failed = true;
+        }
+    }
+
+    // Zynq: xadc exposes raw/scale/offset, which combine to m C. Read it even if the PHY sensor
+    // failed, so one broken sensor cannot hide the other.
+    iio_device *xadc = iio_context_find_device(ctx, "xadc");
+    if (xadc)
+    {
+        iio_channel *temp_ch = iio_device_find_channel(xadc, "temp0", false);
+        if (temp_ch)
+        {
+            char raw_s[64], scale_s[64], offset_s[64];
+            if (iio_channel_attr_read(temp_ch, "raw", raw_s, sizeof(raw_s)) > 0 &&
+                iio_channel_attr_read(temp_ch, "scale", scale_s, sizeof(scale_s)) > 0 &&
+                iio_channel_attr_read(temp_ch, "offset", offset_s, sizeof(offset_s)) > 0)
+            {
+                char *er = nullptr, *es = nullptr, *eo = nullptr;
+                double raw = strtod(raw_s, &er), scale = strtod(scale_s, &es), offset = strtod(offset_s, &eo);
+                if (er != raw_s && es != scale_s && eo != offset_s &&
+                    std::isfinite(raw) && std::isfinite(scale) && std::isfinite(offset))
+                {
+                    float c = (float)((raw + offset) * scale / 1000.0);
+                    if (c > -200.0f && c < 200.0f)
+                    {
+                        zy = c;
+                        has_zy = true;
+                    }
+                    else
+                        failed = true;
+                }
+                else
+                    failed = true;
+            }
+            else
+                failed = true;
+        }
+    }
+}
+
+// Board/silicon identity from the context attributes: hw_model carries board revision, Zynq part
+// and AD936x variant ("Analog Devices PlutoSDR Rev.B (Z7010-AD9364)"). The parenthetical is
+// cosmetic on some builds, so the PHY's own model attribute wins when present.
+static void read_identity(iio_context *ctx, std::string &hw, std::string &fw,
+                          std::string &ad_model, std::string &fpga, std::string &xo_correction)
+{
+    hw.clear();
+    fw.clear();
+    ad_model.clear();
+    fpga.clear();
+    xo_correction.clear();
+
+    const char *h = iio_context_get_attr_value(ctx, "hw_model");
+    const char *f = iio_context_get_attr_value(ctx, "fw_version");
+    if (h)
+        hw = h;
+    if (f)
+        fw = f;
+
+    size_t lp = hw.find('('), rp = hw.find(')');
+    if (lp != std::string::npos && rp != std::string::npos && rp > lp)
+    {
+        std::string parts = hw.substr(lp + 1, rp - lp - 1);
+        size_t dash = parts.find('-');
+        if (dash != std::string::npos)
+        {
+            fpga = parts.substr(0, dash);
+            ad_model = parts.substr(dash + 1);
+        }
+        else
+            ad_model = parts;
+    }
+
+    const char *am = iio_context_get_attr_value(ctx, "ad9361-phy,model");
+    if (am && *am)
+    {
+        ad_model = am;
+        for (char &ch : ad_model)
+            ch = (char)toupper((unsigned char)ch);
+    }
+
+    const char *xo = iio_context_get_attr_value(ctx, "ad9361-phy,xo_correction");
+    if (xo && *xo)
+        xo_correction = xo;
+}
+
+void PlutoSDRSource::start_temp_worker()
+{
+    if (temp_thread.joinable())
+        return;
+
+    if (!temp_state)
+        temp_state = std::make_shared<TempState>();
+
+    // sdr_startup() runs before this on a first start, so hand the streaming handles over here as
+    // well as there - otherwise the worker would have seen a null context and done nothing.
+    {
+        std::lock_guard<std::timed_mutex> lk(temp_state->iio_mutex);
+        temp_state->ctx = ctx;
+        temp_state->phy = phy;
+        temp_state->identity_done = false;
+    }
+
+    temp_state->stop = false;
+    temp_state->done = false;
+    temp_state->enabled = false;
+    temp_state->identity_done = false;
+
+    auto st = temp_state;
+
+    temp_thread = std::thread([st]()
+    {
+        while (!st->stop)
+        {
+            if (st->enabled)
+            {
+                // Timed lock: if the UI is tearing the context down we skip this tick instead of
+                // blocking, and the reverse case (we hold it) is what stop() watches for.
+                if (st->iio_mutex.try_lock_for(std::chrono::milliseconds(500)))
+                {
+                    if (st->ctx)
+                    {
+                        bool has_ad = false, has_zy = false, failed = false;
+                        float ad = 0, zy = 0;
+                        read_temp_values(st->ctx, st->phy, has_ad, ad, has_zy, zy, failed);
+
+                        std::string hw, fw, ad_model, fpga, xo;
+                        bool read_ident = !st->identity_done;
+                        if (read_ident)
+                            read_identity(st->ctx, hw, fw, ad_model, fpga, xo);
+
+                        {
+                            std::lock_guard<std::mutex> lk(st->mutex);
+                            st->has_ad = has_ad;
+                            st->ad = ad;
+                            st->has_zy = has_zy;
+                            st->zy = zy;
+                            if (read_ident && !hw.empty())
+                            {
+                                st->hw_model = hw;
+                                st->fw_version = fw;
+                                st->ad_model = ad_model;
+                                st->fpga_model = fpga;
+                                st->identity_done = true;
+                            }
+                        }
+
+                        if (read_ident && !hw.empty())
+                        {
+                            logger->info("PlutoSDR hardware: %s (fw %s)", hw.c_str(),
+                                         fw.empty() ? "unknown" : fw.c_str());
+                            // XO trim is a diagnostic, not something the panel needs: log only.
+                            if (!xo.empty())
+                                logger->info("PlutoSDR XO correction: %s", xo.c_str());
+                        }
+
+                        // Log the transition, not every tick: a source left running with the plug
+                        // pulled would otherwise print this once a second forever.
+                        if (failed && !st->read_error_logged)
+                        {
+                            logger->debug("PlutoSDR temperature read failed, link may be gone");
+                            st->read_error_logged = true;
+                        }
+                        else if (!failed && (has_ad || has_zy))
+                            st->read_error_logged = false;
+                    }
+                    st->iio_mutex.unlock();
+                }
+            }
+            else
+            {
+                // Readout off: keep the last values out of the way, no polling at all.
+                std::lock_guard<std::mutex> lk(st->mutex);
+                st->has_ad = st->has_zy = false;
+            }
+
+            // Poll at 1 Hz normally, but only every 5 s once reads are failing: nothing changes on a
+            // link that is gone, and USB traffic on a yanked device is pointless.
+            bool backing_off = st->read_error_logged;
+            std::unique_lock<std::mutex> lk(st->mutex);
+            st->cv.wait_for(lk, std::chrono::seconds(backing_off ? 5 : 1), [st] { return (bool)st->stop; });
+        }
+
+        st->done = true;
+    });
+}
+
+void PlutoSDRSource::stop_temp_worker()
+{
+    if (temp_state)
+    {
+        temp_state->enabled = false;
+        temp_state->stop = true;
+        temp_state->cv.notify_all();
+
+        if (temp_thread.joinable())
+        {
+            // Give the worker a moment to leave its read; never block the UI on a wedged transport.
+            for (int i = 0; i < 30 && !temp_state->done; i++)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+            if (temp_state->done)
+                temp_thread.join();
+            else
+                temp_thread.detach();
+        }
+    }
+
+    if (!temp_state)
+        return;
+
+    // Hand the context over for destruction, or abandon it if the worker is still inside a read:
+    // leaking one context is preferable to freeing it under a waiting thread.
+    if (temp_state->iio_mutex.try_lock_for(std::chrono::milliseconds(200)))
+    {
+        temp_state->iio_mutex.unlock();
+        if (temp_state->ctx)
+        {
+            iio_context_destroy(temp_state->ctx);
+            temp_state->ctx = nullptr;
+            temp_state->phy = nullptr;
+        }
+    }
+    else
+    {
+        logger->warn("PlutoSDR: temperature read still in flight, abandoning its context");
+        temp_state->ctx = nullptr;
+        temp_state->phy = nullptr;
+    }
+
+    // The source's raw handles alias the ones above; clear them so stop() does not free twice.
+    ctx = nullptr;
+    phy = nullptr;
+    dev = nullptr;
 }
 
 void PlutoSDRSource::drawControlUI()
@@ -180,6 +469,50 @@ void PlutoSDRSource::drawControlUI()
 
     if (bw_update && is_started)
         set_bandwidth();
+
+    // Board identity and die temperatures: advanced mode only, and serviced entirely by the worker
+    // thread. This block only copies cached values under a lock, so it can never block on the link.
+    bool advanced = false;
+    if (satdump::satdump_cfg.main_cfg.contains("user_interface") &&
+        satdump::satdump_cfg.main_cfg["user_interface"].contains("advanced_mode") &&
+        satdump::satdump_cfg.main_cfg["user_interface"]["advanced_mode"].contains("value") &&
+        satdump::satdump_cfg.main_cfg["user_interface"]["advanced_mode"]["value"].is_boolean())
+        advanced = satdump::satdump_cfg.main_cfg["user_interface"]["advanced_mode"]["value"].get<bool>();
+
+    if (temp_state)
+    {
+        temp_state->enabled = advanced; // worker polls only while the readout is on screen
+
+        if (advanced)
+        {
+            bool has_ad = false, has_zy = false;
+            float ad = 0, zy = 0;
+            std::string ad_model, fpga_model;
+            {
+                std::lock_guard<std::mutex> lk(temp_state->mutex);
+                has_ad = temp_state->has_ad;
+                ad = temp_state->ad;
+                has_zy = temp_state->has_zy;
+                zy = temp_state->zy;
+                ad_model = temp_state->ad_model;
+                fpga_model = temp_state->fpga_model;
+            }
+
+            if (has_ad || has_zy)
+            {
+                const char *ad_name = ad_model.empty() ? "AD936x" : ad_model.c_str();
+                const char *fp_name = fpga_model.empty() ? "Zynq" : fpga_model.c_str();
+                char line[128] = {0};
+                if (has_ad && has_zy)
+                    snprintf(line, sizeof(line), "%s: %.1f\xC2\xB0" "C  %s: %.1f\xC2\xB0" "C", ad_name, ad, fp_name, zy);
+                else if (has_ad)
+                    snprintf(line, sizeof(line), "%s: %.1f\xC2\xB0" "C", ad_name, ad);
+                else
+                    snprintf(line, sizeof(line), "%s: %.1f\xC2\xB0" "C", fp_name, zy);
+                ImGui::TextUnformatted(line);
+            }
+        }
+    }
 }
 
 void PlutoSDRSource::set_samplerate(uint64_t samplerate)
@@ -254,6 +587,13 @@ void PlutoSDRSource::sdr_startup()
 
     if (ctx == NULL)
         throw satdump_exception("Could not open PlutoSDR device! (" + std::string(strerror(errno)) + ")");
+
+    // Bound every IIO operation on this context. Without it, a link that dies mid-stream leaves the
+    // reader blocked in iio_buffer_refill() until TCP gives up - observed at ~7 s when the Pluto was
+    // unplugged while running, during which the UI sits in "Waiting for the thread...". 2 s caps
+    // that while staying well clear of legitimate transfers (a 1 MB buffer at 53 Msps is ~16 ms).
+    iio_context_set_timeout(ctx, 2000);
+
     phy = iio_context_find_device(ctx, "ad9361-phy");
     if (phy == NULL)
     {
@@ -265,6 +605,17 @@ void PlutoSDRSource::sdr_startup()
     {
         iio_context_destroy(ctx);
         throw satdump_exception("Could not connect to PlutoSDR device!");
+    }
+
+    // Hand the streaming handles to the readout worker (advanced mode only). Pluto's USB interface
+    // can only be claimed once, so the worker cannot open its own context.
+    if (temp_state)
+    {
+        temp_state->iio_mutex.lock();
+        temp_state->ctx = ctx;
+        temp_state->phy = phy;
+        temp_state->identity_done = false;
+        temp_state->iio_mutex.unlock();
     }
 
     iio_channel_attr_write_bool(iio_device_find_channel(phy, "altvoltage1", true), "powerdown", true);

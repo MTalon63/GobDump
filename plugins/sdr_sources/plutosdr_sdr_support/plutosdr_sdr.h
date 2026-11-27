@@ -15,6 +15,10 @@
 #include "common/widgets/double_list.h"
 #include "logger.h"
 #include <thread>
+#include <mutex>
+#include <atomic>
+#include <condition_variable>
+#include <memory>
 
 class PlutoSDRSource : public dsp::DSPSampleSource
 {
@@ -230,6 +234,32 @@ public:
 
     void set_samplerate(uint64_t samplerate);
     uint64_t get_samplerate();
+
+    // Board identity and die temperatures are read by a worker thread, so a wedged USB/network
+    // transport can stall at most that thread and never a frame. The Pluto's USB interface can only
+    // be claimed once ("Unable to claim interface: Device or resource busy"), so the worker has to
+    // use the streaming context rather than its own. That makes its lifetime the tricky part: the
+    // worker holds iio_mutex while touching ctx/phy, and a stop that cannot get that lock in time
+    // abandons the context instead of freeing it, so an in-flight read can never hit freed memory.
+    struct TempState
+    {
+        std::mutex mutex;           // protects the cached values read by the UI
+        std::timed_mutex iio_mutex; // held while touching ctx/phy
+        iio_context *ctx = nullptr;
+        iio_device *phy = nullptr;
+        bool has_ad = false, has_zy = false;
+        float ad = 0, zy = 0;
+        bool identity_done = false;
+        bool read_error_logged = false; // log the link going away once, not once per second
+        std::string hw_model, fw_version, ad_model, fpga_model;
+        std::atomic<bool> enabled{false}, stop{false}, done{false};
+        std::condition_variable cv;
+    };
+    std::shared_ptr<TempState> temp_state;
+    std::thread temp_thread;
+
+    void start_temp_worker();
+    void stop_temp_worker();
 
     static std::string getID() { return "plutosdr"; }
     static std::shared_ptr<dsp::DSPSampleSource> getInstance(dsp::SourceDescriptor source) { return std::make_shared<PlutoSDRSource>(source); }
