@@ -5,6 +5,9 @@
 #include "common/widgets/double_list.h"
 #include "logger.h"
 #include <atomic>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
 #include <thread>
 #include <uhd.h>
 #include <uhd/device.hpp>
@@ -17,6 +20,29 @@ protected:
 
     uhd::usrp::multi_usrp::sptr usrp_device;
     uhd::rx_streamer::sptr usrp_streamer;
+
+    // Board status: RFIC die temperature and RSSI, read from the RX channel actually in use and
+    // polled by a worker thread that keeps its own reference to the device, so it can never outlive
+    // the streaming path. Advanced mode only - nothing is polled while the readout is off screen.
+    // Sensors are discovered by name, since which ones exist is a board property rather than
+    // something we can assume.
+    struct StatusState
+    {
+        std::mutex mutex;
+        std::string board;
+        bool has_temp = false, has_rssi = false;
+        float temp_c = 0, rssi_db = 0;
+        std::string temp_unit, rssi_unit; // as reported by UHD, shown verbatim
+        std::string error;
+        bool error_logged = false;
+        bool logged_once = false;
+        std::atomic<bool> enabled{false}, stop{false}, done{false};
+        std::condition_variable cv;
+    };
+    std::shared_ptr<StatusState> status_state;
+    std::thread status_thread;
+    void start_status_worker(uhd::usrp::multi_usrp::sptr dev, int chan);
+    void stop_status_worker();
     uhd::gain_range_t gain_range;
 
     bool use_device_rates = false;

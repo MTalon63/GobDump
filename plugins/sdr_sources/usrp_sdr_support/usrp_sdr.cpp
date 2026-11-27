@@ -1,5 +1,6 @@
 #include "usrp_sdr.h"
 #include "init.h"
+#include "core/config.h"
 
 void USRPSource::set_gains()
 {
@@ -163,8 +164,8 @@ void USRPSource::set_settings(nlohmann::json settings)
         selected_clock_source = 2;
 
     // Combo order is 8 / 12 / 16, so the restore mapping must match it exactly. It previously
-    // mapped 16 to slot 1 and had no case for 12 at all, so a saved 12-bit setting came back
-    // displayed as 16-bit and a saved 16-bit one as 12-bit.
+    // mapped 16 to slot 1 and had no case for 12, so a saved 12-bit setting came back displayed as
+    // 16-bit, and a saved 16-bit one as 12-bit.
     if (bit_depth == 8)
         selected_bit_depth = 0;
     else if (bit_depth == 12)
@@ -197,6 +198,140 @@ void USRPSource::open()
     device_lost = false;
     open_channel();
     usrp_device.reset();
+}
+
+void USRPSource::start_status_worker(uhd::usrp::multi_usrp::sptr dev, int chan)
+{
+    if (status_thread.joinable())
+        return;
+
+    if (!status_state)
+        status_state = std::make_shared<StatusState>();
+
+    status_state->stop = false;
+    status_state->done = false;
+    status_state->enabled = false;
+    status_state->logged_once = false;
+
+    auto st = status_state;
+
+    // The lambda holds its own sptr, so the device object stays alive for as long as the worker
+    // touches it - even if stop() resets the source's handle.
+    status_thread = std::thread([st, dev, chan]()
+    {
+        while (!st->stop)
+        {
+            if (st->enabled)
+            {
+                std::string board;
+                bool has_temp = false, has_rssi = false;
+                float temp_c = 0, rssi_db = 0;
+                std::string temp_unit, rssi_unit, err, available;
+
+                try
+                {
+                    board = dev->get_mboard_name();
+
+                    // Both readings come from the channel actually streaming, not always channel 0.
+                    for (const std::string &name : dev->get_rx_sensor_names(chan))
+                    {
+                        if (!available.empty())
+                            available += ",";
+                        available += name;
+
+                        if (name == "temp")
+                        {
+                            auto v = dev->get_rx_sensor("temp", chan);
+                            temp_c = std::stof(v.value);
+                            temp_unit = v.unit;
+                            has_temp = true;
+                        }
+                        else if (name == "rssi")
+                        {
+                            auto v = dev->get_rx_sensor("rssi", chan);
+                            rssi_db = std::stof(v.value);
+                            rssi_unit = v.unit;
+                            has_rssi = true;
+                        }
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    err = e.what();
+                }
+
+                {
+                    std::lock_guard<std::mutex> lk(st->mutex);
+                    st->board = board;
+                    st->has_temp = has_temp;
+                    st->temp_c = temp_c;
+                    st->has_rssi = has_rssi;
+                    st->rssi_db = rssi_db;
+                    st->temp_unit = temp_unit;
+                    st->rssi_unit = rssi_unit;
+                    st->error = err;
+                }
+
+                // One line per start recording what the board advertises and what we took from it, so
+                // "nothing appears in the panel" can be told apart from "this board has no sensors".
+                // 1 Hz value changes belong on screen, not in the log.
+                if (err.empty() && !st->logged_once)
+                {
+                    if (has_temp || has_rssi)
+                        logger->debug("USRP sensors (chan %d): using%s%s of [%s]", chan,
+                                      has_temp ? (" temp=" + std::to_string(temp_c) + " " + (temp_unit.empty() ? "C" : temp_unit)).c_str() : "",
+                                      has_rssi ? (" rssi=" + std::to_string(rssi_db) + " " + (rssi_unit.empty() ? "dB" : rssi_unit)).c_str() : "",
+                                      available.c_str());
+                    else
+                        logger->debug("USRP sensors (chan %d): board reports no temperature or RSSI sensor ([%s])",
+                                      chan, available.empty() ? "none" : available.c_str());
+                    st->logged_once = true;
+                }
+
+                if (!err.empty() && !st->error_logged)
+                {
+                    logger->debug("USRP status read failed: %s", err.c_str());
+                    st->error_logged = true;
+                }
+                else if (err.empty())
+                    st->error_logged = false;
+            }
+            else
+            {
+                std::lock_guard<std::mutex> lk(st->mutex);
+                st->has_temp = st->has_rssi = false;
+            }
+
+            // 1 Hz normally, 5 s once the device stops answering.
+            std::unique_lock<std::mutex> lk(st->mutex);
+            st->cv.wait_for(lk, std::chrono::seconds(st->error_logged ? 5 : 1), [st] { return (bool)st->stop; });
+        }
+
+        st->done = true;
+    });
+}
+
+void USRPSource::stop_status_worker()
+{
+    if (!status_state)
+        return;
+
+    status_state->enabled = false;
+    status_state->stop = true;
+    status_state->cv.notify_all();
+
+    if (status_thread.joinable())
+    {
+        // Never block the UI on a device that has stopped answering; the worker keeps the device
+        // alive through its own reference, so detaching is safe.
+        for (int i = 0; i < 30 && !status_state->done; i++)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        if (status_state->done)
+            status_thread.join();
+        else
+            status_thread.detach();
+    }
 }
 
 void USRPSource::start()
@@ -254,12 +389,16 @@ void USRPSource::start()
 
     usrp_streamer->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
+    start_status_worker(usrp_device, channel);
+
     thread_should_run = true;
     work_thread = std::thread(&USRPSource::mainThread, this);
 }
 
 void USRPSource::stop()
 {
+    stop_status_worker(); // released before the device handle goes away
+
     thread_should_run = false;
     logger->info("Waiting for the thread...");
     if (output_stream)
@@ -360,6 +499,23 @@ void USRPSource::drawControlUI()
             clock_source = "external";
         if (selected_clock_source == 2)
             clock_source = "gpsdo";
+
+        // Apply immediately: previously this was only pushed in start(), so changing the source
+        // while running did nothing until the stream was restarted, which made the ref_locked
+        // readout look stuck.
+        if (is_started && usrp_device)
+        {
+            try
+            {
+                usrp_device->set_clock_source(clock_source);
+                usrp_device->set_time_source(clock_source);
+                logger->info("USRP clock/time source set to %s", clock_source.c_str());
+            }
+            catch (const std::exception &e)
+            {
+                logger->error("Could not set USRP clock source to %s: %s", clock_source.c_str(), e.what());
+            }
+        }
     }
 
     if (is_started)
@@ -373,6 +529,62 @@ void USRPSource::drawControlUI()
     }
     else // Defaults for using UI when device is not attached (config export)
         RImGui::SteppedSliderFloat("Gain", &gain, 0, 60);
+
+    // RFIC die temperature and RSSI: advanced mode only, for both polling and display. Values come
+    // from the RX channel in use and are only copied under a lock here, so the UI never waits on
+    // the device.
+    bool advanced = false;
+    if (satdump::satdump_cfg.main_cfg.contains("user_interface") &&
+        satdump::satdump_cfg.main_cfg["user_interface"].contains("advanced_mode") &&
+        satdump::satdump_cfg.main_cfg["user_interface"]["advanced_mode"].contains("value") &&
+        satdump::satdump_cfg.main_cfg["user_interface"]["advanced_mode"]["value"].is_boolean())
+        advanced = satdump::satdump_cfg.main_cfg["user_interface"]["advanced_mode"]["value"].get<bool>();
+
+    if (status_state)
+    {
+        status_state->enabled = advanced && is_started;
+
+        if (advanced && is_started)
+        {
+            bool has_temp = false, has_rssi = false;
+            float temp_c = 0, rssi_db = 0;
+            std::string board, temp_unit, rssi_unit;
+            {
+                std::lock_guard<std::mutex> lk(status_state->mutex);
+                has_temp = status_state->has_temp;
+                temp_c = status_state->temp_c;
+                has_rssi = status_state->has_rssi;
+                rssi_db = status_state->rssi_db;
+                temp_unit = status_state->temp_unit;
+                rssi_unit = status_state->rssi_unit;
+                board = status_state->board;
+            }
+
+            if (has_temp || has_rssi)
+            {
+                // B2xx frontends report the AD936x die sensor; other boards differ, so fall back to
+                // a generic label rather than claiming a part number we have not verified.
+                const char *chip = "RFIC";
+                if (board == "B210")
+                    chip = "AD9361";
+                else if (board == "B200" || board == "B205mini")
+                    chip = "AD9364";
+
+                // Units come from UHD rather than being assumed: "dB" for RSSI (relative, not dBm),
+                // and "C" for the die sensor, which is rendered with the degree glyph.
+                const char *tu = (temp_unit.empty() || temp_unit == "C") ? "\xC2\xB0" "C" : temp_unit.c_str();
+                const char *ru = rssi_unit.empty() ? "dB" : rssi_unit.c_str();
+
+                char line[160] = {0};
+                int n = 0;
+                if (has_temp)
+                    n += snprintf(line + n, sizeof(line) - n, "%s: %.1f%s", chip, temp_c, tu);
+                if (has_rssi)
+                    n += snprintf(line + n, sizeof(line) - n, "%sRSSI: %.1f %s", n ? "  " : "", rssi_db, ru);
+                ImGui::TextUnformatted(line);
+            }
+        }
+    }
 }
 
 void USRPSource::set_samplerate(uint64_t samplerate)
